@@ -11,7 +11,8 @@ import { DropdownSelect } from './components/DropdownSelect';
 import { LayoutConfigTool } from './LayoutConfigTool';
 import { BANNER_SPECS } from '../../../config/banner-layouts';
 import { prefixOptions, loadDefaultPositions } from './utils/layoutUtils';
-import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { projectId } from '../../../../utils/supabase/info';
+import { getAuthToken } from '../../../utils/supabase/client';
 import { toast } from 'sonner';
 import { AI_MODELS, DEFAULT_TEXT_MODEL_ID } from '../../../config/ai-models';
 import { TiketSnackbar } from '../ui/TiketSnackbar';
@@ -115,7 +116,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
               method: 'POST',
               headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${publicAnonKey}`
+                  'Authorization': `Bearer ${await getAuthToken()}`
               },
               body: JSON.stringify({
                   prompt_json: payload,

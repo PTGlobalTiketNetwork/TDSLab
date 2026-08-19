@@ -7,7 +7,8 @@ import { Lightbox } from '../Lightbox';
 import { Textarea } from '../ui/textarea';
 import { Button } from '../ui/button';
 import { DotLottiePlayer } from '@dotlottie/react-player';
-import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { projectId } from '../../../../utils/supabase/info';
+import { getAuthToken } from '../../../utils/supabase/client';
 import {
   Select,
   SelectContent,
@@ -170,7 +171,7 @@ export function AIGenerator({ onAssetSelected }: AIGeneratorProps) {
       const res = await fetch(`${SERVER_URL}/cancel-prediction/${currentPredictionId}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${publicAnonKey}`
+          'Authorization': `Bearer ${await getAuthToken()}`
         }
       });
 
@@ -211,7 +212,7 @@ export function AIGenerator({ onAssetSelected }: AIGeneratorProps) {
       const startRes = await fetch(`${SERVER_URL}/start-generate-image`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
+          'Authorization': `Bearer ${await getAuthToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(options)
@@ -249,9 +250,11 @@ export function AIGenerator({ onAssetSelected }: AIGeneratorProps) {
          await new Promise(resolve => setTimeout(resolve, pollInterval));
 
          const pollRes = await fetch(`${SERVER_URL}/check-prediction/${predictionId}`, {
-             headers: { 'Authorization': `Bearer ${publicAnonKey}` }
+             headers: { 'Authorization': `Bearer ${await getAuthToken()}` }
          });
 
+         // Auth failures are permanent; retrying them would spin until timeout.
+         if (pollRes.status === 401 || pollRes.status === 403) throw new Error('You do not have access to AI generation.');
          if (!pollRes.ok) continue;
 
          const data = await pollRes.json();

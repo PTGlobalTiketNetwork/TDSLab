@@ -12,6 +12,7 @@ import {
   ContextMenuTrigger,
 } from './ui/context-menu';
 import { Edit2, Scaling, Copy, Download, Trash2, FileDown, Send, X } from 'lucide-react';
+import { useAccess } from '../../context/AccessContext';
 
 const DOWNLOAD_SCALES = [
   { factor: 1, label: '1x', description: 'Standard' },
@@ -53,6 +54,7 @@ export function BannerContextMenu({
   onBulkPublish,
   onClearSelection,
 }: BannerContextMenuProps) {
+  const { isWhitelisted } = useAccess();
   const hasFormData = !!(banner as any).form_data;
   const hasImage = !!banner.imageUrl;
   const nativeDims = useMemo(() => getNativeDimensions(banner), [banner]);
@@ -148,15 +150,17 @@ export function BannerContextMenu({
               <ContextMenuShortcut>E</ContextMenuShortcut>
             </ContextMenuItem>
 
-            <ContextMenuItem
-              onClick={(e) => { e.stopPropagation(); onResize?.(banner); }}
-              disabled={!hasFormData && !hasImage}
-              className="gap-3"
-            >
-              <Scaling className="size-4" />
-              <span>Resize</span>
-              <ContextMenuShortcut>R</ContextMenuShortcut>
-            </ContextMenuItem>
+            {isWhitelisted && (
+              <ContextMenuItem
+                onClick={(e) => { e.stopPropagation(); onResize?.(banner); }}
+                disabled={!hasFormData && !hasImage}
+                className="gap-3"
+              >
+                <Scaling className="size-4" />
+                <span>Resize</span>
+                <ContextMenuShortcut>R</ContextMenuShortcut>
+              </ContextMenuItem>
+            )}
 
             <ContextMenuSeparator />
 

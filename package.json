@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "check:ai-access": "node scripts/check-ai-access.mjs"
   },
   "dependencies": {
     "@dotlottie/react-player": "^1.6.19",

@@ -1,5 +1,5 @@
 import { projectId, publicAnonKey } from '../../utils/supabase/info';
-import { supabase } from '../utils/supabase/client';
+import { supabase, getAuthToken } from '../utils/supabase/client';
 import { Banner } from '../types/banner';
 
 const SERVER_URL = `https://${projectId}.supabase.co/functions/v1/make-server-67753e13`;
@@ -315,7 +315,7 @@ export const BannerService = {
     const startResponse = await fetchWithRetry(`${SERVER_URL}/start-generate-image`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${publicAnonKey}`,
+        'Authorization': `Bearer ${await getAuthToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(options),
@@ -339,12 +339,17 @@ export const BannerService = {
       const pollResponse = await fetch(`${SERVER_URL}/check-prediction/${predictionId}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
+          'Authorization': `Bearer ${await getAuthToken()}`,
           'Content-Type': 'application/json',
         },
       });
 
       if (!pollResponse.ok) {
+        // Auth failures are permanent; retrying them would spin for the full
+        // 10-minute poll window instead of surfacing the error.
+        if (pollResponse.status === 401 || pollResponse.status === 403) {
+          throw new Error('You do not have access to AI generation.');
+        }
         console.warn('Polling failed, retrying...');
         continue;
       }

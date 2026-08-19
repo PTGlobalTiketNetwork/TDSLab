@@ -11,6 +11,7 @@ import { Lightbox } from '../Lightbox';
 import { DeleteConfirmDialog } from '../DeleteConfirmDialog';
 import { Session } from '@supabase/supabase-js';
 import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { getAuthToken } from '../../../utils/supabase/client';
 import TdsIcSparklingGeneral from '../../../imports/TdsIcSparklingGeneral';
 import { toast } from 'sonner';
 import { TiketSnackbar } from '../ui/TiketSnackbar';
@@ -659,7 +660,7 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
           const res = await fetch(`${SERVER_URL}/utility/remove-background`, {
               method: 'POST',
               headers: {
-                  'Authorization': `Bearer ${publicAnonKey}`,
+                  'Authorization': `Bearer ${await getAuthToken()}`,
                   'Content-Type': 'application/json'
               },
               body: JSON.stringify({
@@ -760,7 +761,7 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
           const res = await fetch(`${SERVER_URL}/utility/remove-background`, {
               method: 'POST',
               headers: {
-                  'Authorization': `Bearer ${publicAnonKey}`,
+                  'Authorization': `Bearer ${await getAuthToken()}`,
                   'Content-Type': 'application/json'
               },
               body: JSON.stringify({
@@ -893,7 +894,7 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
         const startRes = await fetch(`${SERVER_URL}/start-generate-image`, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${publicAnonKey}`,
+              'Authorization': `Bearer ${await getAuthToken()}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -934,7 +935,9 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
             
             if (Date.now() - startTime > 300000) throw new Error('Timed out');
             await new Promise(r => setTimeout(r, 3000));
-            const pollRes = await fetch(`${SERVER_URL}/check-prediction/${predictionId}`, { headers: { 'Authorization': `Bearer ${publicAnonKey}` } });
+            const pollRes = await fetch(`${SERVER_URL}/check-prediction/${predictionId}`, { headers: { 'Authorization': `Bearer ${await getAuthToken()}` } });
+            // Auth failures are permanent; retrying them would spin until timeout.
+            if (pollRes.status === 401 || pollRes.status === 403) throw new Error('You do not have access to AI generation.');
             if (!pollRes.ok) continue;
             const pollData = await pollRes.json();
             status = pollData.status;
@@ -1229,7 +1232,7 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
       const res = await fetch(`${SERVER_URL}/cancel-prediction/${currentPredictionId}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${publicAnonKey}`
+          'Authorization': `Bearer ${await getAuthToken()}`
         }
       });
 
@@ -1307,7 +1310,7 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
       const startRes = await fetch(`${SERVER_URL}/start-generate-image`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
+          'Authorization': `Bearer ${await getAuthToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -1361,11 +1364,13 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
 
         const pollRes = await fetch(`${SERVER_URL}/check-prediction/${predictionId}`, {
           headers: {
-            'Authorization': `Bearer ${publicAnonKey}`,
+            'Authorization': `Bearer ${await getAuthToken()}`,
           }
         });
 
         if (!pollRes.ok) {
+          // Auth failures are permanent; retrying them would spin until timeout.
+          if (pollRes.status === 401 || pollRes.status === 403) throw new Error('You do not have access to AI generation.');
           console.error('Polling failed, retrying...');
           continue;
         }
@@ -1460,7 +1465,7 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
         await fetch(`${SERVER_URL}/generative-resize/history`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${publicAnonKey}`,
+                'Authorization': `Bearer ${await getAuthToken()}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(historyItem)
@@ -1491,7 +1496,7 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
         // to support "dynamic filter options based on data"
 
         const res = await fetch(`${SERVER_URL}/generative-resize/history?${queryParams.toString()}`, {
-            headers: { 'Authorization': `Bearer ${publicAnonKey}` }
+            headers: { 'Authorization': `Bearer ${await getAuthToken()}` }
         });
 
         if (!res.ok) throw new Error("Failed to fetch history");
@@ -1532,7 +1537,7 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
         // Delete from DB
         const res = await fetch(`${SERVER_URL}/generative-resize/history/${itemToDelete.id}`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${publicAnonKey}` }
+            headers: { 'Authorization': `Bearer ${await getAuthToken()}` }
         });
 
         if (!res.ok) throw new Error("Failed to delete");

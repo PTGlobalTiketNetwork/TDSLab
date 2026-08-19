@@ -128,6 +128,20 @@ async function requireAdmin(c: any): Promise<{ user: any; member: AccessMember }
   return { user, member };
 }
 
+// Guard for routes that spend Replicate credits or expose generation history.
+// Returns a Response to send back when the caller is not an active whitelist
+// member, or null when the request may proceed. The frontend hides these
+// features too, but UI gating is not enforcement: the anon key is public, so
+// without this check anyone could drive our Replicate billing.
+// Usage: const denied = await requireWhitelisted(c); if (denied) return denied;
+async function requireWhitelisted(c: any): Promise<Response | null> {
+  const user = await getAuthenticatedUser(c);
+  if (!user) return c.json({ error: "Authentication required" }, 401);
+  const member = await getAccessMember(user);
+  if (!member?.active) return c.json({ error: "AI features require whitelist access" }, 403);
+  return null;
+}
+
 // Health check endpoint
 app.get(`${ROUTE_PREFIX}/health`, (c) => {
   return c.json({ status: "ok" });
@@ -1039,6 +1053,7 @@ app.post(`${ROUTE_PREFIX}/delete-files`, async (c) => {
 
 // Generate Text (GPT-5)
 app.post(`${ROUTE_PREFIX}/generate-text`, async (c) => {
+  const denied = await requireWhitelisted(c); if (denied) return denied;
   try {
     const { prompt_json, source_lang, target_lang, modelId } = await c.req.json();
     const token = Deno.env.get("REPLICATE_API_TOKEN");
@@ -1207,6 +1222,7 @@ app.post(`${ROUTE_PREFIX}/generate-text`, async (c) => {
 
 // Generate Image (Replicate)
 app.post(`${ROUTE_PREFIX}/generate-image`, async (c) => {
+  const denied = await requireWhitelisted(c); if (denied) return denied;
   try {
     const { prompt, aspect_ratio, resolution, image_input, modelId } = await c.req.json();
     const token = Deno.env.get("REPLICATE_API_TOKEN");
@@ -1336,6 +1352,7 @@ app.post(`${ROUTE_PREFIX}/generate-image`, async (c) => {
 
 // Start Image Generation (Async) - Returns prediction ID immediately
 app.post(`${ROUTE_PREFIX}/start-generate-image`, async (c) => {
+  const denied = await requireWhitelisted(c); if (denied) return denied;
   try {
     const { prompt, aspect_ratio, resolution, image_input, modelId } = await c.req.json();
     const token = Deno.env.get("REPLICATE_API_TOKEN");
@@ -1418,6 +1435,7 @@ app.post(`${ROUTE_PREFIX}/start-generate-image`, async (c) => {
 
 // Start Text Generation (Async) - Returns prediction ID immediately
 app.post(`${ROUTE_PREFIX}/start-generate-text`, async (c) => {
+  const denied = await requireWhitelisted(c); if (denied) return denied;
   try {
     const { prompt_json, source_lang, target_lang, modelId } = await c.req.json();
     const token = Deno.env.get("REPLICATE_API_TOKEN");
@@ -1519,6 +1537,7 @@ app.post(`${ROUTE_PREFIX}/start-generate-text`, async (c) => {
 
 // Check Prediction Status (for polling)
 app.get(`${ROUTE_PREFIX}/check-prediction/:id`, async (c) => {
+  const denied = await requireWhitelisted(c); if (denied) return denied;
   try {
     const predictionId = c.req.param("id");
     const token = Deno.env.get("REPLICATE_API_TOKEN");
@@ -1557,6 +1576,7 @@ app.get(`${ROUTE_PREFIX}/check-prediction/:id`, async (c) => {
 
 // Cancel Prediction
 app.post(`${ROUTE_PREFIX}/cancel-prediction/:id`, async (c) => {
+  const denied = await requireWhitelisted(c); if (denied) return denied;
   try {
     const predictionId = c.req.param("id");
     const token = Deno.env.get("REPLICATE_API_TOKEN");
@@ -1595,6 +1615,7 @@ app.post(`${ROUTE_PREFIX}/cancel-prediction/:id`, async (c) => {
 
 // Save History Item
 app.post(`${ROUTE_PREFIX}/generative-resize/history`, async (c) => {
+  const denied = await requireWhitelisted(c); if (denied) return denied;
   try {
     const item = await c.req.json();
     
@@ -1614,6 +1635,7 @@ app.post(`${ROUTE_PREFIX}/generative-resize/history`, async (c) => {
 
 // Get History (with pagination and filtering)
 app.get(`${ROUTE_PREFIX}/generative-resize/history`, async (c) => {
+  const denied = await requireWhitelisted(c); if (denied) return denied;
   try {
     const url = new URL(c.req.url);
     const page = parseInt(url.searchParams.get("page") || "1");
@@ -1710,6 +1732,7 @@ app.get(`${ROUTE_PREFIX}/generative-resize/history`, async (c) => {
 
 // Delete History Item
 app.delete(`${ROUTE_PREFIX}/generative-resize/history/:id`, async (c) => {
+  const denied = await requireWhitelisted(c); if (denied) return denied;
   try {
     const id = c.req.param("id");
     // Also delete the file from storage if possible?
@@ -1758,6 +1781,7 @@ app.delete(`${ROUTE_PREFIX}/generative-resize/history/:id`, async (c) => {
 
 // Utility: Remove Background
 app.post(`${ROUTE_PREFIX}/utility/remove-background`, async (c) => {
+  const denied = await requireWhitelisted(c); if (denied) return denied;
   try {
     const { image, format, background_type } = await c.req.json();
     const token = Deno.env.get("REPLICATE_API_TOKEN");

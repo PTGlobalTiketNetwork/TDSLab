@@ -27,7 +27,7 @@ import { Lightbox } from '../Lightbox';
 import { DeleteConfirmDialog } from '../DeleteConfirmDialog';
 import { AVAILABLE_RESOLUTIONS, AVAILABLE_RATIOS } from '../../../config/generative-resize-presets';
 import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
-import { supabase } from '../../../utils/supabase/client';
+import { supabase, getAuthToken } from '../../../utils/supabase/client';
 import TdsSiGeneralError from '../../../imports/TdsSiGeneralError404-2031-7672';
 import TdsIcSparklingGeneral from '../../../imports/TdsIcSparklingGeneral';
 import { toast } from 'sonner';
@@ -426,7 +426,7 @@ export function BannerTranslate({ session }: BannerTranslateProps) {
         const startRes = await fetch(`${SERVER_URL}/start-generate-image`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${publicAnonKey}`,
+                'Authorization': `Bearer ${await getAuthToken()}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -481,11 +481,13 @@ export function BannerTranslate({ session }: BannerTranslateProps) {
 
             const pollRes = await fetch(`${SERVER_URL}/check-prediction/${predictionId}`, {
                 headers: {
-                    'Authorization': `Bearer ${publicAnonKey}`,
+                    'Authorization': `Bearer ${await getAuthToken()}`,
                 }
             });
 
             if (!pollRes.ok) {
+                // Auth failures are permanent; retrying them would spin until timeout.
+                if (pollRes.status === 401 || pollRes.status === 403) throw new Error('You do not have access to AI generation.');
                 console.error("Polling failed, retrying...");
                 continue; // Retry on poll failure
             }
@@ -539,7 +541,7 @@ export function BannerTranslate({ session }: BannerTranslateProps) {
       const res = await fetch(`${SERVER_URL}/cancel-prediction/${currentPredictionId}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${publicAnonKey}`
+          'Authorization': `Bearer ${await getAuthToken()}`
         }
       });
 
@@ -595,7 +597,7 @@ export function BannerTranslate({ session }: BannerTranslateProps) {
         await fetch(`${SERVER_URL}/generative-resize/history`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${publicAnonKey}`,
+                'Authorization': `Bearer ${await getAuthToken()}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(historyItem)
@@ -642,7 +644,7 @@ export function BannerTranslate({ session }: BannerTranslateProps) {
         }
 
         const res = await fetch(`${SERVER_URL}/generative-resize/history?${queryParams.toString()}`, {
-            headers: { 'Authorization': `Bearer ${publicAnonKey}` }
+            headers: { 'Authorization': `Bearer ${await getAuthToken()}` }
         });
 
         if (!res.ok) throw new Error("Failed to fetch history");
@@ -724,7 +726,7 @@ export function BannerTranslate({ session }: BannerTranslateProps) {
         
         await fetch(`${SERVER_URL}/generative-resize/history/${itemToDelete.id}`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${publicAnonKey}` }
+            headers: { 'Authorization': `Bearer ${await getAuthToken()}` }
         });
         
         toast.custom((t) => (

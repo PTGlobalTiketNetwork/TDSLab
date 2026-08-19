@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, RefreshCw, History, Users } from 'lucide-react';
-import { projectId, publicAnonKey } from '../../../../../utils/supabase/info';
-import { supabase } from '../../../../utils/supabase/client';
+import { projectId } from '../../../../../utils/supabase/info';
+import { supabase, getAuthToken } from '../../../../utils/supabase/client';
 import { Button } from '../../ui/button';
 import { ScrollArea } from '../../ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger } from '../../ui/tabs';
@@ -48,7 +48,7 @@ export function HistorySelector({ onSelect }: HistorySelectorProps) {
         }
 
         const res = await fetch(`${SERVER_URL}/generative-resize/history?${queryParams.toString()}`, {
-            headers: { 'Authorization': `Bearer ${publicAnonKey}` }
+            headers: { 'Authorization': `Bearer ${await getAuthToken()}` }
         });
 
         if (!res.ok) throw new Error("Failed to fetch history");

@@ -20,6 +20,7 @@ import { Header } from '../Header';
 import { handoffStore } from '../../../utils/indexedDB';
 import TdsIcSparklingGeneral from '../../../imports/TdsIcSparklingGeneral-2104-16';
 import { useGlobalInteraction } from '../../../context/GlobalInteractionContext';
+import { useAccess } from '../../../context/AccessContext';
 import { getUserDisplayName, getUserAvatarUrl } from '../../utils/userDisplay';
 
 function formatBytes(bytes: number, decimals = 2) {
@@ -54,6 +55,7 @@ export function SuccessScreen({
   initialStatus,
   onLogout
 }: SuccessScreenProps) {
+  const { isWhitelisted } = useAccess();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   // Tracks which phase of the save pipeline we're in so the Save button can
@@ -566,7 +568,7 @@ export function SuccessScreen({
                 <div className="flex flex-col gap-[8px] items-center text-center">
                     <h2 className="text-[24px] font-bold text-[#303135] leading-[30px]">Creation done ✨</h2>
                     <p className="text-[18px] font-normal text-[#303135] leading-[24px]">
-                        Download or resize it with Generative Resize tool.
+                        {isWhitelisted ? 'Download or resize it with Generative Resize tool.' : 'Download your banner below.'}
                     </p>
                 </div>
 
@@ -634,14 +636,16 @@ export function SuccessScreen({
                     </PopoverContent>
                 </Popover>
 
-                <button 
-                    onClick={handleGenerativeResize}
-                    disabled={isResizing || isSaving || !!downloadingItem}
-                    className="h-[52px] px-[24px] rounded-[8px] bg-[#E7F2FF] text-[#007BFF] text-[18px] font-bold hover:bg-[#D1E6FF] transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {isResizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <div className="w-5 h-5" style={{ '--fill-0': '#007BFF' } as React.CSSProperties}><TdsIcSparklingGeneral /></div>}
-                    Resize
-                </button>
+                {isWhitelisted && (
+                    <button 
+                        onClick={handleGenerativeResize}
+                        disabled={isResizing || isSaving || !!downloadingItem}
+                        className="h-[52px] px-[24px] rounded-[8px] bg-[#E7F2FF] text-[#007BFF] text-[18px] font-bold hover:bg-[#D1E6FF] transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isResizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <div className="w-5 h-5" style={{ '--fill-0': '#007BFF' } as React.CSSProperties}><TdsIcSparklingGeneral /></div>}
+                        Resize
+                    </button>
+                )}
 
                 <button
                     onClick={() => handleSave(true)}

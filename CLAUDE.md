@@ -38,6 +38,43 @@ Tidak ada test runner, linter, atau typecheck script di `package.json`. Verifika
 - Komponen `PascalCase`, service/hook `camelCase`, styling lewat class Tailwind (hindari inline style).
 - Akses data selalu lewat `src/services/*`, jangan panggil client Supabase langsung dari komponen.
 
+## Akses & gating fitur AI
+
+Model izinnya dua flag saja, dari `useAccess()` (`src/context/AccessContext.tsx`): `isWhitelisted` (semua fitur AI) dan `isAdmin` (tambahan halaman Settings). Gating-nya berlapis dua dan **keduanya wajib** — UI untuk pengalaman, server untuk penegakan.
+
+### Lapis 1 — UI (menyembunyikan)
+
+- Route di-gate dengan `<AccessGate>` / `<AccessGate adminOnly>` di `App.tsx`.
+- **Setiap entry point AI juga wajib disembunyikan, bukan cuma di-redirect.** Route guard baru bekerja setelah user klik; tombol yang tetap terlihat lalu melempar user kembali ke dashboard adalah bug. Pola yang dipakai: `{isWhitelisted && <...>}`.
+- Sudah ter-gate: tombol/menu Generative Resize di `BannerContextMenu`, `InspectorPanel`, dan `SuccessScreen`; tab Generate/Gallery di `FormStep3` dan `ImageInputSelector`; Auto Translate di `FormStep2`; menu Tools di `Sidebar`.
+- `ImageInputSelector` memaksa `hideAITab`/`hideHistoryTab` untuk non-whitelist, jadi caller baru aman secara default.
+
+### Lapis 2 — Edge function (menegakkan)
+
+Anon key itu publik, jadi UI saja tidak membatasi biaya Replicate. Route berbayar dijaga `requireWhitelisted(c)` di `supabase/functions/server/index.tsx`:
+
+```ts
+const denied = await requireWhitelisted(c); if (denied) return denied;
+```
+
+Berlaku untuk 10 route: `generate-text`, `generate-image`, `start-generate-text`, `start-generate-image`, `check-prediction/:id`, `cancel-prediction/:id`, `utility/remove-background`, dan tiga route `generative-resize/history`. Balasannya 401 (tidak login) atau 403 (bukan whitelist).
+
+**Konsekuensinya di klien:** route tersebut menolak anon key. Semua pemanggilnya wajib memakai `getAuthToken()` dari `src/utils/supabase/client.ts`, bukan `publicAnonKey`:
+
+```ts
+headers: { 'Authorization': `Bearer ${await getAuthToken()}` }
+```
+
+Route lain (`/upload`, `/delete-files`, `/banners`, `/assets`, `/activities`, `/signup`) masih terbuka dan tetap memakai anon key — belum di-gate, bukan berarti aman.
+
+### Menjaga keduanya tetap sinkron
+
+```bash
+pnpm check:ai-access
+```
+
+Skrip `scripts/check-ai-access.mjs` gagal kalau ada route yang menyentuh `REPLICATE_API_TOKEN` tanpa guard, atau ada call site klien ke route ter-gate yang masih mengirim `publicAnonKey`. Jalankan setelah menambah endpoint AI baru.
+
 ## Secret & keamanan
 
 - `utils/supabase/info.tsx` berisi project URL + **anon key** (publishable, aman ter-commit).

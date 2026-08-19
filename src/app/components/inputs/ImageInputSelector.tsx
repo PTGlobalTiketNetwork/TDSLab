@@ -17,6 +17,7 @@ import {
 } from '../ui/select';
 import { ScrollArea } from '../ui/scroll-area';
 
+import { useAccess } from '../../../context/AccessContext';
 import { AI_MODELS, DEFAULT_MODEL_ID } from '../../../config/ai-models';
 import { AIGenerator } from './AIGenerator';
 import { HistorySelector } from '../create-banner/components/HistorySelector';
@@ -76,9 +77,15 @@ export function ImageInputSelector({
   onAssetSelected, 
   accept = "image/png, image/jpeg, image/jpg", 
   maxSizeMB = 50,
-  hideAITab = false,
-  hideHistoryTab = false
+  hideAITab: hideAITabProp = false,
+  hideHistoryTab: hideHistoryTabProp = false
 }: ImageInputSelectorProps) {
+  // Generate and Gallery are AI features: non-whitelisted accounts never see them,
+  // regardless of what the caller asks for.
+  const { isWhitelisted } = useAccess();
+  const hideAITab = hideAITabProp || !isWhitelisted;
+  const hideHistoryTab = hideHistoryTabProp || !isWhitelisted;
+
   const [activeTab, setActiveTab] = useState('upload');
   
   // Upload Mode State

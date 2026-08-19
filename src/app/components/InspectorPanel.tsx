@@ -24,6 +24,7 @@ import {
 } from '../utils/bannerCapture';
 import TdsIcSparklingGeneral from '../../imports/TdsIcSparklingGeneral-2104-16';
 import { useGlobalInteraction } from '../../context/GlobalInteractionContext';
+import { useAccess } from '../../context/AccessContext';
 import { getUserDisplayName, getUserAvatarUrl, formatStoredName } from '../utils/userDisplay';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -71,6 +72,7 @@ export function InspectorPanel({
   onClearSelection,
   session
 }: InspectorPanelProps) {
+  const { isWhitelisted } = useAccess();
   const [downloadingItem, setDownloadingItem] = useState<string | null>(null);
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [isDuplicateSuccess, setIsDuplicateSuccess] = useState(false);
@@ -1229,7 +1231,7 @@ export function InspectorPanel({
               </span>
             </button>
 
-            {/* Quick Save (for drafts) or Generative Resize (for published) */}
+            {/* Quick Save (for drafts) or Generative Resize (for published, whitelisted only) */}
             {selectedBanner.status === 'draft' && formData ? (
               <button
                 onClick={handleQuickSave}
@@ -1244,7 +1246,7 @@ export function InspectorPanel({
                   {isSaving ? 'Saving...' : 'Save'}
                 </span>
               </button>
-            ) : (
+            ) : isWhitelisted ? (
               <button
                 onClick={handleGenerativeResize}
                 disabled={isResizing}
@@ -1258,7 +1260,7 @@ export function InspectorPanel({
                   {isResizing ? '... ' : 'Resize'}
                 </span>
               </button>
-            )}
+            ) : null}
 
             {/* Duplicate */}
             <button
