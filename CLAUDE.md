@@ -45,4 +45,11 @@ Tidak ada test runner, linter, atau typecheck script di `package.json`. Verifika
 
 ## Git
 
-Repo private: `PTGlobalTiketNetwork/TDSLab`. Identitas commit di-set **per-repo** (`git config user.email` lokal), bukan global — jangan menimpanya dengan config global saat commit.
+Repo private: `PTGlobalTiketNetwork/TDSLab`. Akun GitHub dipatok **per-repo**, terlepas dari akun aktif `gh` di mesin:
+
+- `user.name` / `user.email` di-set di config lokal repo (noreply email akun `PTGlobalTiketNetwork`). Jangan timpa dengan config global.
+- `credential.https://github.com.helper` lokal me-reset daftar helper global lalu memasang helper yang mengambil token akun `PTGlobalTiketNetwork` dari keyring `gh` (`gh auth token --user ...`). Jadi push/fetch di repo ini selalu pakai akun tersebut; repo lain tetap ikut akun aktif `gh`.
+- Untuk perintah `gh` di repo ini (mis. `gh pr create`), akun aktif tetap berlaku — override sesaat dengan:
+  ```bash
+  GH_TOKEN=$(gh auth token --user PTGlobalTiketNetwork) gh <subcommand>
+  ```
