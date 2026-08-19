@@ -1,0 +1,247 @@
+/* 
+  Custom Font: Tiket Odyssey Text & Display
+  Loaded from Supabase Storage bucket 'fonts' and 'fonts_display'
+  
+  CRITICAL: Each weight MUST be declared separately for proper rendering
+  Font weights: 400 (Regular), 600 (SemiBold), 700 (Bold), 800 (ExtraBold)
+*/
+
+/* ========================================
+   TIKET ODYSSEY TEXT (For UI Elements)
+   Loaded from 'fonts' bucket
+   ======================================== */
+
+/* 1. Regular (400) - Base Weight */
+@font-face {
+  font-family: 'Tiket Odyssey Text';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-Regular.woff2') format('woff2'),
+       url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 2. SemiBold (600) - For Buttons & Medium Emphasis */
+@font-face {
+  font-family: 'Tiket Odyssey Text';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-SemiBold.woff2') format('woff2'),
+       url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-SemiBold.woff') format('woff');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 3. Bold (700) - For Headers & Strong Emphasis */
+@font-face {
+  font-family: 'Tiket Odyssey Text';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-Bold.woff2') format('woff2'),
+       url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 4. ExtraBold (800) - For Maximum Impact */
+@font-face {
+  font-family: 'Tiket Odyssey Text';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-ExtraBold.woff2') format('woff2'),
+       url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-ExtraBold.woff') format('woff');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 5. Bold Italic (700 + Italic) */
+@font-face {
+  font-family: 'Tiket Odyssey Text';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-BoldItalic.woff2') format('woff2'),
+       url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-BoldItalic.woff') format('woff');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* ========================================
+   TIKET ODYSSEY DISPLAY (For Live Preview)
+   Loaded from 'fonts_display' bucket
+   ======================================== */
+
+/* 1. Regular (400) */
+@font-face {
+  font-family: 'Tiket Odyssey Display';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts_display/TiketOdysseyDisplay-Regular.woff2') format('woff2'),
+       url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts_display/TiketOdysseyDisplay-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 2. SemiBold (600) */
+@font-face {
+  font-family: 'Tiket Odyssey Display';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts_display/TiketOdysseyDisplay-SemiBold.woff2') format('woff2'),
+       url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts_display/TiketOdysseyDisplay-SemiBold.woff') format('woff');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 3. Bold (700) */
+@font-face {
+  font-family: 'Tiket Odyssey Display';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts_display/TiketOdysseyDisplay-Bold.woff2') format('woff2'),
+       url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts_display/TiketOdysseyDisplay-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 4. ExtraBold (800) */
+@font-face {
+  font-family: 'Tiket Odyssey Display';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts_display/TiketOdysseyDisplay-ExtraBold.woff2') format('woff2'),
+       url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts_display/TiketOdysseyDisplay-ExtraBold.woff') format('woff');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ========================================
+   FIGMA EXPORT COMPATIBILITY LAYER
+   Separate font-family names with colons
+   ======================================== */
+
+@font-face {
+  font-family: 'Tiket_Odyssey_Text:Regular';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Tiket_Odyssey_Text:SemiBold';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Tiket_Odyssey_Text:Bold';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Tiket_Odyssey_Text:ExtraBold';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-ExtraBold.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Tiket_Odyssey_Text:BoldItalic';
+  src: url('https://rrrcbsjmcwlkndolwgst.supabase.co/storage/v1/object/public/fonts/TiketOdysseyText-BoldItalic.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* ========================================
+   GLOBAL APPLICATION
+   ======================================== */
+
+/* Apply Tiket Odyssey Text to body and all UI elements */
+body {
+  font-family: 'Tiket Odyssey Text', 'Tiket_Odyssey_Text:Regular', -apple-system, BlinkMacSystemFont, 'Segoe UI', 
+               'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 
+               'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Explicitly override form elements to use Tiket Odyssey Text */
+button, 
+input, 
+textarea, 
+select {
+  font-family: 'Tiket Odyssey Text', 'Tiket_Odyssey_Text:Regular', -apple-system, BlinkMacSystemFont, 'Segoe UI', 
+               'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 
+               'Droid Sans', 'Helvetica Neue', sans-serif;
+}
+
+/* Utility class for Live Preview (uses Display variant) */
+.font-banner {
+  font-family: 'Tiket Odyssey Display', sans-serif !important;
+}
+
+/* ========================================
+   WEIGHT UTILITIES (Optional Reinforcement)
+   Force exact weight mapping for critical elements
+   ======================================== */
+
+.font-normal {
+  font-weight: 400 !important;
+}
+
+.font-medium {
+  font-weight: 600 !important;
+}
+
+.font-semibold {
+  font-weight: 600 !important;
+}
+
+.font-bold {
+  font-weight: 700 !important;
+}
+
+.font-extrabold {
+  font-weight: 800 !important;
+}
+
+/* Force font-weight for common elements to prevent browser synthesis */
+strong, b {
+  font-weight: 700;
+}
+
+em {
+  font-style: italic;
+}
+
+/* ========================================
+   FIGMA COLON NAMING COMPATIBILITY FIX
+   Force proper font-weight rendering
+   ======================================== */
+
+/* Force Bold rendering for Figma Bold font-family */
+[class*="font-['Tiket_Odyssey_Text:Bold'"],
+[class*='font-["Tiket_Odyssey_Text:Bold'],
+*[style*="font-family: 'Tiket_Odyssey_Text:Bold'"],
+*[style*='font-family: "Tiket_Odyssey_Text:Bold'] {
+  font-family: 'Tiket Odyssey Text', sans-serif !important;
+  font-weight: 700 !important;
+}
+
+/* Force SemiBold rendering for Figma SemiBold font-family */
+[class*="font-['Tiket_Odyssey_Text:SemiBold'"],
+[class*='font-["Tiket_Odyssey_Text:SemiBold'],
+*[style*="font-family: 'Tiket_Odyssey_Text:SemiBold'"],
+*[style*='font-family: "Tiket_Odyssey_Text:SemiBold'] {
+  font-family: 'Tiket Odyssey Text', sans-serif !important;
+  font-weight: 600 !important;
+}
+
+/* Force ExtraBold rendering for Figma ExtraBold font-family */
+[class*="font-['Tiket_Odyssey_Text:ExtraBold'"],
+[class*='font-["Tiket_Odyssey_Text:ExtraBold'],
+*[style*="font-family: 'Tiket_Odyssey_Text:ExtraBold'"],
+*[style*='font-family: "Tiket_Odyssey_Text:ExtraBold'] {
+  font-family: 'Tiket Odyssey Text', sans-serif !important;
+  font-weight: 800 !important;
+}
