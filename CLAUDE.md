@@ -45,11 +45,14 @@ Tidak ada test runner, linter, atau typecheck script di `package.json`. Verifika
 
 ## Git
 
-Repo private: `PTGlobalTiketNetwork/TDSLab`. Akun GitHub dipatok **per-repo**, terlepas dari akun aktif `gh` di mesin:
+Repo private: `PTGlobalTiketNetwork/TDSLab` (owner). Pekerjaan sehari-hari dilakukan sebagai collaborator `ryansetiawan-tiket` (akses write).
 
-- `user.name` / `user.email` di-set di config lokal repo (noreply email akun `PTGlobalTiketNetwork`). Jangan timpa dengan config global.
-- `credential.https://github.com.helper` lokal me-reset daftar helper global lalu memasang helper yang mengambil token akun `PTGlobalTiketNetwork` dari keyring `gh` (`gh auth token --user ...`). Jadi push/fetch di repo ini selalu pakai akun tersebut; repo lain tetap ikut akun aktif `gh`.
-- Untuk perintah `gh` di repo ini (mis. `gh pr create`), akun aktif tetap berlaku — override sesaat dengan:
+Akun dipatok **per-repo** di config lokal, terlepas dari akun aktif `gh` di mesin:
+
+- `user.name` / `user.email` lokal = `ryansetiawan-tiket` / `ryan.setiawan@tiket.com`. Jangan timpa dengan config global.
+- `credential.https://github.com.helper` lokal me-reset daftar helper global lalu memasang helper yang mengambil token `ryansetiawan-tiket` dari keyring `gh` (`gh auth token --user ...`). Push/fetch di repo ini selalu pakai akun itu; repo lain tetap ikut akun aktif `gh`.
+- Perintah `gh` (mis. `gh pr create`) tidak ikut config repo — ia memakai akun aktif. Kalau butuh bertindak sebagai owner:
   ```bash
   GH_TOKEN=$(gh auth token --user PTGlobalTiketNetwork) gh <subcommand>
   ```
+- Ganti akun pengerjaan = ubah dua config lokal di atas (identitas + helper) ke login akun lain; tidak perlu `gh auth switch`.
