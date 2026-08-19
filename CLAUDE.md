@@ -6,7 +6,7 @@ Panduan singkat untuk AI agent yang bekerja di repo ini. Detail fitur & design s
 
 React 18 + TypeScript + Vite 6, Tailwind CSS v4 (via `@tailwindcss/vite`), Radix UI + shadcn-style components, MUI (dipakai sebagian), Supabase (auth, storage, KV store), react-router-dom v7.
 
-Package manager: **pnpm** (ada `pnpm-workspace.yaml` dan `pnpm.overrides` yang mem-pin vite ke 6.3.5).
+Package manager: **pnpm** (ada `pnpm-workspace.yaml` + `pnpm-lock.yaml`; Vercel memakai pnpm 10.x). Vite dipatok ke 6.3.5 lewat `devDependencies`. Jangan pakai `pnpm.overrides`: pnpm 11 mengabaikan field itu, jadi lockfile tidak merekamnya dan build Vercel gagal `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`.
 
 ```bash
 pnpm install
