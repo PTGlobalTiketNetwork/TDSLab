@@ -361,7 +361,7 @@ export function Sidebar({
             )}
             {isVisible('Hero Landing Page Header') && (
               <SubMenuItem
-                label="Hero Landing Page Header"
+                label="Hero LP Header"
                 isActive={activeItem === 'Hero Landing Page Header'}
                 onClick={() => onSelectItem?.('Hero Landing Page Header')}
                 isEmpty={!bannerCounts['Hero Landing Page Header']}

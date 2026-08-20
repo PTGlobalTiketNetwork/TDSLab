@@ -22,7 +22,7 @@ export function FormStepCategory({ formData, onChange }: FormStepCategoryProps) 
     },
     { 
       id: 'Hero Landing Page Header', 
-      label: 'Hero Landing Page Header', 
+      label: 'Hero LP Header', 
       description: 'Large header for landing pages.',
       active: false,
     },
