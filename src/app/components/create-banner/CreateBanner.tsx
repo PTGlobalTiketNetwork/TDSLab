@@ -180,6 +180,11 @@ export function CreateBanner({
     };
   }, [editingId, userId]);
 
+  // Display-only override — internal bannerCategory value stays unchanged.
+  const categoryDisplayLabels: Record<string, string> = {
+    'Hero Landing Page Header': 'Hero LP Header',
+  };
+
   // Map URL slug to Category Name
   const categoryMap: Record<string, string> = {
     'promo-banner': 'Promo Banner',
@@ -978,7 +983,7 @@ export function CreateBanner({
           <TiketBreadcrumb
             items={[
               { label: 'Banners' },
-              { label: formData.bannerCategory, href: `/banners/${formData.bannerCategory}` },
+              { label: categoryDisplayLabels[formData.bannerCategory] || formData.bannerCategory, href: `/banners/${formData.bannerCategory}` },
               { label: editingId ? 'Edit Banner' : 'Create New Banner' },
             ]}
           />

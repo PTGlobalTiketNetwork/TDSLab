@@ -213,6 +213,11 @@ function AppContent() {
       return 'Promo Banner';
   }, [location.pathname]);
 
+  // Display-only override — keys must stay the internal activeSidebarItem values used for comparisons.
+  const sidebarItemDisplayLabels: Record<string, string> = {
+    'Hero Landing Page Header': 'Hero LP Header',
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
@@ -391,7 +396,7 @@ function AppContent() {
               canAccessSettings={access.isAdmin}
           />
           <Header
-            title={activeSidebarItem === 'Drafts' ? 'Drafts' : activeSidebarItem}
+            title={activeSidebarItem === 'Drafts' ? 'Drafts' : (sidebarItemDisplayLabels[activeSidebarItem] || activeSidebarItem)}
             customTitle={headerCustomTitle}
             searchPlaceholder={isAssetMode ? "Search asset by name" : "Search banner by name"}
             createButtonText={isAssetMode ? "Add Asset" : "Create New Banner"}

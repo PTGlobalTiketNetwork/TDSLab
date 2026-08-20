@@ -11,6 +11,14 @@ const MENU_DESCRIPTIONS: Record<ManagedMenuItem, string> = {
   'Hero Landing Page Header': 'Full-width hero headers for landing pages.',
 };
 
+// Display-only labels — keys must stay the internal ManagedMenuItem values used for storage/comparison.
+const MENU_LABELS: Record<ManagedMenuItem, string> = {
+  'Promo Banner': 'Promo Banner',
+  'Product Entry Point': 'Product Entry Point',
+  'Homepage Promo Banner': 'Homepage Promo Banner',
+  'Hero Landing Page Header': 'Hero LP Header',
+};
+
 export function MenuManagementPage({ isSidebarCollapsed = false }: { isSidebarCollapsed?: boolean }) {
   const { visibility, setVisibility, loading } = useMenuVisibility();
 
@@ -19,7 +27,7 @@ export function MenuManagementPage({ isSidebarCollapsed = false }: { isSidebarCo
     toast.custom((id) => (
       <TiketSnackbar
         id={id}
-        message={`"${item}" is now ${value ? 'visible' : 'hidden'} in the sidebar.`}
+        message={`"${MENU_LABELS[item]}" is now ${value ? 'visible' : 'hidden'} in the sidebar.`}
       />
     ));
   };
@@ -55,7 +63,7 @@ export function MenuManagementPage({ isSidebarCollapsed = false }: { isSidebarCo
                 <div key={item} className="flex items-center justify-between px-[24px] py-[18px]">
                   <div className="flex flex-col gap-0.5">
                     <span className={`text-[14px] font-medium ${isOn ? 'text-[#303135]' : 'text-[#aeb2be]'}`}>
-                      {item}
+                      {MENU_LABELS[item]}
                     </span>
                     <span className="text-[12px] text-[#aeb2be]">{MENU_DESCRIPTIONS[item]}</span>
                   </div>

@@ -102,9 +102,14 @@ export function FormStepConfig({ formData, onChange, error, validationState, onV
 
   // If not Promo Banner or Product Entry Point, show placeholder
   if (formData.bannerCategory !== 'Promo Banner' && formData.bannerCategory !== 'Product Entry Point') {
+      // Display-only override — internal bannerCategory value stays unchanged.
+      const categoryDisplayLabels: Record<string, string> = {
+          'Hero Landing Page Header': 'Hero LP Header',
+      };
+      const categoryLabel = categoryDisplayLabels[formData.bannerCategory] || formData.bannerCategory;
       return (
           <div className="flex flex-col items-center justify-center h-[300px] text-center text-[#71747d] bg-[#f8f9fd] rounded-[8px] border border-dashed border-[#d8dce8]">
-              <p>Configuration for <strong>{formData.bannerCategory}</strong> is currently under development.</p>
+              <p>Configuration for <strong>{categoryLabel}</strong> is currently under development.</p>
           </div>
       );
   }
