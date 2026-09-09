@@ -158,7 +158,7 @@ export const BannerService = {
     const bannerId = savedData.id || banner.id;
     if (bannerId) {
       try {
-        await supabase.channel('banner_updates').httpSend({
+        await supabase.channel('banner_updates').send({
            type: 'broadcast',
            event: 'NEW_VERSION_SAVED',
            payload: {
@@ -221,7 +221,7 @@ export const BannerService = {
 
     // Broadcast update (fire-and-forget; a broadcast failure must not surface as a save error)
     try {
-      await supabase.channel('banner_updates').httpSend({
+      await supabase.channel('banner_updates').send({
          type: 'broadcast',
          event: 'NEW_VERSION_SAVED',
          payload: {
