@@ -4,6 +4,9 @@ import { supabase } from '../../utils/supabase/client';
 import { AccessService } from '../../services/accessService';
 import { TiketSelect, type TiketSelectOption } from '../components/ui/TiketSelect';
 import { TiketButton } from '../components/ui/TiketButton';
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
+
+const BOOTSTRAP_ADMIN_EMAIL = 'ryan.setiawan@tiket.com';
 
 const ROLE_OPTIONS: TiketSelectOption[] = [
   {
@@ -38,10 +41,14 @@ export function AccessManagementPage() {
   const [role, setRole] = useState<'member' | 'admin'>('member');
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState('');
+  const [revokeTarget, setRevokeTarget] = useState<any>(null);
+  const [isRevoking, setIsRevoking] = useState(false);
 
   const load = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
+    setCurrentUserId(session.user.id);
     try {
       const [m, a, e] = await Promise.all([
         AccessService.getMembers(session.access_token),
@@ -89,6 +96,24 @@ export function AccessManagementPage() {
       setError(err.message || 'Could not grant access');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const revoke = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || !revokeTarget) return;
+    setIsRevoking(true);
+    setError('');
+    try {
+      await AccessService.revokeMember(session.access_token, revokeTarget.userId);
+      setRevokeTarget(null);
+      await load();
+    } catch (err: any) {
+      console.error('Failed to revoke access:', err);
+      setRevokeTarget(null);
+      setError(err.message || 'Could not revoke access');
+    } finally {
+      setIsRevoking(false);
     }
   };
 
@@ -153,13 +178,18 @@ export function AccessManagementPage() {
             <span className="text-sm text-[#71747d]">{members.filter(m => m.active).length} active</span>
           </div>
           <div className="divide-y divide-[#e9ebef]">
-            {members.map(m => (
-              <div key={m.userId} className="flex items-center justify-between px-6 py-4">
+            {members.filter(m => m.active).map(m => (
+              <div key={m.userId} className="flex items-center justify-between gap-3 px-6 py-4">
                 <div>
                   <p className="font-semibold">{m.displayName || m.email}</p>
                   <p className="text-sm text-[#71747d]">{m.email}</p>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${m.role === 'admin' ? 'bg-blue-50 text-[#0064D2]' : 'bg-slate-100 text-slate-600'}`}>{m.role}</span>
+                <div className="flex items-center gap-3">
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${m.role === 'admin' ? 'bg-blue-50 text-[#0064D2]' : 'bg-slate-100 text-slate-600'}`}>{m.role}</span>
+                  {m.email?.toLowerCase() !== BOOTSTRAP_ADMIN_EMAIL && m.userId !== currentUserId && (
+                    <TiketButton variant="tertiary" onClick={() => setRevokeTarget(m)}>Revoke access</TiketButton>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -180,6 +210,21 @@ export function AccessManagementPage() {
           ))}
         </div>
       </section>
+
+      <AlertDialog open={!!revokeTarget} onOpenChange={open => { if (!open && !isRevoking) setRevokeTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke access?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {revokeTarget?.displayName || revokeTarget?.email} ({revokeTarget?.email}) will lose {revokeTarget?.role} access. You can grant it again later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <TiketButton variant="secondary" disabled={isRevoking} onClick={() => setRevokeTarget(null)}>Cancel</TiketButton>
+            <TiketButton variant="alert" isLoading={isRevoking} onClick={revoke}>Revoke access</TiketButton>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
