@@ -36,7 +36,7 @@ export function AssetDeleteModal({ isOpen, asset, onConfirm, onCancel, isLoading
           </p>
           <div className="bg-[#f8f9fd] p-[16px] rounded-[8px] flex items-center gap-4">
              {/* Thumbnail */}
-             <div className="w-[60px] h-[60px] bg-white rounded border border-[#d8dce8] flex items-center justify-center p-1">
+             <div className="checkerboard w-[60px] h-[60px] rounded border border-[#d8dce8] flex items-center justify-center p-1">
                  <img src={asset.imageUrl} alt={asset.name} className="max-w-full max-h-full object-contain" />
              </div>
              <div>

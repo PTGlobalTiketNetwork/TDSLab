@@ -94,7 +94,7 @@ export function MoveAssetModal({ isOpen, asset, onConfirm, onCancel, isLoading }
 
             {/* Asset Preview */}
             <div className="bg-[#f8f9fd] p-[16px] rounded-[8px] flex items-center gap-4 mb-4">
-              <div className="w-[60px] h-[60px] bg-white rounded border border-[#d8dce8] flex items-center justify-center p-1 shrink-0">
+              <div className="checkerboard w-[60px] h-[60px] rounded border border-[#d8dce8] flex items-center justify-center p-1 shrink-0">
                 <img src={asset.imageUrl} alt={asset.name} className="max-w-full max-h-full object-contain" />
               </div>
               <div className="min-w-0">
@@ -178,7 +178,7 @@ export function MoveAssetModal({ isOpen, asset, onConfirm, onCancel, isLoading }
         <div className="p-[24px]">
           {/* Asset Preview */}
           <div className="bg-[#f8f9fd] p-[16px] rounded-[8px] flex items-center gap-4 mb-5">
-            <div className="w-[60px] h-[60px] bg-white rounded border border-[#d8dce8] flex items-center justify-center p-1 shrink-0">
+            <div className="checkerboard w-[60px] h-[60px] rounded border border-[#d8dce8] flex items-center justify-center p-1 shrink-0">
               <img src={asset.imageUrl} alt={asset.name} className="max-w-full max-h-full object-contain" />
             </div>
             <div className="min-w-0">

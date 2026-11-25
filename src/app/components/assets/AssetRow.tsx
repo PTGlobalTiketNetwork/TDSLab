@@ -31,7 +31,7 @@ export const AssetRow = forwardRef<HTMLDivElement, AssetRowProps>(
 
         {/* Image */}
         <div className="w-[100px] shrink-0 flex items-center justify-start">
-           <div className="h-[40px] w-[80px] flex items-center justify-start">
+           <div className="checkerboard h-[40px] w-[80px] flex items-center justify-start">
               <ImageWithFallback 
                   src={asset.imageUrl}
                   alt={asset.name}
