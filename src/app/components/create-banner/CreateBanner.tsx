@@ -711,7 +711,8 @@ export function CreateBanner({
                     keyVisualPosition: { x: 50, y: 50 },
                     // 5. Default Background: placeholder image like Landscape/Portrait; overlay keeps white text legible
                     backgroundType: 'image',
-                    gradientOpacity: 100
+                    gradientOpacity: 100,
+                    overlayGradientStop: 35 // Square needs a taller overlay for legibility (legacy ratios default to 10)
                 };
             }
 
@@ -745,7 +746,7 @@ export function CreateBanner({
                     keyVisualScale: 100,
                     keyVisualPosition: { x: 50, y: 50 },
                     gradientOpacity: 100,
-                    overlayGradientStop: prev.overlayGradientStop ?? 10,
+                    overlayGradientStop: 10, // reset Square's 35 so Landscape/Portrait keep their default
                     overlayColor: prev.overlayColor || '#000000',
                 };
             }
