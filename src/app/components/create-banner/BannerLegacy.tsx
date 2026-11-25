@@ -339,6 +339,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
 
   if (isPortrait) {
     return (
+      <div className="flex justify-center w-full">{/* centers the fixed 360px banner in the Preview panel */}
       <div className={`flex flex-col gap-[8px] flex-shrink-0 ${className || ''}`} style={{ width: '360px', transform: `scale(${renderScale || 1})`, transformOrigin: 'top left' }} ref={ref}>
         {!hideHeader && (
           <div className="bg-[#f2f8ff] rounded-[4px] p-[10px] w-full">
@@ -539,6 +540,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
           </div>{/* end inner 720×960 div */}
           </div>{/* end scale(0.5) div */}
         </div>{/* end 360×480 outer wrapper */}
+      </div>
       </div>
     );
   }
