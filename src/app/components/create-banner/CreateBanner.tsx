@@ -709,10 +709,9 @@ export function CreateBanner({
                     // 4. Reset Scale/Pos
                     keyVisualScale: 100,
                     keyVisualPosition: { x: 50, y: 50 },
-                    // 5. Default Background Settings (Requested)
-                    backgroundType: 'color',
-                    backgroundColor: '#0064D2', // b500
-                    gradientOpacity: 0
+                    // 5. Default Background: placeholder image like Landscape/Portrait; overlay keeps white text legible
+                    backgroundType: 'image',
+                    gradientOpacity: 100
                 };
             }
 
