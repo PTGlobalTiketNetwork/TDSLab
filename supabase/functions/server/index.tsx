@@ -227,6 +227,26 @@ app.post(`${ROUTE_PREFIX}/access/members`, async (c) => {
   return c.json(member);
 });
 
+app.post(`${ROUTE_PREFIX}/access/members/:userId/revoke`, async (c) => {
+  const actor = await requireAdmin(c);
+  if (!actor) return c.json({ error: "Admin access required" }, 403);
+  const userId = c.req.param("userId");
+  if (userId === actor.user.id) return c.json({ error: "You cannot revoke your own access" }, 403);
+  const key = `${ACCESS_PREFIX}${userId}`;
+  const current = await kv.get(key) as AccessMember | null;
+  if (!current) return c.json({ error: "Member not found" }, 404);
+  if (current.email?.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL) return c.json({ error: "The main admin cannot be revoked" }, 403);
+  if (!current.active) return c.json(current);
+  const now = new Date().toISOString();
+  const member: AccessMember = { ...current, active: false, revokedBy: actor.user.id, revokedAt: now, updatedAt: now };
+  await kv.set(key, member);
+  await kv.set(`${ACCESS_AUDIT_PREFIX}${now}:${crypto.randomUUID()}`, {
+    action: "revoke_member", actorId: actor.user.id, actorEmail: actor.user.email,
+    targetId: userId, targetEmail: current.email, previousRole: current.role, timestamp: now,
+  });
+  return c.json(member);
+});
+
 // --- Banner Endpoints ---
 
 // Create/Update Banner
