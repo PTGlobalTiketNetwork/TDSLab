@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Banner, ViewMode } from '../../types/banner';
 import { BannerCard } from './BannerCard';
 import { BannerRow } from './BannerRow';
@@ -27,6 +27,7 @@ interface MainContentProps {
   isLoading?: boolean;
   searchQuery?: string;
   highlightId?: string | null;
+  onHighlightHandled?: () => void;
   presenceMap?: Record<string, PresenceUser[]>;
   availableRatios: string[];
   availableVerticals: string[];
@@ -60,6 +61,7 @@ export function MainContent({
   isLoading = false,
   searchQuery = '',
   highlightId,
+  onHighlightHandled,
   presenceMap,
   availableRatios,
   availableVerticals,
@@ -77,6 +79,14 @@ export function MainContent({
 }: MainContentProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const lastHighlightedIdRef = useRef<string | null>(null);
+  const highlightTimersRef = useRef<number[]>([]);
+
+  useEffect(() => {
+    return () => {
+      highlightTimersRef.current.forEach(window.clearTimeout);
+    };
+  }, []);
 
   // Reset page when banners change (due to filtering)
   useEffect(() => {
@@ -87,28 +97,39 @@ export function MainContent({
 
   // Handle Highlight
   useEffect(() => {
-      if (highlightId && banners.length > 0) {
-          const index = banners.findIndex(b => b.id === highlightId);
-          if (index !== -1) {
-              const page = Math.floor(index / itemsPerPage) + 1;
-              setCurrentPage(page);
-              onSelectBanner(highlightId, false);
-              
-              // Scroll logic
-              setTimeout(() => {
-                  const element = document.getElementById(`banner-card-${highlightId}`);
-                  if (element) {
-                      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      // Add a temporary flash effect
-                      element.style.transition = 'box-shadow 0.5s';
-                      element.style.boxShadow = '0 0 0 4px rgba(0, 123, 255, 0.5)';
-                      setTimeout(() => {
-                          element.style.boxShadow = '';
-                      }, 2000);
-                  }
-              }, 300);
-          }
+      if (!highlightId) {
+          lastHighlightedIdRef.current = null;
+          return;
       }
+      if (banners.length === 0 || lastHighlightedIdRef.current === highlightId) return;
+
+      const index = banners.findIndex(b => b.id === highlightId);
+      if (index === -1) return;
+
+      lastHighlightedIdRef.current = highlightId;
+      const page = Math.floor(index / itemsPerPage) + 1;
+      setCurrentPage(page);
+      onSelectBanner(highlightId, false);
+
+      highlightTimersRef.current.forEach(window.clearTimeout);
+      highlightTimersRef.current = [];
+
+      const scrollTimer = window.setTimeout(() => {
+          const element = document.getElementById(`banner-card-${highlightId}`);
+          if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              element.style.transition = 'box-shadow 0.5s';
+              element.style.boxShadow = '0 0 0 4px rgba(0, 123, 255, 0.5)';
+              const clearTimer = window.setTimeout(() => {
+                  element.style.boxShadow = '';
+                  onHighlightHandled?.();
+              }, 2000);
+              highlightTimersRef.current.push(clearTimer);
+          } else {
+              onHighlightHandled?.();
+          }
+      }, 300);
+      highlightTimersRef.current.push(scrollTimer);
   }, [highlightId, banners]);
 
   const totalItems = banners.length;
