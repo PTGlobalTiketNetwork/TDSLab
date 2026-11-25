@@ -384,6 +384,7 @@ function AppContent() {
         <>
           <Sidebar 
               userName={userName}
+              userAvatar={userAvatar}
               isCollapsed={isSidebarCollapsed}
               onToggleCollapse={setIsSidebarCollapsed}
               onLogout={handleLogout}
