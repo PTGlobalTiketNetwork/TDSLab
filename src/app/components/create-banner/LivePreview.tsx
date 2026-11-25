@@ -135,6 +135,9 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
 
   const isDraggable = currentStep === 4 && (!!formData.keyVisualFile || !!formData.keyVisualUrl);
   const isSquare = formData.bannerRatio === 'Square (1:1)';
+  const previewFormData = currentStep === 1 && isSquare && !formData.keyVisualFile && !formData.keyVisualUrl
+    ? { ...formData, backgroundType: 'image' as const }
+    : formData;
   const isProductEntryPoint = formData.bannerCategory === 'Product Entry Point';
   const isDesktopEntryPoint = formData.bannerRatio === 'Desktop (5:1)' || formData.bannerRatio === 'Desktop (8:1)';
   // Desktop entry points (640px) use 1x; mobile entry points (320px) use 2x so they appear the same size
@@ -259,7 +262,7 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
     <div className="flex flex-col gap-[24px] w-full items-center overflow-x-auto pb-4">
       <div className="flex flex-col gap-[24px] w-full">
         <BannerFixed 
-            formData={formData} 
+            formData={previewFormData} 
             lang="en" 
             label="EN Translation" 
             scale={scale}
@@ -274,7 +277,7 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
             isShimmering={isTranslating && activeTab === 'id'}
         />
         <BannerFixed 
-            formData={formData} 
+            formData={previewFormData} 
             lang="id" 
             label="ID Translation" 
             scale={scale}
