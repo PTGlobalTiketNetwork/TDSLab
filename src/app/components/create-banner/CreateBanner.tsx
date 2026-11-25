@@ -26,7 +26,7 @@ import { Edit3, Save, Trash2 } from 'lucide-react';
 import { getUserAvatarUrl } from '../../utils/userDisplay';
 
 interface CreateBannerProps {
-  onBack: (message?: string) => void;
+  onBack: (message?: string, destination?: 'drafts' | 'category') => void;
   userName: string;
   userId?: string;
   userAvatar?: string;
@@ -205,6 +205,7 @@ export function CreateBanner({
   }, [initialData, initialCategory, categorySlug]);
 
   const [currentStep, setCurrentStep] = useState(() => {
+      if (initialStatus === 'published') return 1;
       const savedStep = initialData?.last_step;
       const parsedStep = typeof savedStep === 'string' ? parseInt(savedStep, 10) : savedStep;
       
@@ -214,6 +215,7 @@ export function CreateBanner({
       return 1;
   });
   const [maxStepReached, setMaxStepReached] = useState(() => {
+      if (initialStatus === 'published') return 3;
       const savedStep = initialData?.last_step;
       const parsedStep = typeof savedStep === 'string' ? parseInt(savedStep, 10) : savedStep;
       
@@ -814,11 +816,11 @@ export function CreateBanner({
     return (
       <SuccessScreen 
         formData={getSafeFormData()} 
-        onBackToList={onBack}
+        onBackToList={(msg) => onBack(msg, 'category')}
         userName={userName}
         userAvatar={userAvatar}
         onSave={() => {
-          onBack();
+          onBack(undefined, 'category');
         }}
         overwriteMode={isOverwriteMode}
         editingId={editingId}
@@ -902,16 +904,8 @@ export function CreateBanner({
 
       if (shouldLogout) {
           await performLogout();
-      } else if (!editingId) {
-          onBack(); // Only go back if it was a new creation
       } else {
-         // Stay on page if updating draft? Or go back? 
-         // Request implied "Save as Draft" might want to exit. 
-         // "When saving a draft, the toast should say: 'Draft updated successfully.'" 
-         // usually implies staying or exiting. Let's exit to be consistent with previous behavior
-         // unless user wants to keep editing. 
-         // Actually, most "Save as Draft" buttons exit.
-         onBack(); 
+          onBack(undefined, 'drafts');
       }
     } catch (error) {
       console.error('Save draft error:', error);

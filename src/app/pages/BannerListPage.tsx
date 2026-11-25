@@ -463,6 +463,7 @@ export function BannerListPage({
       form_data: {
         ...banner.form_data,
         bannerName: newName,
+        last_step: 1,
       },
       created_by: session!.user.id,
       image_url_en: banner.imageUrl,

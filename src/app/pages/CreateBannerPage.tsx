@@ -75,8 +75,16 @@ export function CreateBannerPage({ userName, userId, userAvatar }: CreateBannerP
     }
   };
 
-  const handleBack = (message?: string) => {
-    navigate(`/banners/${category || 'promo-banner'}`);
+  const handleBack = (message?: string, destination?: 'drafts' | 'category') => {
+    const targetSlug =
+      destination === 'drafts'
+        ? 'drafts'
+        : destination === 'category'
+          ? (category || 'promo-banner')
+          : initialStatus === 'draft'
+            ? 'drafts'
+            : (category || 'promo-banner');
+    navigate(`/banners/${targetSlug}`);
     if (message) toast.custom((t) => <TiketSnackbar id={t} message={message} variant="default" />);
   };
 
