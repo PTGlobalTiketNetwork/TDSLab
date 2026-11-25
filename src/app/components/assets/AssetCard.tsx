@@ -21,7 +21,7 @@ export const AssetCard = forwardRef<HTMLDivElement, AssetCardProps>(
         {...props}
       >
         {/* Image Area */}
-        <div className="flex-1 flex items-center justify-center w-full h-full overflow-hidden">
+        <div className="checkerboard flex-1 flex items-center justify-center w-full h-full overflow-hidden">
           <ImageWithFallback 
              src={asset.imageUrl}
              alt={asset.name}

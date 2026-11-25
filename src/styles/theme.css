@@ -409,3 +409,9 @@
   background-color: #D8DCE8;
   border-radius: 20px;
 }
+/* Light-grey checkerboard behind asset previews so transparent/white images stay visible. */
+.checkerboard {
+  background-color: #ffffff;
+  background-image: conic-gradient(#eef0f4 25%, #ffffff 0 50%, #eef0f4 0 75%, #ffffff 0);
+  background-size: 10px 10px;
+}
