@@ -15,10 +15,14 @@ export function SignUp({ onSwitchToLogin, onSignUpSuccess }: SignUpProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [signupError, setSignupError] = useState<string | null>(null);
+  const [existingAccount, setExistingAccount] = useState(false);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setSignupError(null);
+    setExistingAccount(false);
 
     try {
       // Call the server endpoint for signup
@@ -31,10 +35,16 @@ export function SignUp({ onSwitchToLogin, onSignUpSuccess }: SignUpProps) {
         body: JSON.stringify({ email, password, name }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to sign up');
+        const message = data?.error || 'Failed to sign up';
+        if (/already registered|already exists|already been registered/i.test(message)) {
+          setSignupError('An account with this email already exists.');
+          setExistingAccount(true);
+          return;
+        }
+        throw new Error(message);
       }
 
       // Auto login after successful signup
@@ -49,7 +59,9 @@ export function SignUp({ onSwitchToLogin, onSignUpSuccess }: SignUpProps) {
       onSignUpSuccess();
     } catch (error: any) {
       console.error(error);
-      toast.custom((t) => <TiketSnackbar id={t} message={error.message || 'Error signing up'} variant="error" />);
+      const message = error.message || 'Error signing up';
+      setSignupError(message);
+      toast.custom((t) => <TiketSnackbar id={t} message={message} variant="error" />);
     } finally {
       setLoading(false);
     }
@@ -65,6 +77,16 @@ export function SignUp({ onSwitchToLogin, onSignUpSuccess }: SignUpProps) {
       </div>
 
       <form onSubmit={handleSignUp} className="flex flex-col gap-[20px]">
+        {signupError && (
+          <div role="alert" className="rounded-[8px] border border-[#d4183d] bg-[#fff0f0] p-[12px] text-[12px] leading-[20px] text-[#303135]">
+            {signupError}{' '}
+            {existingAccount && (
+              <button type="button" onClick={onSwitchToLogin} className="font-medium text-[#007BFF] hover:underline">
+                Log in instead.
+              </button>
+            )}
+          </div>
+        )}
         <div className="flex flex-col gap-[8px]">
           <label className="text-[14px] font-medium text-[#303135]">Full Name <span className="text-red-500">*</span></label>
           <input

@@ -67,9 +67,18 @@ export function BannerListPage({
   onDataChange
 }: BannerListPageProps) {
   const { category: categorySlug } = useParams<{ category: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const highlightId = searchParams.get('highlight');
   const navigate = useNavigate();
+
+  const handleHighlightHandled = useCallback(() => {
+    setSearchParams(prev => {
+      if (!prev.has('highlight')) return prev;
+      const next = new URLSearchParams(prev);
+      next.delete('highlight');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
   
   const [banners, setBanners] = useState<Banner[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -485,74 +494,73 @@ export function BannerListPage({
     }
   };
 
-  const handleDuplicate = async (banner: Banner): Promise<void> => {
-        try {
-            if (!banner.form_data) {
-                toast.custom((id) => (
-                    <TiketSnackbar
-                        id={id}
-                        message="Cannot duplicate this banner (missing form data)"
-                        variant="error"
-                    />
-                ));
-                return;
-            }
-    
-            // No global loading here, button will handle it
-    
-            const newBannerId = crypto.randomUUID();
-            const newName = `${banner.name}_copy`;
-    
-            const duplicatedFormData = {
-                ...banner.form_data,
-                bannerName: newName,
-            };
-    
-            const payload = {
-                id: newBannerId,
-                name: newName,
-                category: banner.category,
-                status: 'draft',
-                form_data: duplicatedFormData,
-                created_by: session!.user.id,
-                image_url_en: banner.imageUrl, 
-                image_url_id: banner.imageUrl,
-                product: banner.product,
-                metadata: {
-                    dimension: banner.dimension,
-                    fileSize: banner.fileSize
-                }
-            };
-    
-            // @ts-ignore
-            await BannerService.saveBanner(payload);
-            
-            // Notification with actionable info
-            toast.custom((id) => (
-                <TiketSnackbar
-                    id={id}
-                    message="Banner duplicated successfully. Check Drafts to edit."
-                    cta={{
-                        label: "View Drafts",
-                        onClick: () => navigate('/banners/drafts')
-                    }}
-                />
-            ), { duration: 5000 });
+  const createBannerDuplicate = async (banner: Banner): Promise<string | null> => {
+    if (!banner.form_data) return null;
 
-            await loadBanners();
-            onDataChange?.(); // Update counts
-            
-        } catch (error) {
-            console.error("Duplicate failed", error);
-            toast.custom((id) => (
-                <TiketSnackbar
-                    id={id}
-                    message="Failed to duplicate banner"
-                    variant="error"
-                />
-            ));
-            throw error; // Propagate error so button can reset state
-        }
+    const newBannerId = crypto.randomUUID();
+    const newName = `${banner.name}_copy`;
+
+    const payload = {
+      id: newBannerId,
+      name: newName,
+      category: banner.category,
+      status: 'draft',
+      form_data: {
+        ...banner.form_data,
+        bannerName: newName,
+        last_step: 1,
+      },
+      created_by: session!.user.id,
+      image_url_en: banner.imageUrl,
+      image_url_id: banner.imageUrl,
+      product: banner.product,
+      metadata: {
+        dimension: banner.dimension,
+        fileSize: banner.fileSize,
+      },
+    };
+
+    // @ts-ignore
+    await BannerService.saveBanner(payload);
+    return newBannerId;
+  };
+
+  const handleDuplicate = async (banner: Banner): Promise<void> => {
+    try {
+      const newBannerId = await createBannerDuplicate(banner);
+      if (!newBannerId) {
+        toast.custom((id) => (
+          <TiketSnackbar
+            id={id}
+            message="Cannot duplicate this banner (missing form data)"
+            variant="error"
+          />
+        ));
+        return;
+      }
+
+      await loadBanners();
+      onDataChange?.();
+
+      toast.custom((id) => (
+        <TiketSnackbar
+          id={id}
+          message="Banner duplicated to Drafts"
+        />
+      ), { duration: 4000 });
+
+      navigate(`/banners/drafts?highlight=${newBannerId}`);
+    } catch (error) {
+      console.error("Duplicate failed", error);
+      toast.custom((id) => (
+        <TiketSnackbar
+          id={id}
+          message="Failed to duplicate banner"
+          variant="error"
+        />
+      ));
+      throw error; // Propagate error so button can reset state
+    }
   };
 
   const handleDownload = async (banner: Banner, scaleFactor: number = 1) => {
@@ -696,18 +704,23 @@ export function BannerListPage({
       toast.custom((id) => <TiketSnackbar id={id} message="None of the selected banners can be duplicated" variant="error" />);
       return;
     }
-    let succeeded = 0;
+    const createdIds: string[] = [];
     for (const banner of duplicatable) {
       try {
-        await handleDuplicate(banner);
-        succeeded++;
-      } catch {
-        // handleDuplicate already shows error toast
+        const newId = await createBannerDuplicate(banner);
+        if (newId) createdIds.push(newId);
+      } catch (error) {
+        console.error('Bulk duplicate item failed', error);
       }
     }
-    if (succeeded > 0) {
-      toast.custom((id) => <TiketSnackbar id={id} message={`${succeeded} banner(s) duplicated to Drafts`} />);
+    if (createdIds.length > 0) {
+      await loadBanners();
+      onDataChange?.();
       clearMultiSelect();
+      toast.custom((id) => <TiketSnackbar id={id} message={`${createdIds.length} banner(s) duplicated to Drafts`} />);
+      navigate(`/banners/drafts?highlight=${createdIds[createdIds.length - 1]}`);
+    } else {
+      toast.custom((id) => <TiketSnackbar id={id} message="Failed to duplicate banners" variant="error" />);
     }
   };
 
@@ -824,6 +837,7 @@ export function BannerListPage({
           isLoading={isLoading}
           searchQuery={searchQuery}
           highlightId={highlightId}
+          onHighlightHandled={handleHighlightHandled}
           presenceMap={presenceMap}
           availableRatios={availableRatios}
           availableVerticals={availableVerticals}

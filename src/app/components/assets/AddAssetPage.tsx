@@ -311,7 +311,7 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
           <span className="text-[#303135]">{isEditMode ? 'Edit Asset' : 'Add Asset'}</span>
         </div>
         <div className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] w-full max-w-[600px] p-[40px] flex flex-col items-center">
-          <div className="mb-6 h-[80px] w-[200px] flex items-center justify-center">
+          <div className="checkerboard mb-6 h-[80px] w-[200px] flex items-center justify-center">
             <ImageWithFallback src={previewUrl || ''} alt="Uploaded Asset" className="max-w-full max-h-full object-contain" />
           </div>
           <h2 className="text-[24px] font-bold text-[#303135] mb-2">{isEditMode ? 'Asset Updated' : 'File Uploaded'}</h2>
@@ -407,7 +407,7 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
                 </div>
               ) : (
                 <div className="w-full h-[180px] border border-[#d8dce8] rounded-[8px] flex flex-col items-center justify-center bg-white relative">
-                  <div className="flex-1 flex items-center justify-center p-4 w-full h-full">
+                  <div className="checkerboard flex-1 flex items-center justify-center p-4 w-full h-full">
                     {previewUrl && <img src={previewUrl} alt="Preview" className="max-w-[80%] max-h-[100px] object-contain" />}
                   </div>
                   <div className="mb-4 flex items-center gap-4">
@@ -522,7 +522,7 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
                     }`}
                   >
                     {/* Thumbnail */}
-                    <div className="w-[56px] h-[40px] rounded-[4px] bg-[#f0f2f7] flex items-center justify-center overflow-hidden shrink-0">
+                    <div className="checkerboard w-[56px] h-[40px] rounded-[4px] flex items-center justify-center overflow-hidden shrink-0">
                       <img src={bf.previewUrl} alt={bf.name} className="max-w-full max-h-full object-contain" />
                     </div>
 

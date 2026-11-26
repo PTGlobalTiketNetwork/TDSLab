@@ -29,7 +29,7 @@ import { getUserAvatarUrl } from '../../utils/userDisplay';
 import { startCreationTimer, stopCreationTimer } from '../../../utils/creationTimer';
 
 interface CreateBannerProps {
-  onBack: (message?: string) => void;
+  onBack: (message?: string, destination?: 'drafts' | 'category') => void;
   userName: string;
   userId?: string;
   userAvatar?: string;
@@ -211,6 +211,7 @@ export function CreateBanner({
   }, [initialData, initialCategory, categorySlug]);
 
   const [currentStep, setCurrentStep] = useState(() => {
+      if (initialStatus === 'published') return 1;
       const savedStep = initialData?.last_step;
       const parsedStep = typeof savedStep === 'string' ? parseInt(savedStep, 10) : savedStep;
       
@@ -220,6 +221,7 @@ export function CreateBanner({
       return 1;
   });
   const [maxStepReached, setMaxStepReached] = useState(() => {
+      if (initialStatus === 'published') return 3;
       const savedStep = initialData?.last_step;
       const parsedStep = typeof savedStep === 'string' ? parseInt(savedStep, 10) : savedStep;
       
@@ -754,10 +756,10 @@ export function CreateBanner({
                     // 4. Reset Scale/Pos
                     keyVisualScale: 100,
                     keyVisualPosition: { x: 50, y: 50 },
-                    // 5. Default Background Settings (Requested)
-                    backgroundType: 'color',
-                    backgroundColor: '#0064D2', // b500
-                    gradientOpacity: 0
+                    // 5. Default Background: placeholder image like Landscape/Portrait; overlay keeps white text legible
+                    backgroundType: 'image',
+                    gradientOpacity: 100,
+                    overlayGradientStop: 35 // Square needs a taller overlay for legibility (legacy ratios default to 10)
                 };
             }
 
@@ -791,7 +793,7 @@ export function CreateBanner({
                     keyVisualScale: 100,
                     keyVisualPosition: { x: 50, y: 50 },
                     gradientOpacity: 100,
-                    overlayGradientStop: prev.overlayGradientStop ?? 10,
+                    overlayGradientStop: 10, // reset Square's 35 so Landscape/Portrait keep their default
                     overlayColor: prev.overlayColor || '#000000',
                 };
             }
@@ -859,11 +861,11 @@ export function CreateBanner({
     return (
       <SuccessScreen 
         formData={getSafeFormData()} 
-        onBackToList={onBack}
+        onBackToList={(msg) => onBack(msg, 'category')}
         userName={userName}
         userAvatar={userAvatar}
         onSave={() => {
-          onBack();
+          onBack(undefined, 'category');
         }}
         overwriteMode={isOverwriteMode}
         editingId={editingId}
@@ -949,16 +951,8 @@ export function CreateBanner({
 
       if (shouldLogout) {
           await performLogout();
-      } else if (!editingId) {
-          onBack(); // Only go back if it was a new creation
       } else {
-         // Stay on page if updating draft? Or go back? 
-         // Request implied "Save as Draft" might want to exit. 
-         // "When saving a draft, the toast should say: 'Draft updated successfully.'" 
-         // usually implies staying or exiting. Let's exit to be consistent with previous behavior
-         // unless user wants to keep editing. 
-         // Actually, most "Save as Draft" buttons exit.
-         onBack(); 
+          onBack(undefined, 'drafts');
       }
     } catch (error) {
       console.error('Save draft error:', error);

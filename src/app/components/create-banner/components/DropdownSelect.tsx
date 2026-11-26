@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { Upload } from 'lucide-react';
 import chevronPaths from '../../../../imports/svg-dropdown-chevron';
 import iconPaths from '../../../../imports/svg-dropdown-icons';
+import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 
 interface Option {
   id: string;
@@ -62,18 +63,7 @@ export function DropdownSelect({
 }: DropdownSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const selectedOption = options.find(opt => opt.id === value);
   
@@ -82,12 +72,11 @@ export function DropdownSelect({
   );
 
   return (
-    <div className="relative w-full" ref={dropdownRef}>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <div className="w-full">
       {/* Trigger Box */}
-      <div 
-        onClick={() => setIsOpen(!isOpen)}
-        className="bg-white relative rounded-[8px] shrink-0 w-full cursor-pointer"
-      >
+      <PopoverTrigger asChild>
+      <button type="button" className="bg-white relative rounded-[8px] shrink-0 w-full cursor-pointer text-left">
         <div className="absolute border border-[#d8dce8] border-solid inset-0 pointer-events-none rounded-[8px]" />
         <div className="flex flex-row items-center size-full">
           <div className="content-stretch flex gap-[12px] items-center px-[16px] py-[12px] relative w-full">
@@ -133,35 +122,48 @@ export function DropdownSelect({
             <TdsIcChevronDown />
           </div>
         </div>
-      </div>
+      </button>
+      </PopoverTrigger>
       
       {/* Helper text from Figma design */}
       {/* The helper text is outside the box in the Figma import, so I'll leave it to the parent if needed, 
           but the Figma import included it. The user snippet selected ONLY the select element, so I won't add helper text here. */}
 
       {/* Dropdown Menu */}
-      {isOpen && (
-        <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] z-50 overflow-hidden flex flex-col pb-[8px]">
+      <PopoverContent
+        align="start"
+        side="bottom"
+        sideOffset={4}
+        collisionPadding={8}
+        onOpenAutoFocus={(event) => {
+          if (!disableSearch) {
+            event.preventDefault();
+            searchInputRef.current?.focus();
+          }
+        }}
+        className="w-[var(--radix-popover-trigger-width)] max-h-[var(--radix-popover-content-available-height)] overflow-hidden rounded-[12px] border-0 bg-white p-0 shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)]"
+      >
+        <div className="flex max-h-[var(--radix-popover-content-available-height)] flex-col overflow-hidden pb-[8px]">
           
           {/* Search Box */}
           {!disableSearch && (
-          <div className="p-[12px]">
+          <div className="shrink-0 p-[12px]">
             <div className="bg-[#f4f7fe] relative rounded-[100px] w-full flex items-center px-[12px] py-[10px] gap-[8px]">
               <TdsIcSearch />
               <input
+                ref={searchInputRef}
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search"
-                className="bg-transparent border-none outline-none text-[16px] text-[#303135] placeholder:text-[#71747d] w-full font-sans"
-                autoFocus
+                className="bg-transparent border-none outline-none text-[16px] text-[#303135] placeholder:text-[#71747d] w-full font-['Tiket_Odyssey_Text:Regular',sans-serif]"
               />
             </div>
           </div>
           )}
 
           {/* Options List */}
-          <div className="max-h-[240px] overflow-y-auto custom-scrollbar">
+          <div className="min-h-0 max-h-[240px] flex-1 overflow-y-auto custom-scrollbar">
             {onUploadNew && filteredOptions.length === 0 && (
               <div className="px-[12px] py-[12px] text-[14px] text-[#71747d]" style={{ fontFamily: "'Tiket Odyssey Text', sans-serif" }}>
                 {searchQuery.trim() ? `No results for "${searchQuery.trim()}"` : 'No logos yet'}
@@ -218,7 +220,8 @@ export function DropdownSelect({
             </div>
           )}
         </div>
-      )}
-    </div>
+      </PopoverContent>
+      </div>
+    </Popover>
   );
 }

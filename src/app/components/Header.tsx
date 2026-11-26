@@ -5,6 +5,7 @@ import LogoTiketHorizontal from '../../imports/LogoTiketHorizontal-7-464';
 import { ReactNode, useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { UserAvatar } from './UserAvatar';
 import {
   Tooltip,
   TooltipContent,
@@ -177,10 +178,15 @@ export function Header({
           )}
 
           {/* User Profile (Only shown when userName is provided, typical for Wizard mode) */}
-          {userName && (
+          {userName && (() => {
+            const hasMultiplayerPresence =
+              presenceUsers.length > 1 ||
+              (!!userId && presenceUsers.some((u) => u.id !== userId));
+
+            return (
              <div className="flex-1 flex justify-end items-center gap-6">
-                {/* Presence Avatars */}
-                {presenceUsers && presenceUsers.length > 0 && (
+                {/* Presence Avatars (only shown when collaborating with others) */}
+                {hasMultiplayerPresence && (
                   <div className="flex items-center -space-x-2 mr-2">
                     {presenceUsers.map((user) => {
                       const isCurrentUser = userId && user.id === userId;
@@ -207,6 +213,15 @@ export function Header({
                 )}
 
                 <div className="flex items-center gap-3 relative" ref={menuRef}>
+                    {!hasMultiplayerPresence && (
+                      <UserAvatar
+                        src={userAvatar}
+                        name={userName}
+                        size={36}
+                        showTooltip={false}
+                        className="shrink-0"
+                      />
+                    )}
                     <div className="flex flex-col items-start gap-[2px]">
                         <span className="text-[12px] text-[#71747d] leading-[16px]">You're logged in as</span>
                         <button 
@@ -247,7 +262,8 @@ export function Header({
                     )}
                 </div>
              </div>
-          )}
+            );
+          })()}
         </>
       )}
     </div>

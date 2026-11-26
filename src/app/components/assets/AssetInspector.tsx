@@ -35,7 +35,7 @@ export function AssetInspector({
           {/* Preview Image with Checkerboard Background */}
           <Lightbox
             trigger={
-                <button className="h-[180px] w-[360px] rounded-[12px] overflow-hidden border border-[#e8eaee] relative bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2nk5eX9z4AFePn5+f8zIAn+/////2eAAfz///+WYQDzg46ODtobgH7CQacBAIVT/wX866uAAAAAAElFTkSuQmCC')] group cursor-zoom-in focus:outline-none p-0">
+                <button className="h-[180px] w-[360px] rounded-[12px] overflow-hidden border border-[#e8eaee] relative checkerboard group cursor-zoom-in focus:outline-none p-0">
                     <div className="w-full h-full flex items-center justify-center p-4">
                         <ImageWithFallback
                           src={selectedAsset.imageUrl}
@@ -57,7 +57,7 @@ export function AssetInspector({
                      <img 
                         src={selectedAsset.imageUrl} 
                         alt={selectedAsset.name} 
-                        className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMUlEQVQ4T2nk5eX9z4AFePn5+f8zIAn+/////2eAAfz///+WYQDzg46ODtobgH7CQacBAIVT/wX866uAAAAAAElFTkSuQmCC')]"
+                        className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl checkerboard"
                         draggable={false}
                      />
                  </div>

@@ -8,9 +8,11 @@ import TdsIcImage from '../../imports/TdsIcImage-2031-7588';
 import RevIcFreeFuelTollParking from '../../imports/RevIcFreeFuelTollParking';
 import { User, BarChart3 } from 'lucide-react';
 import { useMenuVisibility, ManagedMenuItem } from '../../context/MenuVisibilityContext';
+import { UserAvatar } from './UserAvatar';
 
 interface SidebarProps {
   userName?: string;
+  userAvatar?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: (collapsed: boolean) => void;
   onLogout?: () => void;
@@ -172,6 +174,7 @@ function SubMenuItem({ label, isActive, onClick, indentLevel = 1, count, isEmpty
 
 export function Sidebar({ 
   userName = "Michael Fernanlie", 
+  userAvatar,
   isCollapsed = false, 
   onToggleCollapse, 
   onLogout,
@@ -615,18 +618,27 @@ export function Sidebar({
             className="cursor-pointer relative"
             onClick={() => setShowUserMenu(!showUserMenu)}
           >
-            <div className="flex flex-col gap-[4px] items-start w-full">
-              <div className="font-normal text-[#71747d] text-[12px]">
-                <p className="leading-[16px]">You're logged in as</p>
-              </div>
-              <div className="flex gap-[4px] items-center justify-between w-full">
-                <div className="font-bold text-[#303135] text-[14px]">
-                  <p className="leading-[20px]">{userName}</p>
+            <div className="flex items-center gap-[10px] w-full">
+              <UserAvatar
+                src={userAvatar}
+                name={userName}
+                size={36}
+                showTooltip={false}
+                className="shrink-0"
+              />
+              <div className="flex flex-col gap-[2px] items-start flex-1 min-w-0">
+                <div className="font-normal text-[#71747d] text-[12px]">
+                  <p className="leading-[16px]">You're logged in as</p>
                 </div>
-                <div className="relative shrink-0 size-[20px]">
-                  <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 20 20">
-                    <path d={svgPaths.p3504a860} fill="#4D4F56" />
-                  </svg>
+                <div className="flex gap-[4px] items-center justify-between w-full">
+                  <div className="font-bold text-[#303135] text-[14px] truncate">
+                    <p className="leading-[20px] truncate">{userName}</p>
+                  </div>
+                  <div className={`relative shrink-0 size-[20px] transition-transform duration-200 ${showUserMenu ? 'rotate-180' : ''}`}>
+                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 20 20">
+                      <path d={svgPaths.p3504a860} fill="#4D4F56" />
+                    </svg>
+                  </div>
                 </div>
               </div>
             </div>

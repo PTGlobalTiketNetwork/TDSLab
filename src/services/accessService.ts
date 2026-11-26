@@ -30,4 +30,5 @@ export const AccessService = {
   getAudit: (token: string) => request('/access/audit', token),
   getAccounts: (token: string) => request('/access/accounts', token),
   addMember: (token: string, userId: string, role: 'admin' | 'member') => request('/access/members', token, { method: 'POST', body: JSON.stringify({ userId, role }) }),
+  revokeMember: (token: string, userId: string) => request(`/access/members/${encodeURIComponent(userId)}/revoke`, token, { method: 'POST' }),
 };
