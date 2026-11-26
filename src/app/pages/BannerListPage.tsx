@@ -99,6 +99,7 @@ export function BannerListPage({
     'hero-landing-page-header': 'Hero Landing Page Header',
     'product-entry-point': 'Product Entry Point',
     'dlp-assets': 'DLP Assets',
+    'ttd-promo-asset': 'TTD Promo Asset',
     'drafts': 'Drafts'
   };
 
@@ -106,7 +107,7 @@ export function BannerListPage({
   const isDraftsPage = activeCategory === 'Drafts';
 
   // Drafts page: category tab ('all' or a category name)
-  const DRAFT_TAB_CATEGORIES = ['Promo Banner', 'Product Entry Point', 'DLP Assets'];
+  const DRAFT_TAB_CATEGORIES = ['Promo Banner', 'Product Entry Point', 'DLP Assets', 'TTD Promo Asset'];
   const [draftTab, setDraftTab] = useState<string>('all');
   useEffect(() => { setDraftTab('all'); }, [categorySlug]);
 

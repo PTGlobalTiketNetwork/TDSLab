@@ -8,6 +8,7 @@ const MENU_DESCRIPTIONS: Record<ManagedMenuItem, string> = {
   'Promo Banner': 'Standard promotional banners for campaigns.',
   'Product Entry Point': 'Mobile and desktop entry point banners.',
   'DLP Assets': 'DLP header and entry point banners in one set.',
+  'TTD Promo Asset': 'TTD promo asset banners.',
   'Auto Translate': 'Show the "Translate to EN / ID" button in the banner form.',
 };
 
@@ -16,6 +17,7 @@ const MENU_LABELS: Record<ManagedMenuItem, string> = {
   'Promo Banner': 'Promo Banner',
   'Product Entry Point': 'Product Entry Point',
   'DLP Assets': 'DLP Assets',
+  'TTD Promo Asset': 'TTD Promo Asset',
   'Auto Translate': 'Translate',
 };
 

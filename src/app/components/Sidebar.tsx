@@ -201,7 +201,7 @@ export function Sidebar({
 
   // Effect to auto-expand menus based on activeItem
   useEffect(() => {
-    if (['Promo Banner', 'Homepage Promo Banner', 'Hero Landing Page Header', 'Product Entry Point', 'DLP Assets'].includes(activeItem)) {
+    if (['Promo Banner', 'Homepage Promo Banner', 'Hero Landing Page Header', 'Product Entry Point', 'DLP Assets', 'TTD Promo Asset'].includes(activeItem)) {
       setIsBannersExpanded(true);
     } else if (['Campaign', 'Payment', 'Airlines', 'Hotel', 'Product Icon', 'Entity Logo', 'Others'].includes(activeItem)) {
       setIsLogoAssetsExpanded(true);
@@ -360,6 +360,15 @@ export function Sidebar({
                 isActive={activeItem === 'DLP Assets'}
                 onClick={() => onSelectItem?.('DLP Assets')}
                 isEmpty={!bannerCounts['DLP Assets']}
+                badge={<span className="px-2 py-0.5 bg-[#FF3B30] text-white text-[10px] font-bold rounded">NEW</span>}
+              />
+            )}
+            {isVisible('TTD Promo Asset') && (
+              <SubMenuItem
+                label="TTD Promo Asset"
+                isActive={activeItem === 'TTD Promo Asset'}
+                onClick={() => onSelectItem?.('TTD Promo Asset')}
+                isEmpty={!bannerCounts['TTD Promo Asset']}
                 badge={<span className="px-2 py-0.5 bg-[#FF3B30] text-white text-[10px] font-bold rounded">NEW</span>}
               />
             )}
