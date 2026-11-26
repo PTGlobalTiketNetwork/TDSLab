@@ -64,6 +64,8 @@ export function calculateDiff(
   const nudgeDiff = !!(
     isDifferent(contentA?.mainBenefitPrefix, contentB?.mainBenefitPrefix) ||
     isDifferent(contentA?.prefixType, contentB?.prefixType) ||
+    isDifferent(contentA?.secondBenefitPrefix, contentB?.secondBenefitPrefix) ||
+    isDifferent(contentA?.secondPrefixType, contentB?.secondPrefixType) ||
     isDifferent(contentA?.prefixFontSize, contentB?.prefixFontSize) ||
     isDifferent(contentA?.prefixColor, contentB?.prefixColor) ||
     isDifferent(contentA?.showPrefix, contentB?.showPrefix) ||
@@ -191,6 +193,7 @@ export function calculateDiff(
   // 10. NEW: CURRENCY 1 DIFF (Rp1)
   const currency1Diff = !!(
     isDifferent(contentA?.discountType, contentB?.discountType) ||
+    isDifferent(contentA?.customCurrency, contentB?.customCurrency) ||
     isDifferent(contentA?.currencyFontSize, contentB?.currencyFontSize) ||
     isDifferent(contentA?.discountAmountColor, contentB?.discountAmountColor) // Color shared with amount?
   );
@@ -199,6 +202,7 @@ export function calculateDiff(
   const currency2Diff = !!(
     isDifferent(contentA?.hasSecondDiscount, contentB?.hasSecondDiscount) ||
     isDifferent(contentA?.secondDiscountType, contentB?.secondDiscountType) ||
+    isDifferent(contentA?.secondCustomCurrency, contentB?.secondCustomCurrency) ||
     isDifferent(contentA?.currencyFontSize, contentB?.currencyFontSize) ||
     isDifferent(contentA?.secondDiscountAmountColor, contentB?.secondDiscountAmountColor)
   );
@@ -367,7 +371,7 @@ export function getChangedAreas(highlights: DiffHighlights): string[] {
   if (highlights.campaignLogoDiff) areasSet.add('Campaign Logo');
   if (highlights.partnerLogoDiff) areasSet.add('Partner Logo');
   if (highlights.layoutDiff) areasSet.add('Layout');
-  if (highlights.labelDiscountDiff) areasSet.add('Label Discount');
+  if (highlights.labelDiscountDiff) areasSet.add('Additional Perks');
   if (highlights.additionalLabelDiff) areasSet.add('Additional Label');
   if (highlights.tncDiff) areasSet.add('Terms');
   if (highlights.productIconDiff) areasSet.add('Product Icon');

@@ -1,9 +1,10 @@
 import { forwardRef, useRef, useImperativeHandle, useState, useCallback, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import JSZip from 'jszip';
 import { BannerFixed } from './create-banner/BannerFixed';
 import { BannerFormData } from './create-banner/types';
 import { getBase64FontCSS } from '../utils/fontCss';
-import { captureBannerElement, ensureDataUrlForCapture, waitForRenderStable } from '../utils/bannerCapture';
+import { captureBannerElement, ensureDataUrlForCapture, sanitizeFileName, waitForRenderStable, type DlpZipBannerSpec } from '../utils/bannerCapture';
 import { Banner } from '../../types/banner';
 import { toast } from 'sonner';
 import { TiketSnackbar } from './ui/TiketSnackbar';
@@ -13,6 +14,8 @@ export interface OffscreenBannerRendererHandle {
   downloadBanner: (banner: Banner, scaleFactor: number) => Promise<void>;
   /** Capture the current EN banner composition for handoff to another tool. */
   captureBannerForResize: (banner: Banner) => Promise<Blob>;
+  /** DLP Assets: render every sub-banner's EN + ID and bundle them into one ZIP download. */
+  downloadDlpZip: (params: { projectName: string; scaleFactor: number; banners: DlpZipBannerSpec[] }) => Promise<void>;
 }
 
 export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>((_, ref) => {
@@ -189,7 +192,146 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
     }
   }, []);
 
-  useImperativeHandle(ref, () => ({ downloadBanner, captureBannerForResize }), [downloadBanner, captureBannerForResize]);
+  // Mounts one formData's EN + ID offscreen, waits for the same render/decode/font settle
+  // as the other single-banner captures above, and returns both as blobs. Looped sequentially
+  // by downloadDlpZip below, one sub-banner at a time, to reuse this proven timing logic without
+  // juggling several BannerFixed instances in parallel (which would race the shared renderState).
+  const captureFormDataPair = useCallback(async (
+    formData: BannerFormData,
+    scaleFactor: number,
+    base64FontCSS: string,
+  ): Promise<{ en: Blob; id: Blob }> => {
+    const previewUrl = await ensureDataUrlForCapture(formData.keyVisualUrl || null, { strict: true });
+    const scale = formData.keyVisualScale || 100;
+    const position = formData.keyVisualPosition || { x: 50, y: 50 };
+    const isEntryPoint = formData.bannerCategory === 'Product Entry Point';
+    const isDesktopEP = formData.bannerRatio === 'Desktop (5:1)' || formData.bannerRatio === 'Desktop (8:1)';
+    const renderScale = isEntryPoint ? (isDesktopEP ? 600 / 640 : 1.875) : undefined;
+
+    setRenderState({
+      formData,
+      previewUrl,
+      scale,
+      position,
+      renderScale,
+      renderKey: `dlp-zip-${Date.now()}-${Math.random()}`,
+    });
+
+    await new Promise<void>((resolve) => {
+      resolveRenderRef.current = resolve;
+    });
+    await waitForRenderStable();
+    await document.fonts.ready;
+
+    if (!enRef.current || !idRef.current) throw new Error('Banner preview was not rendered');
+    const enElement = enRef.current.children[0] as HTMLElement;
+    const idElement = idRef.current.children[0] as HTMLElement;
+    if (!enElement || !idElement) throw new Error('Banner preview element was not found');
+
+    const en = await captureBannerElement(enElement, { pixelRatio: scaleFactor, fontCss: base64FontCSS });
+    // Brief delay before the second capture, mirroring the gap between EN/ID in downloadBanner.
+    await new Promise((r) => setTimeout(r, 300));
+    const id = await captureBannerElement(idElement, { pixelRatio: scaleFactor, fontCss: base64FontCSS });
+
+    return { en: en.blob, id: id.blob };
+  }, []);
+
+  const downloadDlpZip = useCallback(async (params: { projectName: string; scaleFactor: number; banners: DlpZipBannerSpec[] }) => {
+    const { projectName, scaleFactor, banners } = params;
+    const scaleLabel = scaleFactor !== 1 ? ` at ${scaleFactor}x` : '';
+
+    if (!banners.length) {
+      toast.custom((t) => <TiketSnackbar id={t} message="Nothing to download" variant="error" />);
+      return;
+    }
+
+    const downloadBlob = (blob: Blob, filename: string) => {
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    };
+
+    const loadingToast = toast.custom((t) => (
+      <TiketSnackbar
+        id={t}
+        message={`Preparing ZIP (${banners.length} banners)${scaleLabel}...`}
+        variant="default"
+        icon={<Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
+      />
+    ), { duration: Infinity });
+
+    // Render every banner first. One banner's render failing doesn't sink the whole batch —
+    // we just skip it and still bundle/download whatever succeeded.
+    const captured: { folder: string; en: Blob; id: Blob }[] = [];
+    const failedFolders: string[] = [];
+
+    try {
+      const base64FontCSS = await getBase64FontCSS();
+
+      for (const { folder, formData } of banners) {
+        try {
+          const { en, id } = await captureFormDataPair(formData, scaleFactor, base64FontCSS);
+          captured.push({ folder, en, id });
+        } catch (err) {
+          console.error(`DLP ZIP: failed to render "${folder}":`, err);
+          failedFolders.push(folder);
+        }
+      }
+
+      if (!captured.length) {
+        throw new Error('Every banner failed to render — nothing to download.');
+      }
+
+      try {
+        const zip = new JSZip();
+        for (const { folder, en, id } of captured) {
+          const dir = zip.folder(folder);
+          dir?.file('EN.png', en);
+          dir?.file('ID.png', id);
+        }
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        downloadBlob(zipBlob, `${sanitizeFileName(projectName)}.zip`);
+
+        toast.dismiss(loadingToast);
+        const failedNote = failedFolders.length ? ` (${failedFolders.length} failed to render and were skipped)` : '';
+        toast.custom((t) => (
+          <TiketSnackbar id={t} message={`${captured.length} banners (${captured.length * 2} files: EN + ID) downloaded as ZIP${scaleLabel}${failedNote}`} variant={failedFolders.length ? 'error' : 'default'} />
+        ), { duration: 4000 });
+      } catch (zipErr) {
+        // ZIP packaging itself failed (e.g. jszip/CSP/memory issue) — fall back to plain
+        // individual PNG downloads for everything that did render, per user request.
+        console.error('DLP ZIP: packaging failed, falling back to individual downloads:', zipErr);
+        for (const { folder, en, id } of captured) {
+          downloadBlob(en, `${sanitizeFileName(projectName)} - ${sanitizeFileName(folder)} - EN.png`);
+          await new Promise((r) => setTimeout(r, 300));
+          downloadBlob(id, `${sanitizeFileName(projectName)} - ${sanitizeFileName(folder)} - ID.png`);
+          await new Promise((r) => setTimeout(r, 300));
+        }
+        toast.dismiss(loadingToast);
+        toast.custom((t) => (
+          <TiketSnackbar id={t} message={`ZIP packaging failed — downloaded ${captured.length} banners individually instead`} variant="error" />
+        ), { duration: 4000 });
+      }
+    } catch (err) {
+      console.error('DLP ZIP download failed:', err);
+      toast.dismiss(loadingToast);
+      const message = err instanceof Error ? err.message : 'Failed to download. Please try again.';
+      toast.custom((t) => (
+        <TiketSnackbar id={t} message={message} variant="error" />
+      ));
+    } finally {
+      setRenderState(null);
+      resolveRenderRef.current = null;
+      await waitForRenderStable();
+    }
+  }, [captureFormDataPair]);
+
+  useImperativeHandle(ref, () => ({ downloadBanner, captureBannerForResize, downloadDlpZip }), [downloadBanner, captureBannerForResize, downloadDlpZip]);
 
   return renderState
     ? createPortal(

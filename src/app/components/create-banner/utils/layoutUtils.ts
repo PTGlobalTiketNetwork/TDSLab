@@ -1,5 +1,149 @@
 import { BANNER_SPECS } from '../../../../config/banner-layouts';
-import { BannerFormData } from '../types';
+import { BannerFormData, CurrencyType } from '../types';
+
+/**
+ * Converts the rich-text storage tags (<sb>, <b>, <eb>, <r>, <i>, <c v="">) and newlines into HTML.
+ * Works on the whole string at once so tags that span multiple lines stay intact.
+ */
+export const tagsToHtml = (
+    text: string,
+    italicStyle = 'font-style: italic',
+) =>
+    text
+        .replace(/\n/g, '<br/>')
+        .replace(/<sb>/g, '<span style="font-weight: 600">')
+        .replace(/<\/sb>/g, '</span>')
+        .replace(/<b>/g, '<span style="font-weight: 700">')
+        .replace(/<\/b>/g, '</span>')
+        .replace(/<eb>/g, '<span style="font-weight: 800">')
+        .replace(/<\/eb>/g, '</span>')
+        .replace(/<r>/g, '<span style="font-weight: 400">')
+        .replace(/<\/r>/g, '</span>')
+        .replace(/<i>/g, `<span style="${italicStyle}">`)
+        .replace(/<\/i>/g, '</span>')
+        .replace(/<c v="(.*?)">/g, '<span style="color: $1">')
+        .replace(/<\/c>/g, '</span>');
+
+/** Text shown before the discount number. 'IDR' is the legacy value and renders as "Rp". */
+export const getCurrencyLabel = (type: CurrencyType | undefined, customCurrency?: string): string => {
+    switch (type) {
+        case 'IDR': return 'Rp';
+        case 'IDR_CODE': return 'IDR';
+        case 'Custom': return (customCurrency || '').trim();
+        default: return '';
+    }
+};
+
+// Currency "None" with no amount typed = no discount number at all (don't fall back to the '50' / '0' placeholder).
+// Saved banners that have an amount with "None" (old "Non-IDR" = number without Rp) still render the number.
+export const isAmountHidden = (type: CurrencyType | undefined, amount: string | undefined): boolean =>
+    type === 'Non-IDR' && !amount;
+
+/** DLP Header 3:4 partner logo defaults: Y 194px (vs. 20px for Promo 3:4) and 120% scale (vs. 160%). */
+export const getDefaultPartnerLogoY = (formData: Pick<BannerFormData, 'dlpRole'>): number =>
+    formData.dlpRole === 'header-mobile' ? 194 : 20;
+export const getDefaultPartnerLogoScale = (formData: Pick<BannerFormData, 'dlpRole' | 'bannerRatio'>): number =>
+    formData.dlpRole === 'header-mobile' ? 1.2 : (formData.bannerRatio === 'Portrait (3:4)' ? 1.6 : 1);
+/** DLP Header 3:4 campaign logo Y default: 180px (vs. 20px for Promo 3:4). */
+export const getDefaultCampaignLogoY = (formData: Pick<BannerFormData, 'dlpRole'>): number =>
+    formData.dlpRole === 'header-mobile' ? 180 : 20;
+
+/**
+ * DLP Header 3:4 content block Y offset default: -36px when the banner has nothing below the
+ * headline/benefit block (no additional perks label, no additional label, no CTA) so the content
+ * sits lower/centered instead of leaving empty space; 0 otherwise (and for non-DLP 3:4 banners).
+ */
+export const getDefaultPortraitContentOffsetY = (
+    formData: Pick<BannerFormData, 'headlineType' | 'showPortraitCta' | 'dlpRole'>,
+    content: { labelDiscount?: string; additionalLabel?: boolean },
+): number => {
+    if (formData.dlpRole !== 'header-mobile') return 0;
+    const hasLabelDiscount = !!content.labelDiscount && formData.headlineType !== 'With Sub-Headline';
+    const hasAdditionalLabel = !!content.additionalLabel && formData.headlineType !== 'With Sub-Headline';
+    const hasExtras = hasLabelDiscount || hasAdditionalLabel; // DLP header never shows a CTA
+    return hasExtras ? 0 : -36;
+};
+
+/** Desktop 5:1/4:1 content scale default: 180% for the DLP Header 4:1, else 140% (125% with a second discount). */
+export const getDefaultDesktopContentScale = (
+    formData: Pick<BannerFormData, 'dlpRole' | 'content'>,
+): number => {
+    if (formData.dlpRole === 'header-desktop') return 180;
+    return (formData.content.en.hasSecondDiscount || formData.content.id.hasSecondDiscount) ? 125 : 140;
+};
+
+const WEIGHT_TAGS = ['sb', 'b', 'eb', 'r'] as const;
+type WeightTag = typeof WEIGHT_TAGS[number];
+
+const matchFullWrap = (s: string, tag: string): string | null => {
+    const m = s.match(new RegExp(`^<${tag}>([\\s\\S]*)</${tag}>$`));
+    return m ? m[1] : null;
+};
+
+/**
+ * Reads the weight/italic formatting of a headline string, but only when it is applied
+ * uniformly to the WHOLE string (e.g. select-all then click Bold) — the common case for
+ * these short headline fields. Returns null when formatting is mixed/partial, so callers
+ * know not to touch the other language's text.
+ */
+export const analyzeUniformFormat = (text: string): { weight: WeightTag | null; italic: boolean } | null => {
+    const unwrapWeight = (s: string): { rest: string; weight: WeightTag | null } => {
+        for (const tag of WEIGHT_TAGS) {
+            const inner = matchFullWrap(s, tag);
+            if (inner !== null) return { rest: inner, weight: tag === 'r' ? null : tag };
+        }
+        return { rest: s, weight: undefined as unknown as null };
+    };
+
+    let weight: WeightTag | null | undefined;
+    let italic = false;
+    let rest = text.trim();
+
+    const first = unwrapWeight(rest);
+    if (first.weight !== undefined) {
+        weight = first.weight;
+        rest = first.rest;
+        const innerItalic = matchFullWrap(rest, 'i');
+        if (innerItalic !== null) { italic = true; rest = innerItalic; }
+    } else {
+        const innerItalic = matchFullWrap(rest, 'i');
+        if (innerItalic !== null) {
+            italic = true;
+            rest = innerItalic;
+            const second = unwrapWeight(rest);
+            weight = second.weight ?? null;
+            rest = second.rest;
+        } else {
+            weight = null;
+        }
+    }
+
+    // Anything left inside still carrying tags means mixed/partial formatting — bail out.
+    if (/<(sb|b|eb|r|i|c)[ >]/.test(rest)) return null;
+    return { weight: weight ?? null, italic };
+};
+
+/** Strips weight (sb/b/eb/r) and italic (i) wrapper tags, keeping the raw text (and any `<c>` colour tags) intact. */
+export const stripWeightItalicTags = (text: string): string => text.replace(/<\/?(sb|b|eb|r|i)>/g, '');
+
+/** Re-applies a uniform weight/italic format (as read by `analyzeUniformFormat`) to a plain-ish headline string. */
+export const applyUniformFormat = (text: string, format: { weight: WeightTag | null; italic: boolean }): string => {
+    let out = stripWeightItalicTags(text);
+    if (format.italic) out = `<i>${out}</i>`;
+    if (format.weight) out = `<${format.weight}>${out}</${format.weight}>`;
+    return out;
+};
+
+export const CURRENCY_OPTIONS: { value: CurrencyType; label: string }[] = [
+    { value: 'IDR', label: 'Rp' },
+    { value: 'IDR_CODE', label: 'IDR' },
+    { value: 'Custom', label: 'Custom' },
+    { value: 'Non-IDR', label: 'None' },
+];
+
+/** Display text for stored unit values. Stored values stay K/mio/Rb/Jt for saved drafts. */
+export const UNIT_LABEL: Record<string, string> = { K: 'k', mio: 'mio', Rb: 'rb', Jt: 'jt', '%': '%' };
+export const getUnitLabel = (unit?: string) => (unit ? UNIT_LABEL[unit] ?? unit : '');
 
 export const prefixOptions = {
     en: [

@@ -8,6 +8,7 @@ import { Asset } from '../../types/asset';
 import { Header } from '../Header';
 import { getUserDisplayName } from '../../utils/userDisplay';
 import { getAssetConstraints, normalizeCategoryName } from '../../utils/assetConstraints';
+import { SegmentedControl } from '../ui/SegmentedControl';
 
 interface AddAssetPageProps {
   category: string;
@@ -348,26 +349,14 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
 
         {/* Mode toggle — only in add mode */}
         {!isEditMode && (
-          <div className="flex items-center bg-[#f0f2f7] rounded-[8px] p-[3px] gap-[2px]">
-            <button
-              onClick={() => setMode('single')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-[13px] font-bold transition-colors ${
-                mode === 'single' ? 'bg-white text-[#303135] shadow-sm' : 'text-[#71747d] hover:text-[#303135]'
-              }`}
-            >
-              <Upload size={13} />
-              Single
-            </button>
-            <button
-              onClick={() => setMode('bulk')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-[13px] font-bold transition-colors ${
-                mode === 'bulk' ? 'bg-white text-[#303135] shadow-sm' : 'text-[#71747d] hover:text-[#303135]'
-              }`}
-            >
-              <Layers size={13} />
-              Bulk
-            </button>
-          </div>
+          <SegmentedControl
+            items={[
+              { id: 'single', label: <span className="flex items-center gap-1.5"><Upload size={13} /> Single</span> },
+              { id: 'bulk', label: <span className="flex items-center gap-1.5"><Layers size={13} /> Bulk</span> },
+            ]}
+            activeId={mode}
+            onChange={(id) => setMode(id as UploadMode)}
+          />
         )}
       </div>
 

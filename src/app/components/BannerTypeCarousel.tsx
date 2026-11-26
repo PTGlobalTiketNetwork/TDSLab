@@ -59,7 +59,7 @@ const PROMO_MOCK_DATA: BannerFormData[] = [
     {
         bannerName: 'Hotel Promo',
         bannerCategory: 'Promo Banner',
-        verticalCategory: 'Hotel',
+        verticalCategory: 'Accom',
         bannerStyle: 'Style 2 (Thematic/tactical campaign)',
         bannerRatio: 'Landscape (2:1)',
         headlineType: '1 Headline',
@@ -129,7 +129,7 @@ const PROMO_MOCK_DATA: BannerFormData[] = [
     {
         bannerName: 'Flight Promo',
         bannerCategory: 'Promo Banner',
-        verticalCategory: 'Transport',
+        verticalCategory: 'Flight',
         bannerStyle: 'Style 1 (Regular promo campaign)',
         bannerRatio: 'Square (1:1)',
         headlineType: 'With Sub-Headline',

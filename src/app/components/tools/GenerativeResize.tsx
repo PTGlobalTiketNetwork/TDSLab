@@ -6,7 +6,7 @@ import { TiketButton } from '../ui/TiketButton';
 import { TiketSelect } from '../ui/TiketSelect';
 import { TiketTextarea } from '../ui/TiketInput';
 import { TiketTabs } from '../ui/TiketTabs';
-import { TiketPagination } from '../ui/TiketPagination';
+import { CustomPagination } from '../ui/CustomPagination';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -1259,6 +1259,16 @@ export function GenerativeResize({ session }: GenerativeResizeProps) {
       <div ref={galleryRef} className="flex flex-col gap-6 pt-8 border-t border-[#d8dce8]">
          <div className="flex items-center justify-between">
             <h2 className="text-[20px] font-bold text-[#303135]">History Gallery</h2>
+            {!isLoadingHistory && (
+                <CustomPagination
+                    inline
+                    currentPage={currentPage}
+                    totalPages={Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE))}
+                    totalItems={totalItems}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                    onPageChange={(page) => { setCurrentPage(page); galleryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+                />
+            )}
          </div>
          
          {/* Filters */}
@@ -1391,18 +1401,6 @@ export function GenerativeResize({ session }: GenerativeResizeProps) {
                     )}
                 </div>
 
-                {totalItems > ITEMS_PER_PAGE && (
-                    <TiketPagination 
-                        currentPage={currentPage}
-                        totalPages={Math.ceil(totalItems / ITEMS_PER_PAGE)}
-                        totalItems={totalItems}
-                        itemsPerPage={ITEMS_PER_PAGE}
-                        onPageChange={(page) => {
-                            setCurrentPage(page);
-                            galleryRef.current?.scrollIntoView({ behavior: 'smooth' });
-                        }}
-                    />
-                )}
              </>
          )}
       </div>

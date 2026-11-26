@@ -318,9 +318,7 @@ export const BannerEntryPoint = forwardRef((props: BannerEntryPointProps, ref: F
         {!hideHeader && (
             <div className="bg-[#f2f8ff] rounded-[4px] p-[10px]" style={{ width: specs.width * (renderScale || 1) }}>
                 <div className="flex gap-[8px] items-center">
-                    <div className="h-[16px] w-[24px] relative shrink-0">
-                        <img src={lang === 'en' ? "https://flagcdn.com/w40/us.png" : "https://flagcdn.com/w40/id.png"} alt={lang} className="w-full h-full object-cover rounded-[2px]" crossOrigin="anonymous" />
-                    </div>
+                    <span className="text-[18px] leading-none shrink-0" role="img" aria-label={lang}>{lang === 'en' ? '🇺🇸' : '🇮🇩'}</span>
                     <p className="text-[16px] font-bold leading-[22px] text-[#71747d]">{label}</p>
                 </div>
             </div>
@@ -516,7 +514,7 @@ export const BannerEntryPoint = forwardRef((props: BannerEntryPointProps, ref: F
                                     />
                                 )}
                                 <div 
-                                    className="flex items-center justify-center font-bold font-banner shadow-sm px-3"
+                                    className="flex items-center justify-center font-bold font-banner px-3"
                                     style={{
                                         width: specs.elements.ctaButton.w,
                                         height: specs.elements.ctaButton.h,

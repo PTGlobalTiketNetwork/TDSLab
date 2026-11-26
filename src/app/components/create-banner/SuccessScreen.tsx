@@ -22,6 +22,8 @@ import TdsIcSparklingGeneral from '../../../imports/TdsIcSparklingGeneral-2104-1
 import { useGlobalInteraction } from '../../../context/GlobalInteractionContext';
 import { useAccess } from '../../../context/AccessContext';
 import { getUserDisplayName, getUserAvatarUrl } from '../../utils/userDisplay';
+import { BannerDesktop51 } from './BannerDesktop51';
+import { SETTINGS_VERSION } from './settingsVersion';
 
 function formatBytes(bytes: number, decimals = 2) {
     if (!+bytes) return '0 Bytes';
@@ -42,6 +44,7 @@ interface SuccessScreenProps {
   editingId?: string;
   initialStatus?: 'draft' | 'published';
   onLogout?: () => void;
+  onBackToEdit?: () => void; // go back to the editor (nothing has been saved yet)
 }
 
 export function SuccessScreen({ 
@@ -53,7 +56,8 @@ export function SuccessScreen({
   overwriteMode,
   editingId,
   initialStatus,
-  onLogout
+  onLogout,
+  onBackToEdit
 }: SuccessScreenProps) {
   const { isWhitelisted } = useAccess();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -324,7 +328,8 @@ export function SuccessScreen({
       const finalFormData = {
           ...formData,
           keyVisualUrl: keyVisualUrl,
-          keyVisualFile: undefined // Ensure File object is not saved
+          keyVisualFile: undefined, // Ensure File object is not saved
+          settingsVersion: formData.settingsVersion ?? SETTINGS_VERSION,
       };
 
       // 3. Save to DB
@@ -564,6 +569,15 @@ export function SuccessScreen({
 
                 </div>
 
+                {/* Desktop 5:1 version (when "Add desktop version?" is on) */}
+                {formData.bannerRatio === 'Landscape (2:1)' && formData.provideDesktopBanner && (
+                    <div className="flex flex-col gap-[16px] w-full max-w-[1000px] items-stretch">
+                        <span className="text-[14px] font-bold text-[#71747d] text-center">Desktop (5:1)</span>
+                        <BannerDesktop51 formData={formData} lang="en" label="EN Translation" previewUrl={previewUrl} />
+                        <BannerDesktop51 formData={formData} lang="id" label="ID Translation" previewUrl={previewUrl} />
+                    </div>
+                )}
+
             {/* Frame 4 (Text) */}
                 <div className="flex flex-col gap-[8px] items-center text-center">
                     <h2 className="text-[24px] font-bold text-[#303135] leading-[30px]">Creation done ✨</h2>
@@ -635,6 +649,16 @@ export function SuccessScreen({
                         </div>
                     </PopoverContent>
                 </Popover>
+
+                {onBackToEdit && (
+                    <button
+                        onClick={onBackToEdit}
+                        disabled={isSaving || isResizing || !!downloadingItem}
+                        className="h-[52px] px-[24px] rounded-[8px] bg-[#f2f4f8] text-[#303135] text-[18px] font-bold hover:bg-[#e6e9ef] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Back to edit
+                    </button>
+                )}
 
                 {isWhitelisted && (
                     <button 

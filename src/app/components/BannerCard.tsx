@@ -1,3 +1,4 @@
+import { CategoryBadge, getBannerCategory } from './CategoryBadge';
 import { Banner } from '../../types/banner';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import exampleImage from 'figma:asset/c593b610d3877a5faf067379a77363d554217a35.png';
@@ -15,9 +16,10 @@ interface BannerCardProps {
   onClick: (e: MouseEvent) => void;
   activeEditors?: PresenceUser[];
   className?: string;
+  showCategoryBadge?: boolean;
 }
 
-export function BannerCard({ banner, isSelected, onClick, activeEditors, className }: BannerCardProps) {
+export function BannerCard({ banner, isSelected, onClick, activeEditors, className, showCategoryBadge }: BannerCardProps) {
   // Published records also retain form_data. Use its key visual whenever it exists:
   // exported image_url_en can be a stale, generic red/pink render from an older renderer.
   const formData = (banner as any).form_data as BannerFormData | undefined;
@@ -133,7 +135,7 @@ export function BannerCard({ banner, isSelected, onClick, activeEditors, classNa
       
       {/* Image or Draft Preview - Universal Centering Rule */}
       <div 
-        className="relative rounded-[12px] w-full h-[180px] bg-gray-50 flex items-center justify-center overflow-hidden pointer-events-none" 
+        className="relative rounded-[12px] w-full h-[180px] flex items-center justify-center overflow-hidden pointer-events-none" 
         data-name="pt_daily_promo (10) 1"
       >
         {/* Syncing Overlay */}
@@ -145,11 +147,11 @@ export function BannerCard({ banner, isSelected, onClick, activeEditors, classNa
         )}
 
         {hasSourcePreview && formData ? (
-          <div className="flex h-full w-full items-center justify-center p-2">
+          <div className="flex h-full w-full items-center justify-center">
             <ScaledBannerPreview
               formData={formData}
               previewUrl={previewUrl}
-              className="h-full w-full shadow-sm"
+              className="h-full w-full rounded-[8px]"
               fit="contain"
             />
           </div>
@@ -180,6 +182,11 @@ export function BannerCard({ banner, isSelected, onClick, activeEditors, classNa
             </div>
           )}
         </div>
+        {showCategoryBadge && (
+          <div className="flex -mt-[8px]">
+            <CategoryBadge category={getBannerCategory(banner)} />
+          </div>
+        )}
       </div>
     </div>
   );

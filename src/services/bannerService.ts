@@ -1,3 +1,4 @@
+import { getCreationSeconds, isCreationTimerRunning } from '../utils/creationTimer';
 import { projectId, publicAnonKey } from '../../utils/supabase/info';
 import { supabase, getAuthToken } from '../utils/supabase/client';
 import { Banner } from '../types/banner';
@@ -38,6 +39,9 @@ async function fetchWithRetry(
   throw new Error(`Failed after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
 }
 
+// The "Hotel" vertical is now called "Accom"; older records (and the empty fallback) read as Accom
+const normalizeProduct = (p?: string) => (!p || p === 'Hotel' || p === 'Accommodation' ? 'Accom' : p);
+
 export interface CreateBannerDTO {
   id?: string;
   name: string;
@@ -61,6 +65,12 @@ export interface CreateBannerDTO {
   updated_at?: string;
 }
 
+// While a create flow is open, every save also records the active time spent so far
+function withCreationTime(banner: { metadata?: any }) {
+  if (!isCreationTimerRunning()) return {};
+  return { metadata: { ...(banner.metadata || {}), creation_seconds: getCreationSeconds() } };
+}
+
 export const BannerService = {
   async getBanner(id: string): Promise<Banner | null> {
       const response = await fetchWithRetry(`${SERVER_URL}/banners/${id}`, {
@@ -77,7 +87,7 @@ export const BannerService = {
       const item = await response.json();
       return {
         ...item,
-        product: item.product || item.verticalCategory || 'Hotel',
+        product: normalizeProduct(item.product || item.verticalCategory),
         imageUrl: item.image_url_en || item.imageUrl || '',
         thumbnail: item.image_url_en || item.imageUrl || '',
         isPublished: item.status === 'published',
@@ -111,7 +121,7 @@ export const BannerService = {
     return data.map((item: any) => ({
       ...item,
       // Ensure required Banner fields are present
-      product: item.product || item.verticalCategory || 'Hotel', 
+      product: normalizeProduct(item.product || item.verticalCategory), 
       imageUrl: item.image_url_en || item.imageUrl || '',
       thumbnail: item.image_url_en || item.imageUrl || '',
       isPublished: item.status === 'published',
@@ -131,6 +141,7 @@ export const BannerService = {
     // Set initial version info if not present
     const payload = {
         ...banner,
+        ...withCreationTime(banner),
         version: banner.version || 1,
         last_edited_by_id: banner.last_edited_by_id || banner.created_by,
         last_edited_by_name: banner.last_edited_by_name || banner.creator_name,
@@ -198,6 +209,7 @@ export const BannerService = {
 
     const payload = {
         ...banner,
+        ...withCreationTime(banner),
         version: (banner.version || currentVersion) + 1,
         updated_at: new Date().toISOString()
     };

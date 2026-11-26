@@ -13,6 +13,11 @@ import { useAllBannersPresence } from '../../hooks/useAllBannersPresence';
 import { getUserDisplayName, getUserAvatarUrl } from '../utils/userDisplay';
 import { OffscreenBannerRenderer, OffscreenBannerRendererHandle } from '../components/OffscreenBannerRenderer';
 import { handoffStore } from '../../utils/indexedDB';
+import { buildDlpZipManifest } from '../utils/bannerCapture';
+import { TiketTabs } from '../components/ui/TiketTabs';
+import { getBannerCategory } from '../components/CategoryBadge';
+import { needsMigration, SETTINGS_VERSION } from '../components/create-banner/settingsVersion';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
 
 function withPreviewCacheBust(url: string, cacheBuster: string | number) {
   if (url.startsWith('data:') || url.startsWith('blob:')) return url;
@@ -33,15 +38,19 @@ interface BannerListPageProps {
   searchQuery: string;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
-  verticalFilter: string;
-  onVerticalFilterChange: (filter: string) => void;
-  ratioFilter: string;
-  onRatioFilterChange: (filter: string) => void;
+  verticalFilter: string[];
+  onVerticalFilterChange: (filter: string[]) => void;
+  ratioFilter: string[];
+  onRatioFilterChange: (filter: string[]) => void;
   sortBy: string;
   onSortChange: (sort: string) => void;
   isSidebarCollapsed: boolean;
   onDataChange?: () => void;
 }
+
+const VERTICAL_FILTER_OPTIONS = ['General', 'Accom', 'Flight', 'NFT', 'ToDos', 'Event'];
+// Banners saved before the split still say "Transport": they show up under Flight
+const normalizeVertical = (product?: string) => (product === 'Transport' ? 'Flight' : (product === 'Hotel' || product === 'Accommodation') ? 'Accom' : (product || ''));
 
 export function BannerListPage({ 
   session, 
@@ -67,6 +76,7 @@ export function BannerListPage({
   const [selectedBannerId, setSelectedBannerId] = useState<string | null>(null);
   const [selectedBannerIds, setSelectedBannerIds] = useState<Set<string>>(() => new Set());
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [migrateTarget, setMigrateTarget] = useState<{ banner: Banner; version?: number } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [bannerToDelete, setBannerToDelete] = useState<Banner | null>(null);
   const [bannersToDelete, setBannersToDelete] = useState<Banner[]>([]);
@@ -79,10 +89,17 @@ export function BannerListPage({
     'homepage-promo-banner': 'Homepage Promo Banner',
     'hero-landing-page-header': 'Hero Landing Page Header',
     'product-entry-point': 'Product Entry Point',
+    'dlp-assets': 'DLP Assets',
     'drafts': 'Drafts'
   };
 
   const activeCategory = categorySlug ? categoryMap[categorySlug] : 'Promo Banner';
+  const isDraftsPage = activeCategory === 'Drafts';
+
+  // Drafts page: category tab ('all' or a category name)
+  const DRAFT_TAB_CATEGORIES = ['Promo Banner', 'Product Entry Point', 'DLP Assets'];
+  const [draftTab, setDraftTab] = useState<string>('all');
+  useEffect(() => { setDraftTab('all'); }, [categorySlug]);
 
   // Load Banners
   useEffect(() => {
@@ -179,6 +196,9 @@ export function BannerListPage({
 
     if (activeCategory === 'Drafts') {
       filtered = filtered.filter(b => b.status === 'draft' && b.createdBy === session?.user.id);
+      if (draftTab !== 'all') {
+        filtered = filtered.filter(b => getBannerCategory(b) === draftTab);
+      }
     } else {
       filtered = filtered.filter(b => b.status === 'published');
       if (activeCategory) {
@@ -194,15 +214,15 @@ export function BannerListPage({
     }
     
     // Filter by Vertical (Product)
-    if (verticalFilter !== 'All') {
-        filtered = filtered.filter(b => b.product === verticalFilter);
+    if (verticalFilter.length > 0) {
+        filtered = filtered.filter(b => verticalFilter.includes(normalizeVertical(b.product)));
     }
 
     // Filter by Ratio (using form_data.bannerRatio)
-    if (ratioFilter !== 'All') {
+    if (ratioFilter.length > 0) {
         filtered = filtered.filter(b => {
             const formData = (b as any).form_data;
-            return formData?.bannerRatio === ratioFilter;
+            return !!formData?.bannerRatio && ratioFilter.includes(formData.bannerRatio);
         });
     }
 
@@ -227,7 +247,7 @@ export function BannerListPage({
     });
 
     return filtered;
-  }, [banners, searchQuery, activeCategory, session, verticalFilter, ratioFilter, sortBy]);
+  }, [banners, searchQuery, activeCategory, session, verticalFilter, ratioFilter, sortBy, draftTab]);
 
   // DYNAMIC FACETING: Extract unique ratios and verticals from CURRENT page category
   const { availableRatios, availableVerticals } = useMemo(() => {
@@ -252,17 +272,10 @@ export function BannerListPage({
       }
     });
     
-    // Extract unique verticals from product field
-    const verticalsSet = new Set<string>();
-    baseBanners.forEach(b => {
-      if (b.product) {
-        verticalsSet.add(b.product);
-      }
-    });
-    
+    // Verticals are a fixed list (same as the create form); legacy "Transport" was split into Flight and NFT
     return {
       availableRatios: Array.from(ratiosSet).sort(),
-      availableVerticals: Array.from(verticalsSet).sort()
+      availableVerticals: VERTICAL_FILTER_OPTIONS
     };
   }, [banners, activeCategory, session]);
 
@@ -344,10 +357,42 @@ export function BannerListPage({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedBannerIds, banners]);
 
+  // Duplicate an old-settings banner into a new draft on the current settings, then open that copy for editing.
+  // The original is left untouched (and is not editable), so nothing already published changes.
+  const migrateAndEdit = async (banner: Banner) => {
+    try {
+      const newId = crypto.randomUUID();
+      const newName = `${banner.name}_v2`;
+      await BannerService.saveBanner({
+        id: newId,
+        name: newName,
+        category: banner.category,
+        status: 'draft',
+        form_data: { ...banner.form_data, bannerName: newName, settingsVersion: SETTINGS_VERSION },
+        created_by: session!.user.id,
+        image_url_en: banner.imageUrl,
+        image_url_id: banner.imageUrl,
+        product: banner.product,
+        metadata: { dimension: banner.dimension, fileSize: banner.fileSize },
+      } as any);
+      const slug = Object.keys(categoryMap).find((key) => categoryMap[key] === banner.category) || 'promo-banner';
+      await loadBanners();
+      onDataChange?.();
+      navigate(`/banners/${slug}/create?edit=${newId}`);
+    } catch (error) {
+      console.error('Migrate failed', error);
+      toast.custom((id) => <TiketSnackbar id={id} message="Failed to create the migrated copy" variant="error" />);
+    }
+  };
+
   const handleEdit = (banner: Banner, version?: number) => {
+    if (needsMigration(banner.form_data, banner.category)) {
+      setMigrateTarget({ banner, version });
+      return;
+    }
     if (banner.status === 'draft' || banner.form_data) {
         // Construct edit URL
-        const slug = Object.keys(categoryMap).find(key => categoryMap[key] === banner.category);
+        const slug = Object.keys(categoryMap).find(key => categoryMap[key] === getBannerCategory(banner));
         let url = '';
         if (slug) {
             url = `/banners/${slug}/create?edit=${banner.id}`;
@@ -619,6 +664,9 @@ export function BannerListPage({
 
         return next;
       });
+    } else if (selectedBannerId === bannerId && selectedBannerIds.size === 0) {
+      // Clicking the selected card again unselects it
+      setSelectedBannerId(null);
     } else {
       setSelectedBannerIds(new Set());
       setSelectedBannerId(bannerId);
@@ -629,6 +677,18 @@ export function BannerListPage({
     setSelectedBannerIds(new Set());
     setSelectedBannerId(null);
   };
+
+  // Esc unselects (unless a dialog is open, where Esc closes the dialog)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      setSelectedBannerIds(new Set());
+      setSelectedBannerId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const handleBulkDuplicate = async (bulkBanners: Banner[]) => {
     const duplicatable = bulkBanners.filter(b => b.form_data);
@@ -659,7 +719,20 @@ export function BannerListPage({
     }
     toast.custom((id) => <TiketSnackbar id={id} message={`Downloading ${downloadable.length} banner(s)...`} />);
     for (const banner of downloadable) {
-      await handleDownload(banner, 2);
+      const dlp = banner.form_data?.dlp;
+      // DLP Assets is a set of sub-banners: download it as one ZIP (same as its own "Download as ZIP"),
+      // not a single PNG of just the thumbnail — every other category downloads as one banner.
+      if (getBannerCategory(banner) === 'DLP Assets' && dlp) {
+        if (offscreenRendererRef.current) {
+          await offscreenRendererRef.current.downloadDlpZip({
+            projectName: banner.name || 'DLP Assets',
+            scaleFactor: 2,
+            banners: buildDlpZipManifest(dlp),
+          });
+        }
+      } else {
+        await handleDownload(banner, 2);
+      }
       // Give the offscreen portal and browser download stack time to settle
       // before mounting the next banner capture.
       await new Promise(r => setTimeout(r, 1200));
@@ -708,6 +781,25 @@ export function BannerListPage({
 
   const selectedBanner = banners.find(b => b.id === selectedBannerId) || null;
 
+  // Draft counts per category tab (before user filters)
+  const draftTabItems = useMemo(() => {
+    if (!isDraftsPage) return [];
+    const drafts = banners.filter(b => b.status === 'draft' && b.createdBy === session?.user.id);
+    const items = [{ id: 'all', label: `All (${drafts.length})` }];
+    for (const cat of DRAFT_TAB_CATEGORIES) {
+      const count = drafts.filter(b => getBannerCategory(b) === cat).length;
+      if (count > 0) items.push({ id: cat, label: `${cat} (${count})` });
+    }
+    return items;
+  }, [banners, isDraftsPage, session]);
+
+  // If the active tab disappears (e.g. last draft of that type deleted), fall back to All
+  useEffect(() => {
+    if (draftTab !== 'all' && draftTabItems.length > 0 && !draftTabItems.some(i => i.id === draftTab)) {
+      setDraftTab('all');
+    }
+  }, [draftTabItems, draftTab]);
+
   // Track presence for all visible banners
   const bannerIds = useMemo(() => filteredBanners.map(b => b.id), [filteredBanners]);
   const presenceMap = useAllBannersPresence(bannerIds);
@@ -746,7 +838,30 @@ export function BannerListPage({
           onBulkMoveToDrafts={handleBulkMoveToDrafts}
           onBulkPublish={handleBulkPublish}
           onClearSelection={clearMultiSelect}
+          showCategoryBadge={isDraftsPage}
+          headerSlot={isDraftsPage && draftTabItems.length > 0 ? (
+            <TiketTabs
+              items={draftTabItems}
+              activeId={draftTab}
+              onChange={(id) => { setDraftTab(id); clearMultiSelect(); }}
+            />
+          ) : undefined}
         />
+        <AlertDialog open={!!migrateTarget} onOpenChange={(o) => { if (!o) setMigrateTarget(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>This banner uses the old settings</AlertDialogTitle>
+              <AlertDialogDescription>
+                The banner builder has new layouts and defaults. To edit this banner, a copy is created as a new draft on the latest settings.
+                The original stays exactly as it is and can't be edited.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { const b = migrateTarget?.banner; setMigrateTarget(null); if (b) void migrateAndEdit(b); }}>Duplicate & edit</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <InspectorPanel
           selectedBanner={isMultiSelect ? null : selectedBanner}
           selectedBanners={isMultiSelect ? selectedBanners : undefined}
@@ -764,6 +879,7 @@ export function BannerListPage({
           onBulkPublish={handleBulkPublish}
           onClearSelection={clearMultiSelect}
           session={session}
+          renderer={offscreenRendererRef}
         />
         <DeleteModal
             isOpen={deleteModalOpen}

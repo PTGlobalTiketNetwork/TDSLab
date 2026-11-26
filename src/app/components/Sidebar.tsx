@@ -6,7 +6,7 @@ import svgPathsIcon from '../../imports/svg-z4vno468sm';
 import TdsIcVerticals from '../../imports/TdsIcVerticals';
 import TdsIcImage from '../../imports/TdsIcImage-2031-7588';
 import RevIcFreeFuelTollParking from '../../imports/RevIcFreeFuelTollParking';
-import { User } from 'lucide-react';
+import { User, BarChart3 } from 'lucide-react';
 import { useMenuVisibility, ManagedMenuItem } from '../../context/MenuVisibilityContext';
 
 interface SidebarProps {
@@ -198,7 +198,7 @@ export function Sidebar({
 
   // Effect to auto-expand menus based on activeItem
   useEffect(() => {
-    if (['Promo Banner', 'Homepage Promo Banner', 'Hero Landing Page Header', 'Product Entry Point'].includes(activeItem)) {
+    if (['Promo Banner', 'Homepage Promo Banner', 'Hero Landing Page Header', 'Product Entry Point', 'DLP Assets'].includes(activeItem)) {
       setIsBannersExpanded(true);
     } else if (['Campaign', 'Payment', 'Airlines', 'Hotel', 'Product Icon', 'Entity Logo', 'Others'].includes(activeItem)) {
       setIsLogoAssetsExpanded(true);
@@ -270,7 +270,7 @@ export function Sidebar({
               >
                 <TdsIcHomeOff color={activeItem === 'Home' ? "#007BFF" : "#4D4F56"} />
                 {!isCollapsed && (
-                  <p className={`${activeItem === 'Home' ? 'font-bold text-[#007BFF]' : 'font-normal text-[#303135]'} font-['Tiket_Odyssey_Text:Regular',sans-serif] leading-[20px] text-[14px] w-[176px] text-left`}>
+                  <p className={`${activeItem === 'Home' ? 'font-bold text-[#007BFF]' : 'font-normal text-[#303135]'} font-sans leading-[20px] text-[14px] w-[176px] text-left`}>
                     Home
                   </p>
                 )}
@@ -351,20 +351,13 @@ export function Sidebar({
                 isEmpty={!bannerCounts['Product Entry Point']}
               />
             )}
-            {isVisible('Homepage Promo Banner') && (
+            {isVisible('DLP Assets') && (
               <SubMenuItem
-                label="Homepage Promo Banner"
-                isActive={activeItem === 'Homepage Promo Banner'}
-                onClick={() => onSelectItem?.('Homepage Promo Banner')}
-                isEmpty={!bannerCounts['Homepage Promo Banner']}
-              />
-            )}
-            {isVisible('Hero Landing Page Header') && (
-              <SubMenuItem
-                label="Hero LP Header"
-                isActive={activeItem === 'Hero Landing Page Header'}
-                onClick={() => onSelectItem?.('Hero Landing Page Header')}
-                isEmpty={!bannerCounts['Hero Landing Page Header']}
+                label="DLP Assets"
+                isActive={activeItem === 'DLP Assets'}
+                onClick={() => onSelectItem?.('DLP Assets')}
+                isEmpty={!bannerCounts['DLP Assets']}
+                badge={<span className="px-2 py-0.5 bg-[#FF3B30] text-white text-[10px] font-bold rounded">NEW</span>}
               />
             )}
           </>
@@ -534,6 +527,34 @@ export function Sidebar({
             </div>
           )}
         </div>}
+
+        {/* Analytics — admin only */}
+        {canAccessSettings && (
+          <div className="bg-white flex flex-col items-start w-full">
+            <div className="grid-cols-[max-content] grid-rows-[max-content] inline-grid leading-[0] place-items-start w-full">
+              <div className={`[grid-area:1_/_1] bg-transparent flex flex-col items-start overflow-clip py-[10px] ${
+                isCollapsed ? 'ml-[30px] pl-0 pr-0' : 'ml-[28px] pl-0 pr-[8px] w-[240px]'
+              }`}>
+                <button
+                  onClick={() => onSelectItem?.('Analytics')}
+                  className={`flex gap-[8px] items-start w-full cursor-pointer transition-colors ${
+                    isCollapsed ? 'hover:bg-gray-100 rounded-lg p-1' : ''
+                  }`}
+                >
+                  <div className={`size-[20px] shrink-0 flex items-center justify-center ${activeItem === 'Analytics' ? 'text-[#007BFF]' : 'text-[#4D4F56]'}`}>
+                    <BarChart3 size={20} />
+                  </div>
+                  {!isCollapsed && (
+                    <p className={`${activeItem === 'Analytics' ? 'font-bold text-[#007BFF]' : 'font-normal text-[#303135]'} leading-[20px] text-[14px] w-[176px] text-left`}>
+                      Analytics
+                    </p>
+                  )}
+                </button>
+              </div>
+              <div className={`[grid-area:1_/_1] ${activeItem === 'Analytics' ? 'bg-[#007BFF]' : 'bg-transparent'} h-[40px] ml-0 mt-0 w-[4px]`} />
+            </div>
+          </div>
+        )}
 
         {/* Settings */}
         {canAccessSettings && <div className="bg-white flex flex-col items-start w-full">

@@ -5,8 +5,8 @@ import { projectId, publicAnonKey } from '../../utils/supabase/info';
 export const MANAGED_MENU_ITEMS = [
   'Promo Banner',
   'Product Entry Point',
-  'Homepage Promo Banner',
-  'Hero Landing Page Header',
+  'DLP Assets',
+  'Auto Translate',
 ] as const;
 
 export type ManagedMenuItem = (typeof MANAGED_MENU_ITEMS)[number];
@@ -15,8 +15,8 @@ type VisibilityMap = Record<ManagedMenuItem, boolean>;
 const DEFAULT_VISIBILITY: VisibilityMap = {
   'Promo Banner': true,
   'Product Entry Point': true,
-  'Homepage Promo Banner': true,
-  'Hero Landing Page Header': true,
+  'DLP Assets': true,
+  'Auto Translate': true,
 };
 
 const DB_KEY = 'banner_menu_visibility';

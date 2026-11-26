@@ -1,5 +1,6 @@
 import { toPng } from 'html-to-image';
 import { getBase64FontCSS } from './fontCss';
+import type { BannerFormData } from '../components/create-banner/types';
 
 /**
  * Bytes floor for any captured banner PNG. Anything smaller than this is
@@ -179,6 +180,9 @@ export async function captureBannerElement(
         fontEmbedCSS: fontCss,
         skipFonts: true,
         pixelRatio,
+        // DLP Header's navbar overlay (data-dlp-navbar, see BannerLegacy.tsx) is a preview-only visual aid for
+        // the editor — it must never end up baked into the exported/downloaded asset.
+        filter: (node) => !(node instanceof HTMLElement && node.hasAttribute('data-dlp-navbar')),
         style: {
           transform: 'none',
           transformOrigin: 'top left',
@@ -211,4 +215,43 @@ export async function captureBannerElement(
   throw lastError instanceof Error
     ? lastError
     : new Error('Failed to capture banner after retries');
+}
+
+export interface DlpZipBannerSpec {
+  /** Zip folder path, already numbered, e.g. "01 Header/Mobile" — JSZip nests on "/". */
+  folder: string;
+  formData: BannerFormData;
+}
+
+/**
+ * Orders the sub-banners of a DLP Assets project for the "download as ZIP"
+ * feature: "01 Header" (Mobile/Desktop subfolders) then "02 Banner Entry Point"
+ * (2x1/3x4/5x1 subfolders, each in a fixed ratio order).
+ */
+export function buildDlpZipManifest(dlp: NonNullable<BannerFormData['dlp']>): DlpZipBannerSpec[] {
+  const list: DlpZipBannerSpec[] = [];
+
+  if (dlp.header.mobile && dlp.header.mobileForm) {
+    list.push({ folder: '01 Header/Mobile', formData: dlp.header.mobileForm });
+  }
+  if (dlp.header.desktop && dlp.header.desktopForm) {
+    list.push({ folder: '01 Header/Desktop', formData: dlp.header.desktopForm });
+  }
+
+  const epOrder: { key: 'ep-mobile-2x1' | 'ep-mobile-3x4' | 'ep-desktop'; label: string }[] = [
+    { key: 'ep-mobile-2x1', label: '2x1 (Landscape)' },
+    { key: 'ep-mobile-3x4', label: '3x4 (Portrait)' },
+    { key: 'ep-desktop', label: '5x1 (Desktop)' },
+  ];
+  for (const { key, label } of epOrder) {
+    const form = dlp.entryPoints[key];
+    if (form) list.push({ folder: `02 Banner Entry Point/${label}`, formData: form });
+  }
+
+  return list;
+}
+
+/** Sanitizes a project name for use as a filesystem/zip entry name. */
+export function sanitizeFileName(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'DLP Assets';
 }

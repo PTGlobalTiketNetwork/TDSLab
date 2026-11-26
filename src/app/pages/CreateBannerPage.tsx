@@ -5,6 +5,7 @@ import { BannerService } from '../../services/bannerService';
 import { BannerFormData } from '../components/create-banner/types';
 import { toast } from 'sonner';
 import { TiketSnackbar } from '../components/ui/TiketSnackbar';
+import { DlpAssetsFlow } from '../components/dlp-assets/DlpAssetsFlow';
 
 interface CreateBannerPageProps {
   userName: string;
@@ -20,6 +21,7 @@ export function CreateBannerPage({ userName, userId, userAvatar }: CreateBannerP
   const versionParam = searchParams.get('version');
   
   const [initialData, setInitialData] = useState<BannerFormData | undefined>(undefined);
+  const [initialSeconds, setInitialSeconds] = useState(0);
   const [initialStatus, setInitialStatus] = useState<'draft' | 'published' | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(!!editId);
 
@@ -49,6 +51,7 @@ export function CreateBannerPage({ userName, userId, userAvatar }: CreateBannerP
       
       if (bannerData && bannerData.form_data) {
         setInitialData(bannerData.form_data);
+        setInitialSeconds(Number(bannerData.metadata?.creation_seconds) || 0);
         setInitialStatus(bannerData.status as 'draft' | 'published');
       } else {
         if (!version) {
@@ -88,6 +91,10 @@ export function CreateBannerPage({ userName, userId, userAvatar }: CreateBannerP
     );
   }
 
+  if (category === 'dlp-assets') {
+    return <DlpAssetsFlow userName={userName} userId={userId} userAvatar={userAvatar} onBack={handleBack} initialData={initialData} editingId={editId || undefined} initialSeconds={initialSeconds} />;
+  }
+
   return (
     <CreateBanner
       onBack={handleBack}
@@ -95,6 +102,7 @@ export function CreateBannerPage({ userName, userId, userAvatar }: CreateBannerP
       userId={userId}
       userAvatar={userAvatar}
       initialData={initialData}
+      initialSeconds={initialSeconds}
       editingId={editId || undefined}
       initialStatus={initialStatus}
       embedded={false}

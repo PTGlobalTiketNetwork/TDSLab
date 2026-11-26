@@ -4,7 +4,7 @@ import svgPaths from '../../imports/svg-3n792bvqad';
 import TdsIcImage from '../../imports/TdsIcImage';
 import TdsIcCopy from '../../imports/TdsIcCopy';
 import RevIcSave from '../../imports/RevIcSave';
-import { useRef, useState, useEffect, useLayoutEffect } from 'react';
+import { useRef, useState, useEffect, useLayoutEffect, type RefObject } from 'react';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
 import { ChevronDown, Maximize2, Loader2, Check, Sparkles, Eye, RotateCcw, Edit2, X, Save, Copy, Download, Trash2, FileDown, Send } from 'lucide-react';
@@ -14,6 +14,7 @@ import { Lightbox } from './Lightbox';
 import { Skeleton } from './ui/skeleton';
 import { TiketSnackbar } from './ui/TiketSnackbar';
 import { BannerFixed } from './create-banner/BannerFixed';
+import { desktopCanvasHeight } from './create-banner/BannerDesktop51';
 import { BannerFormData } from './create-banner/types';
 import { handoffStore } from '../../utils/indexedDB';
 import { fontEmbedCSS, getBase64FontCSS } from '../utils/fontCss';
@@ -21,7 +22,9 @@ import {
   captureBannerElement,
   ensureDataUrlForCapture,
   waitForRenderStable,
+  buildDlpZipManifest,
 } from '../utils/bannerCapture';
+import { OffscreenBannerRenderer, type OffscreenBannerRendererHandle } from './OffscreenBannerRenderer';
 import TdsIcSparklingGeneral from '../../imports/TdsIcSparklingGeneral-2104-16';
 import { useGlobalInteraction } from '../../context/GlobalInteractionContext';
 import { useAccess } from '../../context/AccessContext';
@@ -34,6 +37,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from './ui/dial
 import { ComparisonViewer } from './ComparisonViewer';
 import { Session } from '@supabase/supabase-js';
 import { TiketTabs } from './ui/TiketTabs';
+import { SegmentedControl } from './ui/SegmentedControl';
 
 interface InspectorPanelProps {
   selectedBanner: Banner | null;
@@ -52,6 +56,10 @@ interface InspectorPanelProps {
   onBulkPublish?: (banners: Banner[]) => void;
   onClearSelection?: () => void;
   session: Session | null;
+  /** Page-level OffscreenBannerRenderer (mounted unconditionally, outside this panel) used for DLP Assets'
+   *  "Download as ZIP". Falls back to a local instance if not given, but that one unmounts — and aborts
+   *  any in-flight ZIP — the moment this panel closes (selection cleared), since it lives inside it. */
+  renderer?: RefObject<OffscreenBannerRendererHandle | null>;
 }
 
 export function InspectorPanel({
@@ -70,7 +78,8 @@ export function InspectorPanel({
   onBulkMoveToDrafts,
   onBulkPublish,
   onClearSelection,
-  session
+  session,
+  renderer,
 }: InspectorPanelProps) {
   const { isWhitelisted } = useAccess();
   const [downloadingItem, setDownloadingItem] = useState<string | null>(null);
@@ -93,9 +102,13 @@ export function InspectorPanel({
   
   // Language state for preview
   const [viewLanguage, setViewLanguage] = useState<'en' | 'id'>('en');
-  
+  // Device state for DLP Assets preview (Mobile/Desktop header switcher)
+  const [dlpDevice, setDlpDevice] = useState<'mobile' | 'desktop'>('mobile');
+
   const enBannerRef = useRef<HTMLDivElement>(null);
   const idBannerRef = useRef<HTMLDivElement>(null);
+  const localDlpZipRenderer = useRef<OffscreenBannerRendererHandle>(null);
+  const dlpZipRenderer = renderer ?? localDlpZipRenderer;
   const notifiedUpdatesRef = useRef<Set<string>>(new Set());
   const previewContainerRef = useRef<HTMLDivElement>(null);
   // 432px panel − 2×32px content padding − 2×16px button padding = 336px
@@ -128,6 +141,11 @@ export function InspectorPanel({
   // Reset notification when switching to a different banner
   useEffect(() => {
       setShowUpdateNotification(false);
+  }, [selectedBanner?.id]);
+
+  // Reset device switcher when switching to a different banner
+  useEffect(() => {
+      setDlpDevice('mobile');
   }, [selectedBanner?.id]);
 
   // Watch for external updates (Syncing)
@@ -173,7 +191,11 @@ export function InspectorPanel({
   const cacheBuster = selectedBanner && (selectedBanner as any).updatedAt ? new Date((selectedBanner as any).updatedAt).getTime() : selectedBanner?.id || 'preview';
   const rawImageUrl = selectedBanner?.imageUrl;
   const selectedFormData = selectedBanner?.form_data as BannerFormData | undefined;
-  const selectedKeyVisualUrl = selectedFormData?.keyVisualUrl || null;
+  const selectedIsDlpAssets = selectedFormData?.bannerCategory === 'DLP Assets' && !!selectedFormData?.dlp?.header;
+  const selectedPreviewFormData = selectedIsDlpAssets
+    ? (dlpDevice === 'desktop' ? selectedFormData?.dlp?.header?.desktopForm : selectedFormData?.dlp?.header?.mobileForm)
+    : selectedFormData;
+  const selectedKeyVisualUrl = selectedPreviewFormData?.keyVisualUrl || null;
   const previewImageSource = capturePreviewUrl || selectedKeyVisualUrl || rawImageUrl;
   const withCacheBust = (url: string) => (
     url.startsWith('data:') || url.startsWith('blob:')
@@ -268,12 +290,13 @@ export function InspectorPanel({
               const bannerElement = enBannerRef.current.children[0] as HTMLElement;
               if (!bannerElement) throw new Error("Banner element not found");
 
-              const dataUrl = await toPng(bannerElement, { 
+              const dataUrl = await toPng(bannerElement, {
                   cacheBust: false,
-                  useCORS: true, 
+                  useCORS: true,
                   fontEmbedCSS: base64FontCSS,
                   skipFonts: true,
                   pixelRatio: 3, // FORCE 3x
+                  filter: (node) => !(node instanceof HTMLElement && node.hasAttribute('data-dlp-navbar')),
                   style: { transform: 'none', transformOrigin: 'top left' }
               });
 
@@ -337,13 +360,15 @@ export function InspectorPanel({
     const hasDownloadable = selectedBanners.some(b => b.imageUrl);
     const hasPublished = selectedBanners.some(b => b.status === 'published');
     const hasDrafts = selectedBanners.some(b => b.status === 'draft');
+    // DLP Assets projects aren't "banners" — use the category's own name when the whole selection is one category
+    const noun = categories.length === 1 ? (categories[0] === 'DLP Assets' ? 'DLP' : 'banners') : 'banners';
 
     return (
       <div className="w-[432px] h-screen bg-white border-l border-[#e8eaee] fixed right-0 top-0 flex flex-col">
         <div className="p-[24px] border-b border-[#e8eaee]">
           <div className="flex items-center justify-between">
             <h3 className="text-[20px] font-bold text-[#303135]">
-              {count} banners selected
+              {count} {noun} selected
             </h3>
             <button
               onClick={onClearSelection}
@@ -403,7 +428,7 @@ export function InspectorPanel({
               className="w-full h-[40px] px-4 flex items-center gap-3 rounded-[8px] text-[14px] font-medium text-[#303135] bg-[#f0f1f5] hover:bg-[#e4e5ea] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Copy className="size-4" />
-              Duplicate {count} banners
+              Duplicate {count} {noun}
             </button>
 
             <button
@@ -412,7 +437,7 @@ export function InspectorPanel({
               className="w-full h-[40px] px-4 flex items-center gap-3 rounded-[8px] text-[14px] font-medium text-[#303135] bg-[#f0f1f5] hover:bg-[#e4e5ea] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Download className="size-4" />
-              Download {count} banners
+              Download {count} {noun}
             </button>
 
             {hasPublished && (
@@ -449,7 +474,7 @@ export function InspectorPanel({
                 className="w-full h-[40px] px-4 flex items-center gap-3 rounded-[8px] text-[14px] font-bold text-[#F15C59] bg-[#FFDFDF] hover:bg-[#FC9999] transition-colors"
               >
                 <Trash2 className="size-4" />
-                Delete {count} banners
+                Delete {count} {noun}
               </button>
             </div>
           </div>
@@ -458,20 +483,9 @@ export function InspectorPanel({
     );
   }
 
+  // Nothing selected: no panel at all (the list uses the full width)
   if (!selectedBanner) {
-    return (
-      <div className="w-[432px] h-screen bg-white border-l border-[#e8eaee] fixed right-0 top-0 flex flex-col items-center justify-center px-[32px]">
-        <div className="text-center">
-          
-          <h3 className="text-[18px] font-bold text-[#303135] mb-2">
-            Please select image
-          </h3>
-          <p className="text-[14px] text-[#71747d]">
-            To see the details here
-          </p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   const handleDownload = async (lang: 'en' | 'id', scaleFactor: number) => {
@@ -506,14 +520,15 @@ export function InspectorPanel({
             return;
         }
 
-        const dataUrl = await toPng(bannerElement, { 
+        const dataUrl = await toPng(bannerElement, {
             cacheBust: false,
-            useCORS: true, 
+            useCORS: true,
             fontEmbedCSS: base64FontCSS,
             skipFonts: true,
-            pixelRatio: scaleFactor, 
+            pixelRatio: scaleFactor,
+            filter: (node) => !(node instanceof HTMLElement && node.hasAttribute('data-dlp-navbar')),
             style: {
-                transform: 'none', 
+                transform: 'none',
                 transformOrigin: 'top left'
             }
         });
@@ -538,6 +553,22 @@ export function InspectorPanel({
         toast.custom((t) => <TiketSnackbar id={t} message="Failed to download banner. Please try again." variant="error" />);
     } finally {
         setDownloadingItem(null);
+    }
+  };
+
+  // DLP Assets: one ZIP containing every sub-banner's EN + ID, instead of the per-language PNG flow above.
+  const handleDownloadDlpZip = async (dlp: NonNullable<BannerFormData['dlp']>, scaleFactor: number) => {
+    const downloadId = `zip-${scaleFactor}`;
+    setDownloadingItem(downloadId);
+    try {
+      const banners = buildDlpZipManifest(dlp);
+      await dlpZipRenderer.current?.downloadDlpZip({
+        projectName: selectedBanner.name || 'DLP Assets',
+        scaleFactor,
+        banners,
+      });
+    } finally {
+      setDownloadingItem(null);
     }
   };
 
@@ -636,6 +667,19 @@ export function InspectorPanel({
   const scale = formData?.keyVisualScale || 100;
   const position = formData?.keyVisualPosition || { x: 50, y: 50 };
 
+  // DLP Assets banners store the real renderable banners nested under formData.dlp — the
+  // top-level formData is a synthetic wrapper, not something BannerFixed can render directly.
+  // previewFormData resolves to the correct nested sub-form for the visible preview only;
+  // hidden capture-for-download and Save/Quick Save keep using the real top-level formData above.
+  const isDlpAssets = formData?.bannerCategory === 'DLP Assets' && !!formData?.dlp?.header;
+  const hasDlpDesktop = !!formData?.dlp?.header?.desktop;
+  const previewFormData: BannerFormData | undefined = isDlpAssets
+    ? (dlpDevice === 'desktop' ? formData?.dlp?.header?.desktopForm : formData?.dlp?.header?.mobileForm)
+    : formData;
+  const displayPreviewUrl = capturePreviewUrl || previewFormData?.keyVisualUrl || null;
+  const displayScale = previewFormData?.keyVisualScale || 100;
+  const displayPosition = previewFormData?.keyVisualPosition || { x: 50, y: 50 };
+
   const handleRestoreClick = async (historyItem: any) => {
       if (isRestoring) return;
       
@@ -686,6 +730,7 @@ export function InspectorPanel({
                fontEmbedCSS: base64FontCSS_restore,
                skipFonts: true,
                pixelRatio: 2, // 2x for dashboard quality
+               filter: (node) => !(node instanceof HTMLElement && node.hasAttribute('data-dlp-navbar')),
                style: { transform: 'none', transformOrigin: 'top left' }
           });
           
@@ -892,31 +937,43 @@ export function InspectorPanel({
   };
   
   // Calculate Render Scale for Product Entry Point
+  // (based on the real top-level formData — feeds the hidden capture-for-download instances)
   const isEntryPoint = formData?.bannerCategory === 'Product Entry Point';
   const isDesktopEntryPoint = formData?.bannerRatio === 'Desktop (5:1)' || formData?.bannerRatio === 'Desktop (8:1)';
   // Mobile entry points are 320px wide → scale to 600px. Desktop are 640px → scale down to 600px.
   const renderScale = isEntryPoint ? (isDesktopEntryPoint ? 600 / 640 : 1.875) : undefined;
 
+  // Same calc for the visible preview, which for DLP Assets renders previewFormData (the nested
+  // per-device sub-form) instead of the top-level formData
+  const previewIsEntryPoint = previewFormData?.bannerCategory === 'Product Entry Point';
+  const previewIsDesktopEntryPoint = previewFormData?.bannerRatio === 'Desktop (5:1)' || previewFormData?.bannerRatio === 'Desktop (8:1)';
+  const previewRenderScale = previewIsEntryPoint ? (previewIsDesktopEntryPoint ? 600 / 640 : 1.875) : undefined;
+
   // Calculate native banner dimensions for CSS-based preview scaling
-  const getNativeBannerDimensions = () => {
-    const isPortraitRatio = formData?.bannerRatio === 'Portrait (3:4)';
-    const nativeWidth = isPortraitRatio ? 360 : 600;
+  const getNativeBannerDimensions = (fd: BannerFormData | undefined, entryPoint: boolean) => {
+    const isPortraitRatio = fd?.bannerRatio === 'Portrait (3:4)';
+    let nativeWidth = isPortraitRatio ? 360 : 600;
     let nativeHeight = isPortraitRatio ? 480 : 300;
-    if (formData) {
-      if (isEntryPoint) {
-        if (formData.bannerRatio === 'Desktop (5:1)') {
+    if (fd) {
+      if (entryPoint) {
+        if (fd.bannerRatio === 'Desktop (5:1)') {
           nativeHeight = Math.round(128 * (600 / 640)); // ~120
-        } else if (formData.bannerRatio === 'Desktop (8:1)') {
+        } else if (fd.bannerRatio === 'Desktop (8:1)') {
           nativeHeight = Math.round(80 * (600 / 640)); // 75
-        } else if (formData.bannerRatio === 'Mobile (2:1)' || formData.bannerRatio === 'mobile_2:1') {
+        } else if (fd.bannerRatio === 'Mobile (2:1)' || fd.bannerRatio === 'mobile_2:1') {
           nativeHeight = 300;
-        } else if (formData.bannerRatio === 'Mobile (4:1)' || formData.bannerRatio === 'mobile_4:1') {
+        } else if (fd.bannerRatio === 'Mobile (4:1)' || fd.bannerRatio === 'mobile_4:1') {
           nativeHeight = 150;
         } else {
           nativeHeight = 240;
         }
+      } else if (fd.bannerRatio === 'Desktop (5:1)' || fd.bannerRatio === 'Desktop (4:1)') {
+        // Standalone Promo/DLP Header "Desktop" banner (BannerDesktop51): real canvas is 2000px wide,
+        // not the 600px default — a 600 width here would mis-scale the preview to a sliver of itself.
+        nativeWidth = 2000;
+        nativeHeight = desktopCanvasHeight(fd.bannerRatio);
       } else if (!isPortraitRatio) {
-        switch (formData.bannerRatio) {
+        switch (fd.bannerRatio) {
           case 'Landscape (16:9)': nativeHeight = 337.5; break;
           case 'Square (1:1)': nativeHeight = 600; break;
           case 'Landscape (2:1)':
@@ -926,11 +983,16 @@ export function InspectorPanel({
     }
     return { nativeWidth, nativeHeight };
   };
-  const { nativeWidth, nativeHeight } = getNativeBannerDimensions();
+  const { nativeWidth, nativeHeight } = getNativeBannerDimensions(previewFormData, previewIsEntryPoint);
   const previewScale = previewContainerWidth / nativeWidth;
 
   return (
     <div className="w-[432px] h-screen bg-white border-l border-[#d8dce8] fixed right-0 top-0 overflow-y-auto">
+      {/* DLP Assets "download as ZIP" renders many different sub-banners off-screen one at a time,
+          separate from the always-mounted single-banner hidden render below.
+          Only mount our own instance when the caller didn't pass a persistent one (`renderer`) — this
+          local instance unmounts the moment the panel closes, which used to abort an in-flight ZIP. */}
+      {isDlpAssets && !renderer && <OffscreenBannerRenderer ref={localDlpZipRenderer} />}
       {/* Hidden Banner Rendering for Downloads - Optimized for reliable html-to-image capture */}
       {formData && (
         <div style={{ 
@@ -971,6 +1033,17 @@ export function InspectorPanel({
                 isImagePreloaded={forceCaptureImageReady ? true : undefined}
             />
         </div>
+      )}
+
+      {onClearSelection && (
+        <button
+          type="button"
+          onClick={onClearSelection}
+          title="Close (Esc)"
+          className="fixed right-[16px] top-[16px] z-[60] w-[32px] h-[32px] rounded-full bg-white hover:bg-[#f2f4f8] text-[#71747d] flex items-center justify-center shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] transition-colors"
+        >
+          <X size={16} />
+        </button>
       )}
 
       {/* Content Container */}
@@ -1016,6 +1089,19 @@ export function InspectorPanel({
 
         {/* Preview Image & Actions */}
         <div className="flex flex-col gap-[16px] items-center w-full mx-[0px] my-[-16px]">
+          {/* Device Tabs - DLP Assets only: switch between the Mobile and Desktop header. */}
+          {isDlpAssets && (
+            <SegmentedControl
+              items={[
+                { id: 'mobile', label: 'Mobile' },
+                ...(hasDlpDesktop ? [{ id: 'desktop', label: 'Desktop' }] : []),
+              ]}
+              activeId={dlpDevice}
+              onChange={(id) => setDlpDevice(id as 'mobile' | 'desktop')}
+              fullWidth
+            />
+          )}
+
           {/* Language Tabs - Only show for dynamic banners with form_data */}
           {formData && (
             <TiketTabs
@@ -1028,7 +1114,7 @@ export function InspectorPanel({
               className="w-full justify-center"
             />
           )}
-          
+
           {/* Preview Image */}
           <Lightbox
             hasLanguageSwitcher={!!formData}
@@ -1054,19 +1140,19 @@ export function InspectorPanel({
                        }}
                      >
                        <BannerFixed
-                        key={`preview-en-${selectedBanner.id}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
-                         formData={formData}
+                        key={`preview-en-${selectedBanner.id}-${dlpDevice}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
+                         formData={previewFormData}
                          lang="en"
-                         scale={scale}
-                         position={position}
-                         previewUrl={previewUrl}
+                         scale={displayScale}
+                         position={displayPosition}
+                         previewUrl={displayPreviewUrl}
                         isImagePreloaded={isPreviewBackgroundLoaded}
                          hideHeader={true}
                          fullSize={true}
-                         renderScale={renderScale}
+                         renderScale={previewRenderScale}
                        />
                      </div>
-                     
+
                      {/* ID Preview */}
                      <div 
                        className="absolute top-0 left-0 pointer-events-none" 
@@ -1081,16 +1167,16 @@ export function InspectorPanel({
                        }}
                      >
                        <BannerFixed
-                        key={`preview-id-${selectedBanner.id}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
-                         formData={formData}
+                        key={`preview-id-${selectedBanner.id}-${dlpDevice}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
+                         formData={previewFormData}
                          lang="id"
-                         scale={scale}
-                         position={position}
-                         previewUrl={previewUrl}
+                         scale={displayScale}
+                         position={displayPosition}
+                         previewUrl={displayPreviewUrl}
                         isImagePreloaded={isPreviewBackgroundLoaded}
                          hideHeader={true}
                          fullSize={true}
-                         renderScale={renderScale}
+                         renderScale={previewRenderScale}
                        />
                      </div>
                    </div>
@@ -1161,17 +1247,17 @@ export function InspectorPanel({
                      }}
                    >
                      <BannerFixed
-                        key={`lightbox-en-${selectedBanner.id}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
-                         formData={formData}
+                        key={`lightbox-en-${selectedBanner.id}-${dlpDevice}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
+                         formData={previewFormData}
                          lang="en"
-                         scale={scale}
-                         position={position}
-                         previewUrl={previewUrl}
+                         scale={displayScale}
+                         position={displayPosition}
+                         previewUrl={displayPreviewUrl}
                          thumbnailUrl={imageUrlWithCacheBust}
                         isImagePreloaded={isPreviewBackgroundLoaded}
                          hideHeader={true}
                          hideBorder={true}
-                         renderScale={renderScale}
+                         renderScale={previewRenderScale}
                      />
                    </div>
                    
@@ -1190,17 +1276,17 @@ export function InspectorPanel({
                      }}
                    >
                      <BannerFixed
-                        key={`lightbox-id-${selectedBanner.id}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
-                         formData={formData}
+                        key={`lightbox-id-${selectedBanner.id}-${dlpDevice}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
+                         formData={previewFormData}
                          lang="id"
-                         scale={scale}
-                         position={position}
-                         previewUrl={previewUrl}
+                         scale={displayScale}
+                         position={displayPosition}
+                         previewUrl={displayPreviewUrl}
                          thumbnailUrl={imageUrlWithCacheBust}
                         isImagePreloaded={isPreviewBackgroundLoaded}
                          hideHeader={true}
                          hideBorder={true}
-                         renderScale={renderScale}
+                         renderScale={previewRenderScale}
                      />
                    </div>
                  </div>
@@ -1300,13 +1386,35 @@ export function InspectorPanel({
                     </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[300px] p-4 bg-white" align="center" sideOffset={8}>
+                  {isDlpAssets && formData.dlp ? (
+                    /* DLP Assets: one ZIP with every sub-banner's EN + ID — no separate EN/ID menus. */
+                    <div className="flex flex-col gap-3">
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Download ZIP (EN + ID)</span>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[1, 1.5, 2, 3].map(factor => (
+                          <button
+                            key={`zip-${factor}`}
+                            onClick={() => handleDownloadDlpZip(formData.dlp!, factor)}
+                            disabled={!!downloadingItem}
+                            className={`px-2 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-[6px] hover:bg-gray-200 transition-colors border border-transparent hover:border-gray-300 disabled:cursor-not-allowed flex items-center justify-center min-w-[40px] ${downloadingItem && downloadingItem !== `zip-${factor}` ? 'opacity-50' : ''}`}
+                          >
+                            {downloadingItem === `zip-${factor}` ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                            ) : (
+                              `${factor}x`
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
                     <div className="flex flex-col gap-4">
                         {/* EN Section */}
                         <div className="flex flex-col gap-3">
                             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">🇬🇧 English Version</span>
                             <div className="grid grid-cols-4 gap-2">
                                 {[1, 1.5, 2, 3].map(factor => (
-                                    <button 
+                                    <button
                                         key={`en-${factor}`}
                                         onClick={() => handleDownload('en', factor)}
                                         disabled={!!downloadingItem}
@@ -1321,15 +1429,15 @@ export function InspectorPanel({
                                 ))}
                             </div>
                         </div>
-                        
+
                         <div className="h-px bg-gray-200 w-full" />
-                        
+
                         {/* ID Section */}
                         <div className="flex flex-col gap-3">
                             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">🇮🇩 Bahasa Indonesia Version</span>
                             <div className="grid grid-cols-4 gap-2">
                                 {[1, 1.5, 2, 3].map(factor => (
-                                    <button 
+                                    <button
                                         key={`id-${factor}`}
                                         onClick={() => handleDownload('id', factor)}
                                         disabled={!!downloadingItem}
@@ -1345,6 +1453,7 @@ export function InspectorPanel({
                             </div>
                         </div>
                     </div>
+                  )}
                 </PopoverContent>
              </Popover>
             )}

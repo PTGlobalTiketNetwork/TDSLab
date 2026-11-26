@@ -32,6 +32,8 @@ interface HeaderProps {
   showLogo?: boolean;
   hideControls?: boolean;
   hideSearch?: boolean;
+  flat?: boolean; // no drop shadow — used while a sticky bar is attached right under the header (header + bar read as one group)
+  compact?: boolean; // shorter bar (64px) for pages that need the vertical space, e.g. the banner builder
   children?: ReactNode;
   userName?: string;
   userId?: string;
@@ -63,6 +65,8 @@ export function Header({
   showLogo = false,
   hideControls = false,
   hideSearch = false,
+  compact = false,
+  flat = false,
   children,
   userName,
   userId,
@@ -107,7 +111,7 @@ export function Header({
   };
 
   return (
-    <div className={`bg-white shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] flex gap-[40px] items-center pl-[40px] pr-[24px] py-[24px] fixed top-0 right-0 z-40 transition-all duration-300 h-[100px] box-border ${
+    <div className={`bg-white ${flat ? '' : 'shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)]'} flex gap-[40px] items-center pl-[40px] pr-[24px] ${compact ? 'py-[8px] h-[64px]' : 'py-[24px] h-[100px]'} fixed top-0 right-0 z-[45] transition-all duration-300 box-border ${
       fullWidth ? 'left-0' : (isSidebarCollapsed ? 'left-[80px]' : 'left-[268px]')
     }`}>
       {/* Logo or Title */}
@@ -144,7 +148,7 @@ export function Header({
                     placeholder={searchPlaceholder}
                     value={searchQuery}
                     onChange={(e) => onSearchChange?.(e.target.value)}
-                    className="flex-1 h-[22px] bg-transparent text-[16px] leading-[22px] text-[#303135] placeholder:text-[#71747d] font-['Tiket_Odyssey_Text:Regular',sans-serif] focus:outline-none"
+                    className="flex-1 h-[22px] bg-transparent text-[16px] leading-[22px] text-[#303135] placeholder:text-[#71747d] font-sans focus:outline-none"
                   />
                   {searchQuery && onSearchChange && (
                     <button 

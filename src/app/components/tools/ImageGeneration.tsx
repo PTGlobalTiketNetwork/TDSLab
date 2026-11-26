@@ -6,7 +6,7 @@ import { TiketSwitch } from '../ui/TiketSwitch';
 import { TiketSelect } from '../ui/TiketSelect';
 import { TiketTextarea } from '../ui/TiketInput';
 import { TiketTabs } from '../ui/TiketTabs';
-import { TiketPagination } from '../ui/TiketPagination';
+import { CustomPagination } from '../ui/CustomPagination';
 import { Lightbox } from '../Lightbox';
 import { DeleteConfirmDialog } from '../DeleteConfirmDialog';
 import { Session } from '@supabase/supabase-js';
@@ -1017,6 +1017,11 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
       }
   }, [processedHistory.length]);
 
+  // Back to page 1 whenever the tab or a filter/sort changes (same rule as every list page)
+  useEffect(() => {
+      setCurrentPage(1);
+  }, [historyTab, historyFilterRatio, historyFilterResolution, historySort]);
+
   const displayedHistory = useMemo(() => {
       const start = (currentPage - 1) * ITEMS_PER_PAGE;
       const end = start + ITEMS_PER_PAGE;
@@ -1786,6 +1791,16 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
       <div ref={galleryRef} className="flex flex-col gap-6 pt-8 border-t border-[#d8dce8]">
          <div className="flex items-center justify-between">
             <h2 className="text-[20px] font-bold text-[#303135]">History Gallery</h2>
+            {!isLoadingHistory && (
+                <CustomPagination
+                    inline
+                    currentPage={currentPage}
+                    totalPages={Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE))}
+                    totalItems={totalItems}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                    onPageChange={setCurrentPage}
+                />
+            )}
          </div>
 
          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1881,16 +1896,6 @@ export function ImageGeneration({ session }: ImageGenerationProps) {
                      )})}
                  </div>
                  
-                 {/* Pagination */}
-                 {totalItems > ITEMS_PER_PAGE && (
-                     <div className="flex justify-center mt-4">
-                         <TiketPagination 
-                             currentPage={currentPage}
-                             totalPages={Math.ceil(totalItems / ITEMS_PER_PAGE)}
-                             onPageChange={setCurrentPage}
-                         />
-                     </div>
-                 )}
              </>
          ) : (
              <div className="flex flex-col items-center justify-center py-12 text-center text-gray-500">

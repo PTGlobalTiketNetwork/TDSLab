@@ -1,16 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { List, Check, X } from 'lucide-react';
-import { ViewMode } from '../../types/banner';
+import { Check, X, Search } from 'lucide-react';
 import svgPaths from '../../imports/svg-2akxad69hc';
-import gridSvgPaths from '../../imports/svg-avczeqk0mg';
 
 interface FilterBarProps {
-  viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
-  verticalFilter: string;
-  onVerticalFilterChange: (filter: string) => void;
-  ratioFilter: string;
-  onRatioFilterChange: (filter: string) => void;
+  verticalFilter: string[];
+  onVerticalFilterChange: (filter: string[]) => void;
+  ratioFilter: string[];
+  onRatioFilterChange: (filter: string[]) => void;
   sortBy: string;
   onSortChange: (sort: string) => void;
   availableRatios: string[];
@@ -36,9 +32,139 @@ function ChevronDownIcon() {
   );
 }
 
+/** Pill dropdown with a search box and checkboxes, so more than one option can be selected. Empty selection = all. */
+export function MultiSelectFilter({ allLabel, pluralLabel, options, selected, onChange }: {
+  allLabel: string;
+  pluralLabel: string;
+  options: string[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, []);
+
+  useEffect(() => { if (!open) setQuery(''); }, [open]);
+
+  const label = selected.length === 0 ? allLabel : selected.length === 1 ? selected[0] : `${selected.length} ${pluralLabel}`;
+  const shown = options.filter((o) => o.toLowerCase().includes(query.trim().toLowerCase()));
+  const toggle = (o: string) => onChange(selected.includes(o) ? selected.filter((x) => x !== o) : [...selected, o]);
+
+  const box = (checked: boolean) => (
+    <span className={`size-[18px] shrink-0 rounded-[4px] border flex items-center justify-center ${checked ? 'bg-[#007BFF] border-[#007BFF]' : 'bg-white border-[#c0c3cf]'}`}>
+      {checked && <Check size={12} className="text-white" strokeWidth={3} />}
+    </span>
+  );
+
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen(!open)} className="bg-white relative flex gap-[4px] items-center justify-center px-[12px] py-[8px] rounded-[18px]">
+        <div className="absolute border border-[#d8dce8] border-solid inset-0 pointer-events-none rounded-[18px]" />
+        <span className={`font-normal leading-[22px] text-[16px] text-nowrap relative ${selected.length ? 'text-[#007BFF]' : 'text-[#303135]'}`}>{label}</span>
+        <ChevronDownIcon />
+      </button>
+
+      {open && (
+        <div className="absolute top-[48px] left-0 w-[280px] bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] z-50 overflow-clip flex flex-col items-start py-[8px]">
+          <div className="w-full px-[12px] pb-[8px]">
+            <div className="flex items-center gap-[8px] bg-[#f8f9fd] border border-[#e8eaee] rounded-[8px] px-[10px] py-[6px]">
+              <Search size={14} className="text-[#71747d] shrink-0" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search"
+                className="w-full bg-transparent outline-none text-[14px] text-[#303135] placeholder:text-[#71747d]"
+              />
+            </div>
+          </div>
+          <div className="w-full max-h-[300px] overflow-y-auto">
+            {!query.trim() && (
+              <div onClick={() => onChange([])} className="flex items-center gap-[12px] px-[16px] py-[10px] w-full cursor-pointer hover:bg-[#f8f9fd] transition-colors">
+                {box(selected.length === 0)}
+                <span className={`font-normal leading-[20px] text-[14px] flex-1 ${selected.length === 0 ? 'text-[#007BFF] font-medium' : 'text-[#303135]'}`}>{allLabel}</span>
+              </div>
+            )}
+            {shown.map((o) => {
+              const isSelected = selected.includes(o);
+              return (
+                <div key={o} onClick={() => toggle(o)} className="flex items-center gap-[12px] px-[16px] py-[10px] w-full cursor-pointer hover:bg-[#f8f9fd] transition-colors">
+                  {box(isSelected)}
+                  <span className={`font-normal leading-[20px] text-[14px] flex-1 ${isSelected ? 'text-[#007BFF] font-medium' : 'text-[#303135]'}`}>{o}</span>
+                </div>
+              );
+            })}
+            {shown.length === 0 && <div className="px-[16px] py-[10px] text-[14px] text-[#71747d]">No results</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Single-select pill dropdown, same look as the other filters (used outside the list page). */
+export function PillSelect({ options, value, onChange, width = 200 }: {
+  options: { label: string; value: string }[];
+  value: string;
+  onChange: (value: string) => void;
+  width?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, []);
+
+  const label = options.find((o) => o.value === value)?.label ?? '';
+
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen(!open)} className="bg-white relative flex gap-[4px] items-center justify-center px-[12px] py-[8px] rounded-[18px]">
+        <div className="absolute border border-[#d8dce8] border-solid inset-0 pointer-events-none rounded-[18px]" />
+        <span className="font-normal leading-[22px] text-[#303135] text-[16px] text-nowrap relative">{label}</span>
+        <ChevronDownIcon />
+      </button>
+      {open && (
+        <div className="absolute top-[48px] left-0 bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] z-50 overflow-clip flex flex-col items-start py-[8px]" style={{ width }}>
+          <div className="w-full max-h-[300px] overflow-y-auto">
+            {options.map((o) => {
+              const isSelected = o.value === value;
+              return (
+                <div
+                  key={o.value}
+                  onClick={() => { onChange(o.value); setOpen(false); }}
+                  className="flex items-center justify-between px-[16px] py-[10px] w-full cursor-pointer hover:bg-[#f8f9fd] transition-colors"
+                >
+                  <span className={`font-normal leading-[20px] text-[14px] flex-1 ${isSelected ? 'text-[#007BFF] font-medium' : 'text-[#303135]'}`}>{o.label}</span>
+                  {isSelected && (
+                    <div className="bg-[#007BFF] rounded-full p-[2px] w-[20px] h-[20px] flex items-center justify-center shrink-0 ml-2">
+                      <Check size={12} className="text-white" strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FilterBar({
-  viewMode,
-  onViewModeChange,
   verticalFilter,
   onVerticalFilterChange,
   ratioFilter,
@@ -48,21 +174,11 @@ export function FilterBar({
   availableRatios,
   availableVerticals,
 }: FilterBarProps) {
-  const [isVerticalDropdownOpen, setIsVerticalDropdownOpen] = useState(false);
-  const [isRatioDropdownOpen, setIsRatioDropdownOpen] = useState(false);
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const ratioDropdownRef = useRef<HTMLDivElement>(null);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsVerticalDropdownOpen(false);
-      }
-      if (ratioDropdownRef.current && !ratioDropdownRef.current.contains(event.target as Node)) {
-        setIsRatioDropdownOpen(false);
-      }
       if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target as Node)) {
         setIsSortDropdownOpen(false);
       }
@@ -75,17 +191,16 @@ export function FilterBar({
   const currentSortLabel = sortOptions.find(opt => opt.value === sortBy)?.label || 'Sort by';
   
   // Check if any filter is active
-  const hasActiveFilters = verticalFilter !== 'All' || ratioFilter !== 'All';
+  const hasActiveFilters = verticalFilter.length > 0 || ratioFilter.length > 0;
   
   const handleClearAll = () => {
-    onVerticalFilterChange('All');
-    onRatioFilterChange('All');
+    onVerticalFilterChange([]);
+    onRatioFilterChange([]);
   };
 
   return (
-    <div className="flex items-center justify-between mx-[0px] my-[6px] p-[0px] mt-[6px] mr-[0px] mb-[18px] ml-[0px]">
-      {/* Left - Filters */}
-      <div className="flex gap-[8px] items-start">
+    // Left-side filters only; layout, pagination and view toggle come from ListToolbar
+    <>
         {/* Sort by */}
         <div className="relative" ref={sortDropdownRef}>
           <button 
@@ -126,132 +241,8 @@ export function FilterBar({
           )}
         </div>
 
-        {/* Vertical Filter */}
-        <div className="relative" ref={dropdownRef}>
-          <button
-            onClick={() => setIsVerticalDropdownOpen(!isVerticalDropdownOpen)}
-            className="bg-white relative flex gap-[4px] items-center justify-center px-[12px] py-[8px] rounded-[18px]"
-          >
-            <div className="absolute border border-[#d8dce8] border-solid inset-0 pointer-events-none rounded-[18px]" />
-            <span className="font-normal leading-[22px] text-[#303135] text-[16px] text-nowrap relative">
-              {verticalFilter === "All" ? "All Product" : verticalFilter}
-            </span>
-            <ChevronDownIcon />
-          </button>
-
-          {isVerticalDropdownOpen && (
-            <div className="absolute top-[48px] left-0 w-[280px] bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] z-50 overflow-clip flex flex-col items-start py-[8px]">
-              
-              <div className="w-full max-h-[300px] overflow-y-auto">
-                 {/* "All" Option */}
-                  <div
-                    onClick={() => {
-                      onVerticalFilterChange("All");
-                      setIsVerticalDropdownOpen(false);
-                    }}
-                    className="flex items-center justify-between px-[16px] py-[10px] w-full cursor-pointer hover:bg-[#f8f9fd] transition-colors relative"
-                  >
-                      <span className={`font-normal leading-[20px] text-[14px] flex-1 ${verticalFilter === "All" ? 'text-[#007BFF] font-medium' : 'text-[#303135]'}`}>
-                        All Product
-                      </span>
-                      {verticalFilter === "All" && (
-                        <div className="bg-[#007BFF] rounded-full p-[2px] w-[20px] h-[20px] flex items-center justify-center shrink-0 ml-2">
-                            <Check size={12} className="text-white" strokeWidth={3} />
-                        </div>
-                      )}
-                  </div>
-
-                  {availableVerticals.map((option) => {
-                    const isSelected = verticalFilter === option;
-                    return (
-                    <div
-                      key={option}
-                      onClick={() => {
-                        onVerticalFilterChange(option);
-                        setIsVerticalDropdownOpen(false);
-                      }}
-                      className="flex items-center justify-between px-[16px] py-[10px] w-full cursor-pointer hover:bg-[#f8f9fd] transition-colors relative"
-                    >
-                      <span className={`font-normal leading-[20px] text-[14px] flex-1 ${isSelected ? 'text-[#007BFF] font-medium' : 'text-[#303135]'}`}>
-                        {option}
-                      </span>
-                      {isSelected && (
-                        <div className="bg-[#007BFF] rounded-full p-[2px] w-[20px] h-[20px] flex items-center justify-center shrink-0 ml-2">
-                            <Check size={12} className="text-white" strokeWidth={3} />
-                        </div>
-                      )}
-                    </div>
-                  )})}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Ratio Filter */}
-        <div className="relative" ref={ratioDropdownRef}>
-          <button
-            onClick={() => setIsRatioDropdownOpen(!isRatioDropdownOpen)}
-            className="bg-white relative flex gap-[4px] items-center justify-center px-[12px] py-[8px] rounded-[18px]"
-          >
-            <div className="absolute border border-[#d8dce8] border-solid inset-0 pointer-events-none rounded-[18px]" />
-            <span className="font-normal leading-[22px] text-[#303135] text-[16px] text-nowrap relative">
-              {ratioFilter === "All" ? "All Ratio" : ratioFilter}
-            </span>
-            <ChevronDownIcon />
-          </button>
-
-          {isRatioDropdownOpen && (
-            <div className="absolute top-[48px] left-0 w-[280px] bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] z-50 overflow-clip flex flex-col items-start py-[8px]">
-              
-              <div className="w-full max-h-[300px] overflow-y-auto">
-                 {/* "All" Option */}
-                  <div
-                    onClick={() => {
-                      onRatioFilterChange("All");
-                      setIsRatioDropdownOpen(false);
-                    }}
-                    className="flex items-center justify-between px-[16px] py-[10px] w-full cursor-pointer hover:bg-[#f8f9fd] transition-colors relative"
-                  >
-                      <span className={`font-normal leading-[20px] text-[14px] flex-1 ${ratioFilter === "All" ? 'text-[#007BFF] font-medium' : 'text-[#303135]'}`}>
-                        All Ratio
-                      </span>
-                      {ratioFilter === "All" && (
-                        <div className="bg-[#007BFF] rounded-full p-[2px] w-[20px] h-[20px] flex items-center justify-center shrink-0 ml-2">
-                            <Check size={12} className="text-white" strokeWidth={3} />
-                        </div>
-                      )}
-                  </div>
-
-                  {availableRatios.map((option) => {
-                    const isSelected = ratioFilter === option;
-                    return (
-                    <div
-                      key={option}
-                      onClick={() => {
-                        onRatioFilterChange(option);
-                        setIsRatioDropdownOpen(false);
-                      }}
-                      className="flex items-center justify-between px-[16px] py-[10px] w-full cursor-pointer hover:bg-[#f8f9fd] transition-colors relative"
-                    >
-                      <span className={`font-normal leading-[20px] text-[14px] flex-1 ${isSelected ? 'text-[#007BFF] font-medium' : 'text-[#303135]'}`}>
-                        {option}
-                      </span>
-                      {isSelected && (
-                        <div className="bg-[#007BFF] rounded-full p-[2px] w-[20px] h-[20px] flex items-center justify-center shrink-0 ml-2">
-                            <Check size={12} className="text-white" strokeWidth={3} />
-                        </div>
-                      )}
-                    </div>
-                  )})}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Right Side - Clear All + View Toggle */}
-      <div className="flex items-center gap-[12px]">
-        {/* Clear All Button */}
+        <MultiSelectFilter allLabel="All Product" pluralLabel="Products" options={availableVerticals} selected={verticalFilter} onChange={onVerticalFilterChange} />
+        <MultiSelectFilter allLabel="All Ratio" pluralLabel="Ratios" options={availableRatios} selected={ratioFilter} onChange={onRatioFilterChange} />
         {hasActiveFilters && (
           <button
             onClick={handleClearAll}
@@ -261,35 +252,6 @@ export function FilterBar({
             <span>Clear All</span>
           </button>
         )}
-        
-        {/* View Toggle */}
-        <div className="flex items-center gap-[4px] bg-[#f4f7fe] border border-[#d8dce8] rounded-[8px] p-[4px]">
-          <button
-            onClick={() => onViewModeChange('grid')}
-            className={`w-[36px] h-[32px] flex items-center justify-center rounded-[6px] transition-all ${
-              viewMode === 'grid'
-                ? 'bg-white text-[#007BFF] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)]'
-                : 'text-[#71747d] hover:bg-[#e8ebf5]'
-            }`}
-          >
-            <div className="relative size-[18px]">
-              <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-                  <path clipRule="evenodd" d={gridSvgPaths.p28557400} fill="currentColor" fillRule="evenodd" />
-              </svg>
-            </div>
-          </button>
-          <button
-            onClick={() => onViewModeChange('list')}
-            className={`w-[36px] h-[32px] flex items-center justify-center rounded-[6px] transition-all ${
-              viewMode === 'list'
-                ? 'bg-white text-[#007BFF] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)]'
-                : 'text-[#71747d] hover:bg-[#e8ebf5]'
-            }`}
-          >
-            <List size={18} />
-          </button>
-        </div>
-      </div>
-    </div>
+    </>
   );
 }

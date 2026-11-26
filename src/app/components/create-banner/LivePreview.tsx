@@ -1,8 +1,10 @@
 import { BannerFormData } from './types';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
 import { BannerFixed } from './BannerFixed';
-import { Lock, Unlock, RotateCcw } from 'lucide-react';
-import { BANNER_SPECS } from '../../../config/banner-layouts';
+import { BannerDesktop51 } from './BannerDesktop51';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
+import { Lock, Unlock, RotateCcw, Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
+import { BANNER_SPECS, ENTRY_POINT_SPECS } from '../../../config/banner-layouts';
 import { getPositionsForRender, loadDefaultPositions } from './utils/layoutUtils';
 
 interface LivePreviewProps {
@@ -11,10 +13,17 @@ interface LivePreviewProps {
   currentStep: number;
   onControlsChange?: (controls: { isUnlocked: boolean; isSquare: boolean; onToggleLock: () => void; onResetPositions: () => void }) => void;
   activeTab?: 'en' | 'id';
+  deviceTab?: 'mobile' | 'desktop' | 'all';
+  onDeviceTabChange?: (tab: 'mobile' | 'desktop' | 'all') => void;
   isTranslating?: boolean;
+  actualSizeOpen?: boolean;
+  onActualSizeOpenChange?: (open: boolean) => void;
+  embedded?: boolean; // inside the DLP accordion editor: 2:1 side by side + "Preview full size" (no zoom bar), like 3:4
+  hideDeviceTabs?: boolean; // hide the All / Mobile / Desktop tab bar (e.g. inside the copy dialog)
+  compact?: boolean; // small embedded preview: 2:1 shows EN / ID side by side with "Preview full size" instead of the zoom bar
 }
 
-export function LivePreview({ formData, onChange, currentStep, onControlsChange, activeTab = 'en', isTranslating = false }: LivePreviewProps) {
+export function LivePreview({ formData, onChange, currentStep, onControlsChange, activeTab = 'en', deviceTab = 'mobile', onDeviceTabChange, isTranslating = false, compact = false, hideDeviceTabs = false, embedded = false, actualSizeOpen, onActualSizeOpenChange }: LivePreviewProps) {
   // Use formData position or default to center (50, 50)
   // Scale defaults to 100 if undefined
   const scale = formData.keyVisualScale || 100;
@@ -22,6 +31,30 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
   
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isUnlocked, setIsUnlocked] = useState(false);
+
+  // Side-by-side layout: shrink to fit the panel by default; "Actual size" shows the real export pixels (portrait is previewed at 0.5x)
+  const [actualSizeInternal, setActualSizeInternal] = useState(false);
+  const actualSize = actualSizeOpen ?? actualSizeInternal; // can be driven from outside (button placed by the caller)
+  const setActualSize = (o: boolean) => {
+    if (o) setModalDevice(deviceTab === 'desktop' ? 'desktop' : 'mobile'); // start on the tab being looked at ('All' starts on Mobile)
+    setActualSizeInternal(o); onActualSizeOpenChange?.(o);
+  };
+  const [modalDevice, setModalDevice] = useState<'mobile' | 'desktop'>('mobile'); // Mobile | Desktop tabs inside the full-size popup (2:1 + 5:1)
+  const [modalZoom, setModalZoom] = useState(50); // % of actual (720×960) size
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [fitZoom, setFitZoom] = useState(1);
+  const isPortraitRatio = formData.bannerRatio === 'Portrait (3:4)';
+  const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)';
+  const isSquareRatio = formData.bannerRatio === 'Square (1:1)';
+  // 2:1, 3:4 and 1:1 all show EN and ID side by side (fit to the panel, "Preview full size" for the real size) — same behavior everywhere, not just in the DLP/compact views.
+  const sideBySide = isPortraitRatio || isLandscape21 || isSquareRatio;
+  const isDesktopStandalone = formData.bannerCategory === 'Promo Banner' && (formData.bannerRatio === 'Desktop (5:1)' || formData.bannerRatio === 'Desktop (4:1)');
+  const hasDesktop = formData.bannerRatio === 'Landscape (2:1)' && !!formData.provideDesktopBanner;
+  // shared with the tabs in the form; 'all' shows both previews (2:1 first, then 5:1)
+  const showDesktop = hasDesktop && deviceTab !== 'mobile';
+  const showMobile = !hasDesktop || deviceTab !== 'desktop';
+  const [landscapeZoom, setLandscapeZoom] = useState(75); // % — 2:1 preview zoom
 
   // Use Refs for mutable drag state so listeners don't need to be recreated
   const dragState = useRef({
@@ -141,7 +174,10 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
   const renderScale = isProductEntryPoint ? (isDesktopEntryPoint ? 1 : 2) : 1;
 
   // Element Drag Handler
-  const handleElementMove = useCallback((key: string, x: number, y: number, w?: number, h?: number, lang?: 'en' | 'id') => {
+  const handleElementMove = useCallback((key: string, x0: number, y0: number, w0?: number, h0?: number, lang?: 'en' | 'id') => {
+      // Positions are always whole numbers (no decimals)
+      const x = Math.round(x0), y = Math.round(y0);
+      const w = typeof w0 === 'number' ? Math.round(w0) : w0, h = typeof h0 === 'number' ? Math.round(h0) : h0;
       // Special handling for top-level properties
       if (key === 'backgroundGradientPosition') {
           onChange?.({ backgroundGradientPosition: { x, y } });
@@ -255,13 +291,111 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
     }
   }, [isUnlocked, isSquare, onControlsChange, handleResetPositions]);
 
+  // Entry Point mobile previews (renderScale 2x) are fixed-pixel-width and stack EN/ID vertically (not side by side),
+  // so unlike sideBySide ratios they need the full available width, not half of it, to fit without being cropped.
+  const fitsToWidth = isProductEntryPoint;
+  // Known intrinsic px width (not measured from the DOM): the DOM width would already reflect any
+  // zoom we previously applied to this same subtree, which feeds back into the next measurement and
+  // can spiral the fit down toward 0 (the preview collapsing to a speck). A fixed reference width sidesteps that.
+  let entryPointRatioKey: keyof typeof ENTRY_POINT_SPECS = 'mobile_5:2';
+  if (formData.bannerRatio === 'Mobile (2:1)') entryPointRatioKey = 'mobile_2:1';
+  if (formData.bannerRatio === 'Mobile (4:1)') entryPointRatioKey = 'mobile_4:1';
+  if (formData.bannerRatio === 'Mobile (2:1 WhatsApp)') entryPointRatioKey = 'mobile_2:1_whatsapp';
+  if (formData.bannerRatio === 'Desktop (5:1)') entryPointRatioKey = 'desktop_5:1';
+  if (formData.bannerRatio === 'Desktop (8:1)') entryPointRatioKey = 'desktop_8:1';
+  const entryPointNaturalWidth = ENTRY_POINT_SPECS[entryPointRatioKey].width * renderScale;
+
+  // Layout effect: fit before the first paint, otherwise a freshly mounted preview (e.g. switching the Summary tab) flashes at 100% and then snaps to the fitted size
+  useLayoutEffect(() => {
+    const update = () => {
+      const avail = wrapRef.current?.clientWidth;
+      if (fitsToWidth) {
+        if (avail) setFitZoom(Math.max(0.1, Math.min(1, (avail - 16) / entryPointNaturalWidth)));
+        return;
+      }
+      const natural = measureRef.current?.scrollWidth;
+      if (avail && natural) {
+        const divisor = sideBySide ? 2 : 1;
+        const z = (avail - 16) / divisor / natural;
+        setFitZoom(compact ? z : Math.min(1, z)); // compact (DLP cards): scale up/down so EN + ID fill the width edge to edge
+      }
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    return () => ro.disconnect();
+  }, [formData.bannerRatio, formData.bannerCategory, compact, sideBySide, fitsToWidth, entryPointNaturalWidth]);
+
+  const zoom = (sideBySide || fitsToWidth) ? fitZoom : 1;
+
+  // Back to the default layout: undoes accidental drags / scales made with the bounding boxes in the preview
+  const resetLayout = () => {
+    const mobile = { keyVisualPosition: { x: 50, y: 50 }, keyVisualScale: 100, portraitContentScale: undefined, portraitContentOffsetY: undefined, landscapeContentScale: undefined, squareContentScale: undefined, squareContentOffsetY: undefined };
+    const desktop = {
+      desktopContentScale: undefined, desktopContentOffsetX: undefined, desktopContentOffsetY: undefined,
+      desktopKeyVisualPosition: undefined, desktopKeyVisualScale: undefined,
+      desktopCampaignLogoX: undefined, desktopCampaignLogoY: undefined, desktopCampaignLogoScale: undefined,
+      desktopTncOffset: undefined, desktopTncWidth: undefined,
+    };
+    const doMobile = !isDesktopStandalone && !(hasDesktop && deviceTab === 'desktop');
+    const doDesktop = isDesktopStandalone || showDesktop;
+    onChange?.({ ...(doMobile ? mobile : {}), ...(doDesktop ? desktop : {}) } as Partial<BannerFormData>);
+    if (isSquare && doMobile) handleResetPositions();
+  };
+
   return (
-    <div className="flex flex-col gap-[24px] w-full items-center overflow-x-auto pb-4">
-      <div className="flex flex-col gap-[24px] w-full">
+    <div className="flex flex-col gap-[12px] w-full min-w-0 pb-4">
+      {hasDesktop && !hideDeviceTabs && (
+        <div className="flex border-b border-[#e9ebef] sticky top-[var(--sticky-top,0px)] z-30 bg-white -mt-[24px] -mx-[24px] px-[24px]">
+      {([['all', 'All'], ['mobile', 'Mobile (2:1)'], ['desktop', 'Desktop (5:1)']] as const).map(([id, text]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => onDeviceTabChange?.(id)}
+          className={`px-[16px] py-[12px] text-[14px] font-bold border-b-2 transition-colors ${deviceTab === id ? 'text-[#007BFF] border-[#007BFF]' : 'text-[#71747d] border-transparent hover:text-[#303135]'}`}
+        >
+          {text}
+        </button>
+      ))}
+    </div>
+      )}
+      {showDesktop && (
+        <div className={compact ? 'flex flex-row gap-[12px] w-full order-2' : 'flex flex-col gap-[24px] w-full order-2'}>
+          <BannerDesktop51 formData={formData} lang="en" label="EN" previewUrl={previewUrl} onFormChange={onChange} isDraggable={isDraggable} />
+          <BannerDesktop51 formData={formData} lang="id" label="ID" previewUrl={previewUrl} onFormChange={onChange} isDraggable={isDraggable} />
+        </div>
+      )}
+      {!compact && (
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={resetLayout}
+            className="p-2 rounded-md bg-[#f2f4f8] text-[#303135] hover:bg-[#e6e9f0] transition-colors"
+            title="Reset to default (position and scale of the content, key visual and logos)"
+            aria-label="Reset to default"
+          >
+            <RotateCcw size={16} />
+          </button>
+          {(sideBySide || isDesktopStandalone || showDesktop) && (
+            <button
+              type="button"
+              onClick={() => setActualSize(true)}
+              className="p-2 rounded-md bg-[#e7f2ff] text-[#007bff] hover:bg-[#d1e6ff] transition-colors"
+              title="Preview full size"
+              aria-label="Preview full size"
+            >
+              <Maximize2 size={16} />
+            </button>
+          )}
+        </div>
+      )}
+      <div ref={wrapRef} className={`w-full ${compact || embedded ? '' : 'overflow-x-auto'} ${compact && isPortraitRatio ? 'max-w-[75%] mx-auto' : ''} ${showMobile ? '' : 'hidden'}`}>
+      <div className={sideBySide ? "flex flex-row items-start gap-[16px] w-max mx-auto" : (embedded && isDesktopStandalone) ? "flex flex-row gap-[12px] w-full lg:flex-col lg:gap-[24px]" : "flex flex-col gap-[24px] w-full"} style={(sideBySide || fitsToWidth) ? { zoom } : isLandscape21 ? { zoom: landscapeZoom / 100 } : undefined}>
+      <div ref={measureRef} className="flex flex-col w-full min-w-0">
         <BannerFixed 
             formData={formData} 
             lang="en" 
-            label="EN Translation" 
+            label="EN" 
             scale={scale}
             renderScale={renderScale}
             position={position}
@@ -271,12 +405,15 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
             isUnlocked={isUnlocked}
             onElementMove={handleElementMove}
             onContentChange={handleContentChange}
+            onFormChange={onChange}
             isShimmering={isTranslating && activeTab === 'id'}
         />
+      </div>
+      <div className="flex flex-col w-full min-w-0">
         <BannerFixed 
             formData={formData} 
             lang="id" 
-            label="ID Translation" 
+            label="ID" 
             scale={scale}
             renderScale={renderScale}
             position={position}
@@ -286,9 +423,59 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
             isUnlocked={isUnlocked}
             onElementMove={handleElementMove}
             onContentChange={handleContentChange}
+            onFormChange={onChange}
             isShimmering={isTranslating && activeTab === 'en'}
         />
       </div>
+      </div>
+      </div>
+      {(sideBySide || isDesktopStandalone || showDesktop || hasDesktop) && (
+        <Dialog open={actualSize} onOpenChange={(o) => { setActualSize(o); if (!o) setModalZoom(50); }}>
+          <DialogContent className="w-auto max-w-[96vw] sm:max-w-[96vw] max-h-[92vh] overflow-auto p-[24px]">
+            <DialogTitle className="sr-only">Actual size preview</DialogTitle>
+            {hasDesktop && (
+              <div className="flex border-b border-[#e9ebef] mb-[16px]">
+                {([['mobile', 'Mobile (2:1)'], ['desktop', 'Desktop (5:1)']] as const).map(([id, text]) => (
+                  <button key={id} type="button" onClick={() => setModalDevice(id)}
+                    className={`px-[16px] py-[10px] text-[14px] font-bold border-b-2 transition-colors ${modalDevice === id ? 'text-[#007BFF] border-[#007BFF]' : 'text-[#71747d] border-transparent hover:text-[#303135]'}`}>
+                    {text}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-2 mb-[16px]">
+              <button type="button" onClick={() => setModalZoom(z => Math.max(25, z - 25))} disabled={modalZoom <= 25} className="p-1.5 rounded-md bg-gray-50 hover:bg-gray-100 disabled:opacity-40" title="Zoom out"><ZoomOut size={16} /></button>
+              <span className="text-sm font-bold text-[#303135] w-[48px] text-center">{modalZoom}%</span>
+              <button type="button" onClick={() => setModalZoom(z => Math.min(300, z + 25))} disabled={modalZoom >= 300} className="p-1.5 rounded-md bg-gray-50 hover:bg-gray-100 disabled:opacity-40" title="Zoom in"><ZoomIn size={16} /></button>
+              <button type="button" onClick={() => setModalZoom(50)} className="px-2 py-1 rounded-md text-sm font-bold text-blue-600 hover:bg-blue-50">Reset</button>
+            </div>
+            {(isDesktopStandalone || (hasDesktop && modalDevice === 'desktop')) ? (
+              // Desktop 5:1 is drawn at its native 2000×400, so zoom = the percentage (default 50%)
+              <div className="flex flex-col gap-[16px] w-max" style={{ zoom: modalZoom / 100 }}>
+                {(['en', 'id'] as const).map(l => (
+                  <BannerDesktop51 key={l} formData={formData} lang={l} label={l === 'en' ? 'EN' : 'ID'} previewUrl={previewUrl} fullSize />
+                ))}
+              </div>
+            ) : (
+            /* Preview is drawn at 0.5x of the 720×960 export (1:1: 400px for 600px), so zoom 2 (1:1: 1.5) shows real pixels */
+            <div className="flex flex-row items-start gap-[24px] w-max" style={{ zoom: (isSquareRatio ? 1.5 : 2) * modalZoom / 100 }}>
+              {(['en', 'id'] as const).map(l => (
+                <BannerFixed
+                  key={l}
+                  formData={formData}
+                  lang={l}
+                  label={l === 'en' ? 'EN' : 'ID'}
+                  scale={scale}
+                  renderScale={renderScale}
+                  position={position}
+                  previewUrl={previewUrl}
+                />
+              ))}
+            </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

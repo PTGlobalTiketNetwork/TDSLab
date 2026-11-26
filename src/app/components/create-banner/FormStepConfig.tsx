@@ -4,6 +4,8 @@ import { StyledInput } from './components/FormElements';
 import { cn } from '../ui/utils';
 import { DropdownSelect } from './components/DropdownSelect';
 import { useState } from 'react';
+import { CopySettingsFrom } from './components/CopySettingsFrom';
+import { Switch } from '../ui/switch';
 import { AddCategoryDialog } from './components/AddCategoryDialog';
 
 interface FormStepConfigProps {
@@ -23,13 +25,29 @@ export function FormStepConfig({ formData, onChange, error, validationState, onV
   // Use state but initialize safely. We can memoize if needed but state is fine.
   const [verticalCategories, setVerticalCategories] = useState([
     { id: 'General', label: 'General' },
-    { id: 'Hotel', label: 'Hotel' },
-    { id: 'Transport', label: 'Transport' },
+    { id: 'Accom', label: 'Accom' },
+    { id: 'Flight', label: 'Flight' },
+    { id: 'NFT', label: 'NFT' },
     { id: 'ToDos', label: 'ToDos' },
     { id: 'Event', label: 'Event' },
   ]);
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+
+  // Promo Banner naming: pick the vertical first, then only type the part after the fixed "<Vertical> - " prefix.
+  // formData.bannerName always holds the full name. Names saved before this (no vertical prefix) stay plain, untouched.
+  const verticalPrefixRe = new RegExp(`^(${[...verticalCategories.map((v) => v.id), 'Hotel', 'Transport'].join('|')}) - `);
+  const [legacyName] = useState(() => !!formData.bannerName && !verticalPrefixRe.test(formData.bannerName));
+  // "Hotel" was renamed to "Accom": saved banners may still carry the old value
+  const vertical = formData.verticalCategory === 'Hotel' ? 'Accom' : formData.verticalCategory;
+  const namePrefix = !legacyName && vertical ? `${vertical} - ` : '';
+  const nameSuffix = namePrefix && formData.bannerName.startsWith(namePrefix) ? formData.bannerName.slice(namePrefix.length) : formData.bannerName.replace(verticalPrefixRe, '');
+  const nameDisabled = !legacyName && !vertical;
+  const handleVerticalChange = (value: string) => {
+    if (legacyName) { onChange({ verticalCategory: value as any }); return; }
+    const suffix = nameSuffix;
+    onChange({ verticalCategory: value as any, bannerName: value && suffix ? `${value} - ${suffix}` : '' });
+  };
 
   const handleAddNewVertical = () => {
     setIsAddDialogOpen(true);
@@ -46,13 +64,6 @@ export function FormStepConfig({ formData, onChange, error, validationState, onV
         onChange({ verticalCategory: id as any });
       }
   };
-
-  // Banner Styles
-  const bannerStyles = [
-    'Style 1 (Regular promo campaign)',
-    'Style 2 (Thematic/tactical campaign)',
-    'Style 3 (Flagship/big campaign)'
-  ];
 
   // Banner Ratios
   const bannerRatios = [
@@ -119,48 +130,55 @@ export function FormStepConfig({ formData, onChange, error, validationState, onV
       return (
           <div className="flex flex-col gap-[32px] pb-[24px]">
               
-              {/* Banner Name */}
-              <div className="flex flex-col gap-[8px] w-full">
-                  <label className="text-[14px] font-bold leading-[20px] text-[#303135]">Banner Name</label>
-                  <div className="relative w-full">
-                      <StyledInput
-                          type="text"
-                          value={formData.bannerName}
-                          onChange={(e) => onChange({ bannerName: e.target.value })}
-                          placeholder="Enter banner name"
-                          className={cn(
-                              error && "border-[#ff5c5c] ring-1 ring-[#ff5c5c] focus:border-[#ff5c5c] focus:ring-[#ff5c5c]",
-                              "pr-10" 
-                          )}
-                      />
-                      {/* Validation Icons */}
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                          {validationState?.status === 'valid' && (
-                              <svg className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                              </svg>
-                          )}
-                          {validationState?.status === 'invalid' && (
-                              <svg className="h-5 w-5 text-[#ff5c5c]" viewBox="0 0 20 20" fill="currentColor">
-                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
-                          )}
-                      </div>
-                  </div>
-                  {error && (
-                      <span className="text-[12px] text-[#ff5c5c] leading-[16px]">{error}</span>
-                  )}
-              </div>
-
-              {/* Vertical Category (Dropdown) - Added for Validation */}
+              {/* Vertical Category (Dropdown) */}
               <div className="flex flex-col gap-[8px] w-full">
                   <label className="text-[14px] font-bold leading-[20px] text-[#303135]">Vertical</label>
                   <DropdownSelect
                     options={verticalCategories}
-                    value={formData.verticalCategory}
-                    onChange={(value) => onChange({ verticalCategory: value as any })}
+                    value={vertical}
+                    onChange={handleVerticalChange}
                     placeholder="Select vertical"
                   />
+              </div>
+
+              {/* Banner Name */}
+              <div className="flex flex-col gap-[8px] w-full">
+                <label className="text-[14px] font-bold leading-[20px] text-[#303135]">Banner Name</label>
+                <div className="relative w-full">
+                  <div
+                    className={cn(
+                      'flex items-center w-full rounded-[8px] border transition-all',
+                      nameDisabled ? 'bg-[#F8F9FD] border-[#d8dce8]' : error ? 'bg-white border-[#ff5c5c] ring-1 ring-[#ff5c5c]' : 'bg-white border-[#d8dce8] focus-within:border-[#007BFF] focus-within:ring-1 focus-within:ring-[#007BFF]'
+                    )}
+                  >
+                    {namePrefix && <span className="pl-[12px] text-[14px] font-medium text-[#71747d] whitespace-nowrap select-none">{namePrefix}</span>}
+                    <input
+                      type="text"
+                      value={nameSuffix}
+                      disabled={nameDisabled}
+                      onChange={(e) => onChange({ bannerName: e.target.value ? `${namePrefix}${e.target.value}` : '' })}
+                      onBlur={() => { if (formData.bannerName.trim()) onValidateName?.(formData.bannerName); }}
+                      placeholder={nameDisabled ? 'Select a vertical first' : 'Enter banner name'}
+                      className={cn('flex-1 min-w-0 py-[10px] pr-10 bg-transparent outline-none text-[14px] font-medium font-sans placeholder:text-[#9EA0A5] disabled:text-[#9EA0A5]', namePrefix ? 'pl-[4px]' : 'pl-[12px]')}
+                    />
+                  </div>
+                  {/* Validation Icons */}
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                     {validationState?.status === 'valid' && (
+                        <svg className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                     )}
+                     {validationState?.status === 'invalid' && (
+                        <svg className="h-5 w-5 text-[#ff5c5c]" viewBox="0 0 20 20" fill="currentColor">
+                           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                     )}
+                  </div>
+                </div>
+                {error && (
+                    <span className="text-[12px] text-[#ff5c5c] leading-[16px]">{error}</span>
+                )}
               </div>
 
               <div className="w-full h-[1px] bg-[#e9ebef]" />
@@ -271,25 +289,44 @@ export function FormStepConfig({ formData, onChange, error, validationState, onV
       );
   }
 
-  const isLandscape = formData.bannerRatio === 'Landscape (2:1)';
 
   return (
     <div className="flex flex-col gap-[32px] pb-[24px]">
       
+      {/* Vertical Category (Dropdown) */}
+      <div className="flex flex-col gap-[8px] w-full">
+          <label className="text-[14px] font-bold leading-[20px] text-[#303135]">Vertical</label>
+          <DropdownSelect
+            options={verticalCategories}
+            value={vertical}
+            onChange={handleVerticalChange}
+            // onAddNew={handleAddNewVertical} // Disabled for now
+            placeholder="Select vertical"
+          />
+      </div>
+
+
       {/* Banner Name */}
       <div className="flex flex-col gap-[8px] w-full">
         <label className="text-[14px] font-bold leading-[20px] text-[#303135]">Banner Name</label>
         <div className="relative w-full">
-          <StyledInput
-            type="text"
-            value={formData.bannerName}
-            onChange={(e) => onChange({ bannerName: e.target.value })}
-            placeholder="Enter banner name"
+          <div
             className={cn(
-                error && "border-[#ff5c5c] ring-1 ring-[#ff5c5c] focus:border-[#ff5c5c] focus:ring-[#ff5c5c]",
-                "pr-10" // Space for icon
+              'flex items-center w-full rounded-[8px] border transition-all',
+              nameDisabled ? 'bg-[#F8F9FD] border-[#d8dce8]' : error ? 'bg-white border-[#ff5c5c] ring-1 ring-[#ff5c5c]' : 'bg-white border-[#d8dce8] focus-within:border-[#007BFF] focus-within:ring-1 focus-within:ring-[#007BFF]'
             )}
-          />
+          >
+            {namePrefix && <span className="pl-[12px] text-[14px] font-medium text-[#71747d] whitespace-nowrap select-none">{namePrefix}</span>}
+            <input
+              type="text"
+              value={nameSuffix}
+              disabled={nameDisabled}
+              onChange={(e) => onChange({ bannerName: e.target.value ? `${namePrefix}${e.target.value}` : '' })}
+              onBlur={() => { if (formData.bannerName.trim()) onValidateName?.(formData.bannerName); }}
+              placeholder={nameDisabled ? 'Select a vertical first' : 'Enter banner name'}
+              className={cn('flex-1 min-w-0 py-[10px] pr-10 bg-transparent outline-none text-[14px] font-medium font-sans placeholder:text-[#9EA0A5] disabled:text-[#9EA0A5]', namePrefix ? 'pl-[4px]' : 'pl-[12px]')}
+            />
+          </div>
           {/* Validation Icons */}
           <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
              {validationState?.status === 'valid' && (
@@ -311,72 +348,54 @@ export function FormStepConfig({ formData, onChange, error, validationState, onV
 
       <div className="w-full h-[1px] bg-[#e9ebef]" />
 
-      {/* Vertical Category (Dropdown) */}
-      <div className="flex flex-col gap-[8px] w-full">
-          <label className="text-[14px] font-bold leading-[20px] text-[#303135]">Vertical</label>
-          <DropdownSelect
-            options={verticalCategories}
-            value={formData.verticalCategory}
-            onChange={(value) => onChange({ verticalCategory: value as any })}
-            // onAddNew={handleAddNewVertical} // Disabled for now
-            placeholder="Select vertical"
-          />
-      </div>
-
-      {/* Banner Ratio */}
-       <div className="flex flex-col gap-[12px] w-full">
+      {/* Banner Ratio — grouped by platform */}
+       <div className="flex flex-col gap-[16px] w-full">
           <label className="text-[14px] font-bold leading-[20px] text-[#303135]">
               Banner Ratio
               {isLocked && <span className="ml-2 text-[12px] font-normal text-[#71747d]">(Cannot be changed in edit mode)</span>}
           </label>
-          <div className="flex gap-[16px]" title={isLocked ? "Cannot change layout structure in Edit mode. Please create a new banner." : ""}>
-              {bannerRatios.map((ratio) => {
-                  const isAvailable = ratio === 'Landscape (2:1)' || ratio === 'Square (1:1)' || ratio === 'Portrait (3:4)';
-                  const isDisabled = !isAvailable || isLocked;
-                  return (
-                    <div key={ratio} className={isLocked ? "opacity-60 cursor-not-allowed" : ""}>
-                        <Radio
-                            name="bannerRatio"
-                            checked={formData.bannerRatio === ratio}
-                            onChange={() => !isDisabled && onChange({ bannerRatio: ratio as any })}
-                            disabled={isDisabled}
-                            className={isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
-                        >
-                            <span className="text-[14px] text-[#303135]">{ratio}</span>
-                        </Radio>
-                    </div>
-                  );
-              })}
-          </div>
+          {([
+              ['Mobile', ['Landscape (2:1)', 'Square (1:1)', 'Portrait (3:4)']],
+              ['Desktop', ['Desktop (5:1)']],
+          ] as const).map(([group, ratios]) => (
+              <div key={group} className="flex flex-col gap-[8px]">
+                  <span className="text-[13px] font-semibold text-[#71747d]">{group}</span>
+                  <div className="flex gap-[16px] flex-wrap" title={isLocked ? "Cannot change layout structure in Edit mode. Please create a new banner." : ""}>
+                      {ratios.map((ratio) => (
+                          <div key={ratio} className={isLocked ? "opacity-60 cursor-not-allowed" : ""}>
+                              <Radio
+                                  name="bannerRatio"
+                                  checked={formData.bannerRatio === ratio}
+                                  onChange={() => !isLocked && onChange({ bannerRatio: ratio as any })}
+                                  disabled={isLocked}
+                                  className={isLocked ? 'opacity-50 cursor-not-allowed' : ''}
+                              >
+                                  <span className="text-[14px] text-[#303135]">{ratio}</span>
+                              </Radio>
+                          </div>
+                      ))}
+                  </div>
+                  {/* Sub option of 2:1 */}
+                  {group === 'Mobile' && formData.bannerCategory === 'Promo Banner' && formData.bannerRatio === 'Landscape (2:1)' && (
+                      <div className="flex items-center justify-between gap-[12px] ml-[28px]">
+                          <div className="flex flex-col">
+                              <span className="text-[14px] font-medium text-[#303135]">Add desktop version?</span>
+                              <span className="text-[12px] text-[#71747d]">Adds a Desktop (5:1) version to this banner (own preview tab and settings).</span>
+                          </div>
+                          <Switch
+                              checked={!!formData.provideDesktopBanner}
+                              onCheckedChange={(checked) => onChange({ provideDesktopBanner: checked })}
+                              className="data-[state=checked]:bg-[#007BFF]"
+                          />
+                      </div>
+                  )}
+              </div>
+          ))}
       </div>
 
-      {/* Layout Style (Conditional - Only for Landscape) */}
-      {isLandscape && (
-          <div className="flex flex-col gap-[12px] w-full">
-              <label className="text-[14px] font-bold leading-[20px] text-[#303135]">
-                  Layout Style
-                  {isLocked && <span className="ml-2 text-[12px] font-normal text-[#71747d]">(Cannot be changed in edit mode)</span>}
-              </label>
-              <div className="flex flex-col gap-[12px]" title={isLocked ? "Cannot change layout structure in Edit mode. Please create a new banner." : ""}>
-                  {bannerStyles.map((style) => {
-                      const isAvailable = style === 'Style 1 (Regular promo campaign)';
-                      const isDisabled = !isAvailable || isLocked;
-                      return (
-                        <div key={style} className={isLocked ? "opacity-60 cursor-not-allowed" : ""}>
-                            <Radio
-                                name="bannerStyle"
-                                checked={formData.bannerStyle === style}
-                                onChange={() => !isDisabled && onChange({ bannerStyle: style as any })}
-                                disabled={isDisabled}
-                                className={isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
-                            >
-                                <span className="text-[14px] text-[#303135]">{style}</span>
-                            </Radio>
-                        </div>
-                      );
-                  })}
-              </div>
-          </div>
+      {/* Copy settings from an existing banner (same journey) */}
+      {formData.bannerCategory === 'Promo Banner' && (
+        <CopySettingsFrom formData={formData} onChange={onChange} />
       )}
 
       <AddCategoryDialog 
