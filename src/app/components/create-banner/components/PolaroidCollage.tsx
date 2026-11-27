@@ -170,8 +170,9 @@ export const cropStyle = (c: Crop, rel?: number | null): React.CSSProperties => 
   const shrunk = c.scale < 100;
   const w = shrunk && rel ? c.scale * Math.max(1, rel) : c.scale;
   const h = shrunk && rel ? c.scale * Math.max(1, 1 / rel) : c.scale;
-  const left = ((100 - w) * px) / 100 - (c.x - px) * OVERSHOOT;
-  const top = ((100 - h) * py) / 100 - (c.y - py) * OVERSHOOT;
+  // Past 0/100 keep moving the same way as inside it: a smaller-than-frame axis slides with the value, a larger one against it
+  const left = ((100 - w) * px) / 100 + (c.x - px) * OVERSHOOT * (w < 100 ? 1 : -1);
+  const top = ((100 - h) * py) / 100 + (c.y - py) * OVERSHOOT * (h < 100 ? 1 : -1);
   return {
     position: 'absolute',
     width: `${w}%`,
@@ -199,6 +200,7 @@ export const CropImg = ({ crop, ...props }: { crop: Crop } & React.ImgHTMLAttrib
       onLoad={(e) => {
         const img = e.currentTarget;
         const box = img.parentElement;
+        if (img.naturalWidth && props.src) naturalSizes.set(props.src, { w: img.naturalWidth, h: img.naturalHeight });
         if (img.naturalWidth && img.naturalHeight && box?.clientWidth && box.clientHeight)
           setRel((img.naturalWidth / img.naturalHeight) / (box.clientWidth / box.clientHeight));
       }}
