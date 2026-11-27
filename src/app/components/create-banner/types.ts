@@ -88,6 +88,29 @@ export interface BannerFormData {
   partnerLogoBg?: string; // default #FFFFFF
   showCampaignLogo: boolean;
   partnerLogos: PartnerLogoSlot[];
+
+  // TTD Promo Asset template (picked once in Select Option, applies to 2:1, 3:1 and 5:1).
+  // 'gradient' = full-bleed key visual + overlay (default). 'highlight-2' / 'highlight-3' = solid/gradient background
+  // with 2 or 3 tilted polaroid photos; photo 1 is the key visual, photos 2 and 3 live in polaroidImages.
+  ttdTemplate?: 'gradient' | 'highlight-2' | 'highlight-3';
+  polaroidImages?: string[]; // [photo 2, photo 3] URLs
+  polaroidOrder?: number[]; // layer order, front first: source index per polaroid frame (0 = key visual, 1/2 = polaroidImages[0/1])
+  polaroidCrops?: { x: number; y: number; scale: number; flipH?: boolean; flipV?: boolean }[]; // per source: focus point (%) + zoom (%, ≥100) inside its frame
+  polaroidRotations?: number[]; // per frame: extra tilt (deg, -5…5) on top of the Figma angle
+  polaroidGroup?: { scale: number; x: number; y: number }; // whole collage: scale (%) + offset (Figma frame px)
+  polaroidBg?: string; // solid background colour, default #007BFF (B400)
+  polaroidBgMode?: 'solid' | 'gradient';
+  // Optional image between the background colour and the polaroids, faded out towards the text
+  polaroidOverlay?: {
+    enabled: boolean;
+    source: 'upload' | 'photo1'; // photo1 = reuse the key visual (photo 1)
+    url?: string; // uploaded image
+    opacity: number; // %
+    fadeStart: number; // % of the banner width from the photo side where the fade begins
+    fadeEnd: number; // % where it has faded out completely
+    x: number; y: number; scale: number; flipH?: boolean; flipV?: boolean; // same model as polaroidCrops (x/y CROP_MIN…CROP_MAX, 50 = centred)
+  };
+  polaroidGradient?: { angle: number; stops: { color: string; pos: number }[] }; // linear, 2 or 3 stops
   showPartnerLogo: boolean;
   showJhtLogo: boolean;
   
@@ -144,6 +167,7 @@ export interface BannerFormData {
   desktopGradientStop?: number; // 5:1 overlay Start: % from the RIGHT edge where it begins to fade, default 66 (mirror of the 2:1 overlay)
   desktopKeyVisualScale?: number; // 5–250, default 100
   desktopKeyVisualPosition?: { x: number; y: number }; // % like the 2:1 key visual, default 50,50
+  textShadow?: boolean; // drop shadow on the banner text (headline, benefit, labels); missing = off
   landscapeContentScale?: number; // 60–200, default 100 — scales the whole content block in 2:1
   portraitContentOffsetY?: number; // px on the 720×960 canvas, default 0 — nudges the block up/down (negative = up)
   portraitBenefitScale?: number; // 50–150, default 100 — scales only the discount/benefit row

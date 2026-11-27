@@ -1,3 +1,4 @@
+import { unitBadgeAutoColor } from './components/PolaroidCollage';
 import { useStickyBar, STICKY_SHADOW } from '@/hooks/useStickyBar';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Sparkles, RotateCw } from 'lucide-react';
@@ -12,7 +13,7 @@ import { Switch } from '../ui/switch';
 import { DropdownSelect } from './components/DropdownSelect';
 import { LayoutConfigTool } from './LayoutConfigTool';
 import { BANNER_SPECS } from '../../../config/banner-layouts';
-import { prefixOptions, loadDefaultPositions, CURRENCY_OPTIONS, getUnitLabel, getDefaultPortraitContentOffsetY, getDefaultLandscapeContentScale, getDefaultDesktopContentScale, analyzeUniformFormat, applyUniformFormat } from './utils/layoutUtils';
+import { prefixOptions, loadDefaultPositions, CURRENCY_OPTIONS, getUnitLabel, getDefaultPortraitContentOffsetY, getDefaultLandscapeContentScale, getDefaultDesktopContentScale, analyzeUniformFormat, applyUniformFormat, NEW_LANDSCAPE_21_CONTENT_SCALE } from './utils/layoutUtils';
 import { projectId } from '../../../../utils/supabase/info';
 import { getAuthToken } from '../../../utils/supabase/client';
 import { toast } from 'sonner';
@@ -930,7 +931,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
             <label className="text-[14px] font-bold text-[#303135]">Content Scale</label>
             <div className="flex items-center gap-[8px]">
               <span className="text-[13px] font-semibold text-[#007BFF]">{formData.landscapeContentScale ?? getDefaultLandscapeContentScale(formData)}%</span>
-              <button type="button" onClick={() => onChange({ landscapeContentScale: getDefaultLandscapeContentScale(formData) })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset to default">
+              <button type="button" onClick={() => onChange({ landscapeContentScale: formData.bannerRatio === 'Landscape (2:1)' ? NEW_LANDSCAPE_21_CONTENT_SCALE : getDefaultLandscapeContentScale(formData) })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset to default">
                 <RotateCw size={12} />
               </button>
             </div>
@@ -980,6 +981,19 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
       )}
 
       {langTabs}
+
+      {/* Text shadow: one switch for every text layer of the banner (headline, benefit, labels). Off by default (missing = off), for every banner. */}
+      <label className="flex items-center justify-between gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] cursor-pointer">
+        <div className="flex flex-col">
+          <span className="text-[14px] font-bold text-[#303135]">Text shadow</span>
+          <span className="text-[12px] text-[#71747d]">Soft drop shadow behind the headline, benefit and labels.</span>
+        </div>
+        <Switch
+          checked={formData.textShadow === true}
+          onCheckedChange={(checked) => onChange({ textShadow: checked })}
+          className="data-[state=checked]:bg-[#007BFF]"
+        />
+      </label>
 
       {/* PRODUCT ENTRY POINT FIELDS */}
       {isProductEntryPoint && (
@@ -1266,7 +1280,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
               <div className="flex flex-col gap-[8px]">
                   <div className="flex items-center gap-[8px]">
                       <label className="text-[14px] font-bold text-[#303135]">Unit</label>
-                      <ColorPicker value={currentContent.unitColor} onChange={(v) => updateContent({ unitColor: v })} defaultValue="#0064D2" />
+                      <ColorPicker value={currentContent.unitColor} onChange={(v) => updateContent({ unitColor: v })} defaultValue={currentContent.unitDisplayType === 'icon' ? unitBadgeAutoColor(formData) : '#FFFFFF'} />
                       
                       {currentContent.unitDisplayType === 'icon' && (!isSquare || isDlpSquare) && (
                           <div className="flex items-center gap-[4px] ml-[12px] border-l pl-[12px] border-[#d8dce8]">

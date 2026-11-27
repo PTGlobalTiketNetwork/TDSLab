@@ -177,7 +177,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
   };
   const [sizeOpen, setSizeOpen] = useState<Record<string, boolean>>({});
   const [openEp, setOpenEp] = useState<Record<string, boolean>>({}); // collapsed by default
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() => (editingId ? 1 : 0)); // editing opens straight on the first setup step (Select stays one click back)
   // Editing an existing project: every step already has content, so unlock the whole stepper right away instead of making the user click through Next each time.
   const [maxIndex, setMaxIndex] = useState(() => {
     if (!editingId) return 0;
@@ -353,7 +353,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
     return (
       <div key={ratio} className="flex flex-col items-center gap-[8px]">
         <div
-          className="relative overflow-hidden rounded-[6px] border border-[#d8dce8] bg-gradient-to-br from-[#cfe4ff] to-[#9cc8ff]"
+          className="relative overflow-hidden rounded-[6px] border border-[#d8dce8] bg-[#007BFF]"
           style={{ width: Math.round(w * scale), height: Math.round(h * scale) }}
         >
           {side === 'bottom' ? (
@@ -533,7 +533,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
         return (
           <div className="flex flex-col gap-[16px]">
             {editors.map((id) => (
-              <div key={id} className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] px-[24px]" style={{ '--ep-head-top': 'calc(var(--sticky-base, 0px) + 64px)' } as React.CSSProperties}>
+              <div key={id} data-dlp-card className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] px-[24px] scroll-mt-[calc(var(--sticky-base,0px)+72px)]" style={{ '--ep-head-top': 'calc(var(--sticky-base, 0px) + 64px)' } as React.CSSProperties}>
                 {/* Sticky while scrolling: sits under the fixed header (64px) + fixed stepper bar (64px); the editor tabs stick right below it */}
                 <div className="sticky top-[var(--ep-head-top)] z-[30] -mx-[24px] px-[24px] h-[56px] bg-white rounded-t-[12px] flex items-center justify-between gap-[12px]">
                   <span className="flex items-baseline gap-[8px]">
@@ -566,7 +566,13 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
                   {/* Edit opens the editor, Save closes it (changes are kept in the project and written when the project is saved) */}
                   <button
                     type="button"
-                    onClick={() => setOpenEp((p) => ({ ...p, [id]: !p[id] }))}
+                    onClick={(e) => {
+                      // Only one editor open at a time: opening one closes the others
+                      const opening = !openEp[id];
+                      setOpenEp(opening ? { [id]: true } : {});
+                      // Closing a card above shifts this one up, so bring its header back into view
+                      if (opening) { const card = (e.currentTarget as HTMLElement).closest('[data-dlp-card]'); requestAnimationFrame(() => card?.scrollIntoView({ block: 'start', behavior: 'smooth' })); }
+                    }}
                     className={`shrink-0 px-[16px] py-[6px] rounded-[8px] text-[14px] font-bold transition-colors ${openEp[id] ? 'bg-[#007BFF] text-white hover:bg-[#0064D2]' : 'bg-[#e7f2ff] text-[#007bff] hover:bg-[#d1e6ff]'}`}
                   >
                     {openEp[id] ? 'Save' : 'Edit'}

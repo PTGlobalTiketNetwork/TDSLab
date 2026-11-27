@@ -41,6 +41,8 @@ async function fetchWithRetry(
 
 // The "Hotel" vertical is now called "Accom"; older records (and the empty fallback) read as Accom
 const normalizeProduct = (p?: string) => (!p || p === 'Hotel' || p === 'Accommodation' ? 'Accom' : p);
+// TTD Promo Asset projects are always To Do; ones saved before the product field was sent would otherwise read as 'Accom'
+const productOf = (item: any) => normalizeProduct(item.product || item.verticalCategory || (item.category === 'TTD Promo Asset' ? 'ToDos' : undefined));
 
 export interface CreateBannerDTO {
   id?: string;
@@ -87,7 +89,7 @@ export const BannerService = {
       const item = await response.json();
       return {
         ...item,
-        product: normalizeProduct(item.product || item.verticalCategory),
+        product: productOf(item),
         imageUrl: item.image_url_en || item.imageUrl || '',
         thumbnail: item.image_url_en || item.imageUrl || '',
         isPublished: item.status === 'published',
@@ -121,7 +123,7 @@ export const BannerService = {
     return data.map((item: any) => ({
       ...item,
       // Ensure required Banner fields are present
-      product: normalizeProduct(item.product || item.verticalCategory), 
+      product: productOf(item), 
       imageUrl: item.image_url_en || item.imageUrl || '',
       thumbnail: item.image_url_en || item.imageUrl || '',
       isPublished: item.status === 'published',

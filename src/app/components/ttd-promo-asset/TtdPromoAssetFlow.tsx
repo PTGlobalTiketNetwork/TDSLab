@@ -15,6 +15,7 @@ import { SingleAssetUploadDialog } from '../assets/SingleAssetUploadDialog';
 import { DropdownSelect } from '../create-banner/components/DropdownSelect';
 import { BoundingBox } from '../create-banner/components/BoundingBox';
 import { EntryPointEditor } from '../dlp-assets/EntryPointEditor';
+import { PolaroidCollage } from '../create-banner/components/PolaroidCollage';
 import { LivePreview } from '../create-banner/LivePreview';
 import { initialFormDataBase } from '../create-banner/CreateBanner';
 import { OffscreenBannerRenderer, type OffscreenBannerRendererHandle } from '../OffscreenBannerRenderer';
@@ -55,6 +56,13 @@ const ITEM_TITLE: Record<BannerItemId, string> = {
   banner5x1: 'Banner 5:1 (Single - Desktop)',
 };
 
+type TtdTemplate = NonNullable<BannerFormData['ttdTemplate']>;
+const TEMPLATES: { id: TtdTemplate; label: string; hint: string }[] = [
+  { id: 'gradient', label: 'Gradient', hint: 'Full-bleed key visual with a gradient overlay' },
+  { id: 'highlight-2', label: 'Highlight 2 Image', hint: 'Solid background with 2 polaroid photos' },
+  { id: 'highlight-3', label: 'Highlight 3 Image', hint: 'Solid background with 3 polaroid photos' },
+];
+
 const OPTION_LABEL: Record<OptionId, string> = {
   ...ITEM_TITLE,
   'vertical-icon': 'Brand Icon (1:1)',
@@ -83,9 +91,8 @@ const newItemForm = (ratio: BannerFormData['bannerRatio']): BannerFormData => ({
   partnerLogos: [{ id: Math.random().toString(36).slice(2, 11), type: 'Partner' as const, logo: '' }],
   // Banner 5:1 default content scale is 150% for TTD (vs the shared Desktop 5:1 default used by plain Promo Banner).
   ...(ratio === 'Desktop (5:1)' ? { desktopContentScale: 150 } : {}),
-  // Banner 2:1 defaults to 125% (vs the shared 100% default used by plain Promo Banner/DLP's own 2:1 entry point).
-  // 3:1 defaults to 105% via the shared getDefaultLandscapeContentScale — that ratio is exclusive to TTD.
-  ...(ratio === 'Landscape (2:1)' ? { landscapeContentScale: 125 } : {}),
+  // 2:1 gets the shared 125% from initialFormDataBase; 3:1 (exclusive to TTD) stays at its own 105% default.
+  ...(ratio === 'Landscape (3:1)' ? { landscapeContentScale: undefined } : {}),
 });
 
 interface Props {
@@ -114,7 +121,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
     banner3x1: !!saved.banner3x1,
     banner5x1: !!saved.banner5x1,
     'vertical-icon': !!saved.verticalIconUrl,
-  } : {});
+  } : { banner2x1: true, banner3x1: true, banner5x1: true, 'vertical-icon': true }); // new project: the whole package is picked by default
   const toggle = (id: OptionId) => setPicked((p) => ({ ...p, [id]: !p[id] }));
   const anyPicked = Object.values(picked).some(Boolean);
 
@@ -159,7 +166,9 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
     banner3x1: saved?.banner3x1 ?? newItemForm(ITEM_RATIO.banner3x1),
     banner5x1: saved?.banner5x1 ?? newItemForm(ITEM_RATIO.banner5x1),
   }));
-  const itemForm = (id: BannerItemId): BannerFormData => ({ ...itemForms[id], bannerRatio: ITEM_RATIO[id] });
+  // Template is picked once in Select Option and stamped on every banner (Brand Icon is unaffected).
+  const [template, setTemplate] = useState<TtdTemplate>(() => saved?.banner2x1?.ttdTemplate ?? saved?.banner3x1?.ttdTemplate ?? saved?.banner5x1?.ttdTemplate ?? 'gradient');
+  const itemForm = (id: BannerItemId): BannerFormData => ({ ...itemForms[id], bannerRatio: ITEM_RATIO[id], ttdTemplate: template });
   const itemChange = (id: BannerItemId, updates: Partial<BannerFormData>) => setItemForms((p) => ({ ...p, [id]: { ...p[id], bannerRatio: ITEM_RATIO[id], ...updates } }));
 
   // "Apply to…": push one banner's content (headline, discount, labels, logos, key visual) down to any other picked banner(s).
@@ -175,6 +184,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
       ...JSON.parse(JSON.stringify({
         content: src.content,
         headlineType: src.headlineType,
+        textShadow: src.textShadow,
         discountEnabled: src.discountEnabled,
         showCampaignLogo: src.showCampaignLogo,
         campaignLogo: src.campaignLogo,
@@ -184,6 +194,14 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         keyVisualRotation: src.keyVisualRotation,
         keyVisualFlipH: src.keyVisualFlipH,
         keyVisualFlipV: src.keyVisualFlipV,
+        polaroidImages: src.polaroidImages,
+        polaroidBg: src.polaroidBg,
+        polaroidBgMode: src.polaroidBgMode,
+        polaroidGradient: src.polaroidGradient,
+        polaroidOrder: src.polaroidOrder,
+        polaroidCrops: src.polaroidCrops,
+        polaroidRotations: src.polaroidRotations,
+        polaroidOverlay: src.polaroidOverlay,
         ...overlayUpdates,
       })),
       keyVisualFile: src.keyVisualFile, // File object: shared, not cloned
@@ -238,7 +256,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
 
   const [openItem, setOpenItem] = useState<Record<string, boolean>>({}); // collapsed by default
   const [sizeOpen, setSizeOpen] = useState<Record<string, boolean>>({});
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() => (editingId ? 1 : 0)); // editing opens straight on Setup Banners (Select Option stays one click back)
   // Editing an existing project: every step already has content, so unlock the whole stepper right away.
   const [maxIndex, setMaxIndex] = useState(() => (editingId ? 2 : 0));
   const [isExitModalOpen, setIsExitModalOpen] = useState(false);
@@ -342,6 +360,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         name: projectName.trim(),
         category: 'TTD Promo Asset',
         status,
+        product: 'ToDos', // TTD is always the To Do vertical (without it the list falls back to 'Accom')
         form_data: formData,
         created_by: user.id,
         creator_name: userDisplay,
@@ -415,7 +434,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
           </div>
         ) : (
         <div
-          className="relative overflow-hidden rounded-[6px] border border-[#d8dce8] bg-gradient-to-br from-[#cfe4ff] to-[#9cc8ff]"
+          className="relative overflow-hidden rounded-[6px] border border-[#d8dce8] bg-[#007BFF]"
           style={{ width: Math.round(w * scale), height: Math.round(h * scale) }}
         >
           {side === 'bottom' ? (
@@ -436,6 +455,25 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         )}
         <span className="text-[12px] font-bold text-[#303135] leading-[16px]">{ratio}</span>
         <span className="text-[11px] text-[#71747d] leading-[14px] -mt-[8px]">{name}</span>
+      </div>
+    );
+  };
+
+  // Mini 2:1 mock of each template: text bars on the left, key visual + overlay or tilted polaroids on the right
+  const templateThumb = (id: TtdTemplate) => {
+    const bars = (
+      <div className="absolute left-[8%] top-1/2 -translate-y-1/2 flex flex-col gap-[3px] w-[40%]">
+        <div className="h-[5px] rounded-full bg-white/90 w-full" />
+        <div className="h-[5px] rounded-full bg-[#fdd703] w-[70%]" />
+        <div className="h-[3px] rounded-full bg-white/70 w-[80%]" />
+      </div>
+    );
+    return (
+      <div className="relative w-full aspect-[2/1] rounded-[6px] overflow-hidden" style={{ background: '#007BFF' }}>
+        {id === 'gradient' && <div className="absolute inset-0 bg-gradient-to-r from-[#303135]/90 from-40% to-transparent" />}
+        {/* The real 2:1 polaroid layout (empty frames), so the thumbnail matches the banner exactly */}
+        {id !== 'gradient' && <PolaroidCollage formData={{ bannerRatio: 'Landscape (2:1)', ttdTemplate: id, polaroidBg: '#007BFF' } as BannerFormData} keyVisualUrl={null} />}
+        {bars}
       </div>
     );
   };
@@ -589,6 +627,22 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
               </div>
               {nameState.status === 'invalid' && <span className="text-[12px] text-[#ff5c5c] leading-[16px]">{nameState.message}</span>}
             </div>
+            {section('Template', 'Applies to Banner 2:1, 3:1 and 5:1. Brand Icon stays as it is.', (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-[12px]">
+                {TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTemplate(t.id)}
+                    className={`flex flex-col gap-[8px] p-[12px] rounded-[8px] border text-left transition-colors ${template === t.id ? 'border-[#007BFF] bg-[#f2f8ff] ring-1 ring-[#007BFF]' : 'border-[#e9ebef] hover:bg-[#f8f9fd]'}`}
+                  >
+                    {templateThumb(t.id)}
+                    <span className="text-[14px] font-bold text-[#303135]">{t.label}</span>
+                    <span className="text-[12px] leading-[16px] text-[#71747d]">{t.hint}</span>
+                  </button>
+                ))}
+              </div>
+            ))}
             {section('TTD Banner Package', 'Pick the items you need. Each one is set up separately.', (
               <div className="flex flex-col gap-[4px] p-[12px] rounded-[8px] border border-[#e9ebef]">
                 {option('banner2x1')}
@@ -612,7 +666,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         return (
           <div className="flex flex-col gap-[16px]">
             {editors.map((id) => (
-              <div key={id} className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] px-[24px]" style={{ '--ep-head-top': 'calc(var(--sticky-base, 0px) + 64px)' } as React.CSSProperties}>
+              <div key={id} data-ttd-card className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] px-[24px] scroll-mt-[calc(var(--sticky-base,0px)+72px)]" style={{ '--ep-head-top': 'calc(var(--sticky-base, 0px) + 64px)' } as React.CSSProperties}>
                 <div className="sticky top-[var(--ep-head-top)] z-[30] -mx-[24px] px-[24px] h-[56px] bg-white rounded-t-[12px] flex items-center justify-between gap-[12px]">
                   <span className="text-[16px] font-bold text-[#303135]">{ITEM_TITLE[id]}</span>
                   <div className="flex items-center gap-[8px] shrink-0">
@@ -628,7 +682,13 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
                     )}
                     <button
                       type="button"
-                      onClick={() => setOpenItem((p) => ({ ...p, [id]: !p[id] }))}
+                      onClick={(e) => {
+                        // Only one banner open at a time: opening one closes the others
+                        const opening = !openItem[id];
+                        setOpenItem(opening ? { [id]: true } : {});
+                        // Closing a card above shifts this one up, so bring its header back into view
+                        if (opening) { const card = (e.currentTarget as HTMLElement).closest('[data-ttd-card]'); requestAnimationFrame(() => card?.scrollIntoView({ block: 'start', behavior: 'smooth' })); }
+                      }}
                       className={`px-[16px] py-[6px] rounded-[8px] text-[14px] font-bold transition-colors ${openItem[id] ? 'bg-[#007BFF] text-white hover:bg-[#0064D2]' : 'bg-[#e7f2ff] text-[#007bff] hover:bg-[#d1e6ff]'}`}
                     >
                       {openItem[id] ? 'Save' : 'Edit'}

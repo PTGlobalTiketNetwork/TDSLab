@@ -3,6 +3,7 @@ import { BannerFormData } from './types';
 import { BannerLegacy } from './BannerLegacy';
 import { BoundingBox } from './components/BoundingBox';
 import { ImageBox } from './components/ImageBox';
+import { PolaroidCollage, isPolaroidTemplate } from './components/PolaroidCollage';
 import { tagsToHtml, getDefaultDesktopContentScale, getDefaultDesktopCampaignAssetScale } from './utils/layoutUtils';
 import exampleImage from 'figma:asset/c593b610d3877a5faf067379a77363d554217a35.png';
 
@@ -83,6 +84,7 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
     ...formData,
     bannerCategory: 'Promo Banner',
     bannerRatio: 'Landscape (2:1)',
+    overlayColor: formData.desktopOverlayColor ?? '#000000', // unit badge text defaults to the 5:1 overlay colour
     showPortraitCta: false,
     landscapeContentScale: 100,
     portraitContentOffsetY: 0,
@@ -100,10 +102,12 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
       )}
       <div ref={wrapRef} className="relative overflow-hidden rounded-[12px]" style={{ height: H * scale, width: fullSize ? W : '100%' }}>
         <div data-canvas-w={W} className="absolute top-0 left-0 overflow-hidden" style={{ width: W, height: H, transform: `scale(${scale})`, transformOrigin: 'top left', background: '#e9ebef' }}>
+          {/* TTD Highlight templates: background colour + polaroid photos instead of the key visual and overlay */}
+          {isPolaroidTemplate(formData) ? <PolaroidCollage formData={formData} keyVisualUrl={previewUrl} /> : (<>
           {/* Key visual — full-bleed background like the 2:1 banner (position in %, scale in %), faded under the content */}
           {previewUrl && isDraggable && onFormChange ? (
             <ImageBox
-              wrapperStyle={{ position: 'absolute', left: `${kvPos.x}%`, top: `${kvPos.y}%`, width: 'auto', minWidth: '100%', transform: `translate3d(-50%, -50%, 0) scale(${kvScale})` }}
+              wrapperStyle={{ position: 'absolute', left: `${kvPos.x}%`, top: `${kvPos.y}%`, width: 'auto', minWidth: '100%', transform: `translate3d(-50%, -50%, 0) scale(${(formData.keyVisualFlipH ? -1 : 1) * kvScale}, ${(formData.keyVisualFlipV ? -1 : 1) * kvScale})` /* same flips as the 2:1 key visual */ }}
               position={kvPos}
               scale={formData.desktopKeyVisualScale ?? 100} scaleMin={5} scaleMax={250}
               onPositionChange={(p) => onFormChange({ desktopKeyVisualPosition: p })}
@@ -120,7 +124,7 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
               className="absolute pointer-events-none select-none"
               style={previewUrl ? {
                 left: `${kvPos.x}%`, top: `${kvPos.y}%`, width: 'auto', minWidth: '100%', height: 'auto', maxWidth: 'none',
-                transform: `translate3d(-50%, -50%, 0) scale(${kvScale})`,
+                transform: `translate3d(-50%, -50%, 0) scale(${(formData.keyVisualFlipH ? -1 : 1) * kvScale}, ${(formData.keyVisualFlipV ? -1 : 1) * kvScale})` /* same flips as the 2:1 key visual */,
               } : {
                 left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover',
               }}
@@ -128,6 +132,7 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
           )}
           <div className="absolute inset-0 pointer-events-none" style={{ background: overlayBg((formData.desktopOverlayOpacity ?? 100) / 100, formData.desktopGradientStop ?? 45, formData.desktopGradientEnd ?? 80) }} />
           {formData.desktopOverlay2Enabled && <div className="absolute inset-0 pointer-events-none" style={{ background: overlayBg((formData.desktopOverlay2Opacity ?? 100) / 100, formData.desktopGradientStop2 ?? 80, formData.desktopGradientEnd2 ?? 100) }} />}
+          </>)}
 
           {/* Content — the 2:1 component, scaled */}
           <BoundingBox
@@ -222,6 +227,11 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
               </>
             );
           })()}
+
+          {/* Invisible copy of the polaroids above the content block: dragging a photo pans it inside its frame */}
+          {isPolaroidTemplate(formData) && isDraggable && onFormChange && (
+            <div className="absolute inset-0 z-[4] pointer-events-none"><PolaroidCollage formData={formData} keyVisualUrl={previewUrl} onFormChange={onFormChange} handlesOnly /></div>
+          )}
 
           {/* CTA (right) — Figma 82:516 */}
           {showCta && (

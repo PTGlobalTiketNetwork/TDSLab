@@ -5,7 +5,7 @@ import { BannerDesktop51 } from './BannerDesktop51';
 import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
 import { Lock, Unlock, RotateCcw, Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
 import { BANNER_SPECS, ENTRY_POINT_SPECS } from '../../../config/banner-layouts';
-import { getPositionsForRender, loadDefaultPositions } from './utils/layoutUtils';
+import { getPositionsForRender, loadDefaultPositions, NEW_LANDSCAPE_21_CONTENT_SCALE } from './utils/layoutUtils';
 
 interface LivePreviewProps {
   formData: BannerFormData;
@@ -48,7 +48,12 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
   const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)' || formData.bannerRatio === 'Landscape (3:1)';
   const isSquareRatio = formData.bannerRatio === 'Square (1:1)';
   // 2:1, 3:4 and 1:1 all show EN and ID side by side (fit to the panel, "Preview full size" for the real size) — same behavior everywhere, not just in the DLP/compact views.
-  const sideBySide = isPortraitRatio || isLandscape21 || isSquareRatio;
+  // 2:1/3:1: zoom in = EN and ID stacked (ID under EN) at the full panel width, zoom out = side by side
+  const canStack = isLandscape21 && !compact; // every 2:1/3:1 editor preview (Promo, DLP, TTD); the small collapsed/summary cards always stay side by side
+  // 0 = side by side, 1 = stacked at 75% of the panel width (default), 2 = stacked at the full panel width
+  const [zoomLevel, setZoomLevel] = useState<0 | 1 | 2>(1);
+  const isStacked = canStack && zoomLevel > 0;
+  const sideBySide = (isPortraitRatio || isLandscape21 || isSquareRatio) && !isStacked;
   const isDesktopStandalone = formData.bannerCategory === 'Promo Banner' && (formData.bannerRatio === 'Desktop (5:1)' || formData.bannerRatio === 'Desktop (4:1)');
   const hasDesktop = formData.bannerRatio === 'Landscape (2:1)' && !!formData.provideDesktopBanner;
   // shared with the tabs in the form; 'all' shows both previews (2:1 first, then 5:1)
@@ -317,9 +322,10 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
         return;
       }
       const natural = measureRef.current?.scrollWidth;
-      if (avail && natural) {
+      if (avail && natural && (sideBySide || isStacked)) {
         const divisor = sideBySide ? 2 : 1;
-        const z = (avail - 16) / divisor / natural;
+        // TTD zoom in: each banner at 75% of the panel width (full width felt too big)
+        const z = ((avail - 16) / divisor / natural) * (isStacked && zoomLevel === 1 ? 0.75 : 1);
         setFitZoom(compact ? z : Math.min(1, z)); // compact (DLP cards): scale up/down so EN + ID fill the width edge to edge
       }
     };
@@ -327,13 +333,13 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
     const ro = new ResizeObserver(update);
     if (wrapRef.current) ro.observe(wrapRef.current);
     return () => ro.disconnect();
-  }, [formData.bannerRatio, formData.bannerCategory, compact, sideBySide, fitsToWidth, entryPointNaturalWidth]);
+  }, [formData.bannerRatio, formData.bannerCategory, compact, sideBySide, isStacked, zoomLevel, fitsToWidth, entryPointNaturalWidth]);
 
-  const zoom = (sideBySide || fitsToWidth) ? fitZoom : 1;
+  const zoom = (sideBySide || fitsToWidth || isStacked) ? fitZoom : 1;
 
   // Back to the default layout: undoes accidental drags / scales made with the bounding boxes in the preview
   const resetLayout = () => {
-    const mobile = { keyVisualPosition: { x: 50, y: 50 }, keyVisualScale: 100, portraitContentScale: undefined, portraitContentOffsetY: undefined, landscapeContentScale: undefined, squareContentScale: undefined, squareContentOffsetY: undefined };
+    const mobile = { keyVisualPosition: { x: 50, y: 50 }, keyVisualScale: 100, portraitContentScale: undefined, portraitContentOffsetY: undefined, landscapeContentScale: formData.bannerRatio === 'Landscape (2:1)' ? NEW_LANDSCAPE_21_CONTENT_SCALE : undefined, squareContentScale: undefined, squareContentOffsetY: undefined };
     const desktop = {
       desktopContentScale: undefined, desktopContentOffsetX: undefined, desktopContentOffsetY: undefined,
       desktopKeyVisualPosition: undefined, desktopKeyVisualScale: undefined,
@@ -379,7 +385,31 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
           >
             <RotateCcw size={16} />
           </button>
-          {(sideBySide || isDesktopStandalone || showDesktop) && (
+          {canStack && (
+            <>
+              <button
+                type="button"
+                onClick={() => setZoomLevel((z) => (z > 0 ? ((z - 1) as 0 | 1) : z))}
+                disabled={zoomLevel === 0}
+                className="p-2 rounded-md bg-[#f2f4f8] text-[#303135] hover:bg-[#e6e9f0] disabled:opacity-40 disabled:hover:bg-[#f2f4f8] transition-colors"
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                <ZoomOut size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoomLevel((z) => (z < 2 ? ((z + 1) as 1 | 2) : z))}
+                disabled={zoomLevel === 2}
+                className="p-2 rounded-md bg-[#f2f4f8] text-[#303135] hover:bg-[#e6e9f0] disabled:opacity-40 disabled:hover:bg-[#f2f4f8] transition-colors"
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                <ZoomIn size={16} />
+              </button>
+            </>
+          )}
+          {(sideBySide || isStacked || isDesktopStandalone || showDesktop) && (
             <button
               type="button"
               onClick={() => setActualSize(true)}
@@ -393,7 +423,7 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
         </div>
       )}
       <div ref={wrapRef} className={`w-full ${compact || embedded ? '' : 'overflow-x-auto'} ${compact && isPortraitRatio ? 'max-w-[75%] mx-auto' : ''} ${showMobile ? '' : 'hidden'}`}>
-      <div className={sideBySide ? "flex flex-row items-start gap-[16px] w-max mx-auto" : (embedded && isDesktopStandalone) ? "flex flex-row gap-[12px] w-full lg:flex-col lg:gap-[24px]" : "flex flex-col gap-[24px] w-full"} style={(sideBySide || fitsToWidth) ? { zoom } : isLandscape21 ? { zoom: landscapeZoom / 100 } : undefined}>
+      <div className={sideBySide ? "flex flex-row items-start gap-[16px] w-max mx-auto" : isStacked ? "flex flex-col items-start gap-[16px] w-max mx-auto" : (embedded && isDesktopStandalone) ? "flex flex-row gap-[12px] w-full lg:flex-col lg:gap-[24px]" : "flex flex-col gap-[24px] w-full"} style={(sideBySide || fitsToWidth || isStacked) ? { zoom } : isLandscape21 ? { zoom: landscapeZoom / 100 } : undefined}>
       <div ref={measureRef} className="flex flex-col w-full min-w-0">
         <BannerFixed 
             formData={previewFormData} 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { HexColorPicker } from 'react-colorful';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -12,7 +12,7 @@ interface ColorToken {
   family: string;
 }
 
-const colorTokens: ColorToken[] = [
+export const colorTokens: ColorToken[] = [
   // Red
   { name: 'r900', value: '#380909', family: 'Red' },
   { name: 'r800', value: '#610F0F', family: 'Red' },
@@ -107,6 +107,53 @@ const colorTokens: ColorToken[] = [
   { name: 'm100', value: '#FCEEF7', family: 'Magenta' },
 ];
 
+/** One step darker in the design tokens (b400 → b500, r600 → r700). Colours that aren't a token are darkened a little
+ *  instead. Used for "auto" text colours that sit on top of a colour (e.g. the unit badge text vs. the banner background). */
+export function oneShadeDarker(hex: string): string {
+  const token = colorTokens.find((t) => t.value.toLowerCase() === hex.toLowerCase());
+  if (token) {
+    const m = /^([a-z]+)(\d+)$/.exec(token.name);
+    const darker = m && colorTokens.find((t) => t.name === `${m[1]}${Number(m[2]) + 100}`);
+    return darker ? darker.value : token.value;
+  }
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return hex;
+  return '#' + m.slice(1, 4).map((c) => Math.round(parseInt(c, 16) * 0.8).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+// Last 10 custom colours picked in any ColorPicker, newest first (per browser).
+const HISTORY_KEY = 'tdslab:color-history';
+const HISTORY_MAX = 10;
+const readHistory = (): string[] => {
+  try { const v = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); return Array.isArray(v) ? v.filter((c) => typeof c === 'string') : []; } catch { return []; }
+};
+const pushHistory = (color: string) => {
+  const c = color.toUpperCase();
+  const next = [c, ...readHistory().filter((h) => h.toUpperCase() !== c)].slice(0, HISTORY_MAX);
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch { /* storage blocked */ }
+  return next;
+};
+
+// HSL <-> hex for the H / S / L sliders in the Custom tab
+const hexToHsl = (hex: string): [number, number, number] => {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return [0, 0, 0];
+  const [r, g, b] = m.slice(1, 4).map((c) => parseInt(c, 16) / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  if (max === min) return [0, 0, Math.round(l * 100)];
+  const d = max - min;
+  const sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [Math.round(h * 60), Math.round(sat * 100), Math.round(l * 100)];
+};
+const hslToHex = (h: number, sat: number, l: number) => {
+  const s1 = sat / 100, l1 = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = s1 * Math.min(l1, 1 - l1);
+  const f = (n: number) => l1 - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return '#' + [f(0), f(8), f(4)].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+};
+
 interface ColorPickerProps {
   value?: string;
   onChange: (color: string) => void;
@@ -116,20 +163,41 @@ interface ColorPickerProps {
   variant?: 'dot' | 'chip';
   chipLabel?: string;
   chipActive?: boolean;
+  /** Custom trigger element (e.g. a gradient stop handle) instead of the dot/chip; hides the hex caption. */
+  trigger?: React.ReactNode;
 }
 
-export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant = 'dot', chipLabel = 'Custom', chipActive = false }: ColorPickerProps) {
+export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant = 'dot', chipLabel = 'Custom', chipActive = false, trigger }: ColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'tokens' | 'custom'>('tokens');
   
   const currentColor = value || defaultValue;
+  const [history, setHistory] = useState<string[]>([]);
+  const openedWith = useRef(currentColor);
+  // Record the colour on close when it changed to a custom (non-token) hex, so it can be picked again without remembering the code
+  // Custom picks (wheel, hex input, eyedropper) are saved once the user pauses for a moment, not only when the popover closes
+  const recordTimer = useRef<ReturnType<typeof setTimeout>>();
+  const record = (c: string) => {
+    if (!/^#[0-9a-f]{6}$/i.test(c) || colorTokens.some((t) => t.value.toLowerCase() === c.toLowerCase())) return;
+    setHistory(pushHistory(c));
+  };
+  const pickCustom = (c: string) => {
+    onChange(c);
+    clearTimeout(recordTimer.current);
+    recordTimer.current = setTimeout(() => record(c), 700);
+  };
+  const handleOpenChange = (open: boolean) => {
+    if (open) { openedWith.current = currentColor; setHistory(readHistory()); }
+    else if (currentColor.toLowerCase() !== openedWith.current.toLowerCase()) { clearTimeout(recordTimer.current); record(currentColor); }
+    setIsOpen(open);
+  };
   // Native screen eyedropper (Chromium/Edge); hidden where the browser doesn't support it.
   const canEyedrop = typeof window !== 'undefined' && 'EyeDropper' in window;
   const pickFromScreen = async () => {
     try {
       const result = await new (window as any).EyeDropper().open();
-      onChange(String(result.sRGBHex).toUpperCase());
+      pickCustom(String(result.sRGBHex).toUpperCase());
     } catch {
       // cancelled with Esc
     }
@@ -161,9 +229,9 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
 
   return (
     <div className="flex items-center gap-[8px]">
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <Popover open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
-          {variant === 'chip' ? (
+          {trigger ? trigger : variant === 'chip' ? (
             <button type="button" title="Custom colour" className="flex flex-col items-center gap-[4px]">
               <span
                 className={`block w-[28px] h-[28px] rounded-full transition-all ${chipActive ? 'ring-2 ring-offset-1 ring-[#303135] scale-110' : 'ring-1 ring-[#e0e0e0]'}`}
@@ -199,6 +267,26 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
             </div>
 
             <div className="p-4">
+              {(history.length > 0 || activeTab === 'custom') && (
+                <div className="flex flex-col gap-2 mb-4">
+                  <h4 className="text-xs font-semibold text-muted-foreground">Recent</h4>
+                  {history.length === 0 && <span className="text-xs text-[#9EA0A5]">Colours you pick here show up for next time.</span>}
+                  <div className="flex flex-wrap gap-2">
+                    {history.map((c) => (
+                      <button
+                        type="button"
+                        key={c}
+                        className="relative w-6 h-6 rounded-full border border-black/10 hover:scale-110 transition-transform focus:outline-none focus:ring-2 focus:ring-[#007BFF] focus:ring-offset-1"
+                        style={{ backgroundColor: c }}
+                        onClick={() => onChange(c)}
+                        title={c}
+                      >
+                        {currentColor.toLowerCase() === c.toLowerCase() && <span className="absolute inset-0 m-auto w-1.5 h-1.5 bg-white rounded-full shadow-sm" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <TabsContent value="tokens" className="mt-0 flex flex-col gap-4">
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -246,7 +334,43 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
               </TabsContent>
 
               <TabsContent value="custom" className="mt-0 flex flex-col gap-4 items-center">
-                <HexColorPicker color={currentColor} onChange={onChange} className="!w-full !h-[200px]" />
+                <HexColorPicker color={currentColor} onChange={pickCustom} className="!w-full !h-[200px]" />
+
+                {/* H / S / L sliders: fine-tune the same colour numerically */}
+                {(() => {
+                  const [h, sat, l] = hexToHsl(currentColor);
+                  const rows: [string, number, number, string, (v: number) => string][] = [
+                    ['H', h, 360, 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)', (v) => hslToHex(v, sat, l)],
+                    ['S', sat, 100, `linear-gradient(to right, ${hslToHex(h, 0, l)}, ${hslToHex(h, 100, l)})`, (v) => hslToHex(h, v, l)],
+                    ['L', l, 100, `linear-gradient(to right, #000, ${hslToHex(h, sat, 50)}, #fff)`, (v) => hslToHex(h, sat, v)],
+                  ];
+                  return (
+                    <div className="flex flex-col gap-2 w-full">
+                      {rows.map(([label, val, max, track, toHex]) => (
+                        <div key={label} className="flex items-center gap-2">
+                          <span className="w-3 text-xs font-semibold text-[#71747d]">{label}</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={max}
+                            value={val}
+                            onChange={(e) => pickCustom(toHex(Number(e.target.value)))}
+                            className="flex-1 h-[10px] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-[16px] [&::-webkit-slider-thumb]:h-[16px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-[0_0_0_1px_rgba(0,0,0,0.2),0_1px_3px_rgba(0,0,0,0.3)] [&::-moz-range-thumb]:w-[14px] [&::-moz-range-thumb]:h-[14px] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white"
+                            style={{ background: track }}
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            max={max}
+                            value={val}
+                            onChange={(e) => pickCustom(toHex(Math.max(0, Math.min(max, Number(e.target.value) || 0))))}
+                            className="w-[48px] h-[28px] px-[6px] rounded-md border border-[#d8dce8] text-xs text-right outline-none focus:border-[#007BFF]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
                 
                 <div className="flex gap-2 w-full items-center">
                   <div className="w-10 h-10 rounded-md border border-[#d8dce8] shrink-0" style={{ backgroundColor: currentColor }} />
@@ -267,7 +391,7 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
                       onChange={(e) => {
                         const val = e.target.value;
                         if (/^[0-9A-Fa-f]{0,6}$/.test(val)) {
-                          onChange(`#${val}`);
+                          pickCustom(`#${val}`);
                         }
                       }}
                       className="pl-6 uppercase"
@@ -280,7 +404,7 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
           </Tabs>
         </PopoverContent>
       </Popover>
-      {variant === 'dot' && (
+      {variant === 'dot' && !trigger && (
       <span className="text-[12px] text-[#9EA0A5] font-mono uppercase">
         {displayValue}
       </span>

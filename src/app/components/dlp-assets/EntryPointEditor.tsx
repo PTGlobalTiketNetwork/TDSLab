@@ -27,6 +27,19 @@ export function EntryPointEditor({ formData, onChange, tabsExtra, previewMaxWidt
   // On small screens the preview stays pinned above the form for every ratio (desktop: EN / ID side by side; taller ratios are capped to half the viewport and scroll inside).
   // The form's own sticky bars (EN / ID tabs…) must then sit below it, so measure the pinned preview's height.
   const previewRef = useRef<HTMLDivElement>(null);
+  // Switching Content Nudge ↔ Visual & Logo starts the new tab at its top: if the page was scrolled down inside this editor,
+  // bring the editor's top back to just under the sticky card header.
+  const topRef = useRef<HTMLDivElement>(null);
+  const switchTab = (id: 'content' | 'visual') => {
+    if (id === sub) return;
+    setSub(id);
+    const el = topRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      const offset = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+      if (el.getBoundingClientRect().top < offset) el.scrollIntoView({ block: 'start' });
+    });
+  };
   const tabBarRef = useRef<HTMLDivElement>(null);
   const { shadow: tabBarShadow } = useStickyBar(tabBarRef);
   const [wide, setWide] = useState(() => typeof window === 'undefined' || window.matchMedia('(min-width: 1024px)').matches);
@@ -57,11 +70,12 @@ export function EntryPointEditor({ formData, onChange, tabsExtra, previewMaxWidt
   return (
     <RadioScope>
     <div className="flex flex-col gap-[16px] lg:gap-0">
+      <div ref={topRef} aria-hidden className="h-0 -mb-[16px] lg:mb-0 scroll-mt-[calc(var(--ep-head-top,0px)+56px)]" />
       {/* Sticky right under the card title row (56px) when inside the DLP flow */}
       <div ref={tabBarRef} className={`sticky top-[calc(var(--ep-head-top,0px)+56px)] z-[29] bg-white flex items-center justify-between -mx-[24px] px-[24px] ${tabBarShadow ? STICKY_SHADOW : 'border-b border-[#e9ebef]'}`}>
         <div className="flex">
         {([['content', 'Content Nudge'], ['visual', 'Visual & Logo']] as const).map(([id, text]) => (
-          <button key={id} type="button" onClick={() => setSub(id)}
+          <button key={id} type="button" onClick={() => switchTab(id)}
             className={`px-[16px] pt-[10px] pb-[7px] text-[16px] leading-[22px] font-bold border-b-[3px] rounded-t-[3px] transition-colors ${sub === id ? 'text-[#007BFF] border-[#007BFF]' : 'text-[#71747d] border-transparent hover:text-[#303135]'}`}>
             {text}
           </button>
