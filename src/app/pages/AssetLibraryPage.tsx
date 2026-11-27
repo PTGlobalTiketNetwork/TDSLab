@@ -145,10 +145,10 @@ export function AssetLibraryPage({ searchQuery, isSidebarCollapsed }: AssetLibra
                 setEditingAsset(null);
             }}
             onSuccess={() => {
+                // AddAssetPage already shows its own "Asset updated/File uploaded successfully" toast
                 loadAssets();
                 setIsAdding(false);
                 setEditingAsset(null);
-                toast.custom((t) => <TiketSnackbar id={t} message={editingAsset ? 'Asset updated successfully' : 'Asset added successfully'} variant="default" />);
             }}
             initialData={editingAsset}
             isSidebarCollapsed={isSidebarCollapsed}
