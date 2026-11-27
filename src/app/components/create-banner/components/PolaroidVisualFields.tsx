@@ -264,21 +264,10 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
         </div>
         {v.enabled && (
           <>
-            <ColorPicker
-              value={v.color || DEFAULT_VOUCHER_COLOR}
-              onChange={(c) => setVoucher(pos, { color: c })}
-              defaultValue={DEFAULT_VOUCHER_COLOR}
-              trigger={
-                <button type="button" className="flex items-center gap-2 w-full text-left bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8] hover:border-[#b9bfcc]">
-                  <div className="w-[16px] h-[16px] rounded-full border border-[#d8dce8] shrink-0 shadow-sm" style={{ backgroundColor: v.color || DEFAULT_VOUCHER_COLOR }} />
-                  <span className="text-sm text-[#71747d] font-medium uppercase truncate">{v.color || DEFAULT_VOUCHER_COLOR}</span>
-                </button>
-              }
-            />
             {slider('Position X', v.x ?? 0, '%', -5, 5, 0, (x) => setVoucher(pos, { x }))}
             {slider('Position Y', v.y ?? 0, '%', -5, 5, 0, (y) => setVoucher(pos, { y }))}
             {slider('Rotation', v.rotate ?? 0, '°', -15, 15, 0, (rotate) => setVoucher(pos, { rotate }))}
-            {slider('Scale', v.scale ?? 100, '%', 90, 110, 100, (scale) => setVoucher(pos, { scale }))}
+            {slider('Scale', v.scale ?? 100, '%', 75, 120, 100, (scale) => setVoucher(pos, { scale }))}
           </>
         )}
       </div>
@@ -392,8 +381,32 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
       </div>
 
       <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] w-full">
-        <label className="text-[14px] font-bold text-[#303135]">Voucher</label>
+        <div className="flex items-center justify-between">
+          <label className="text-[14px] font-bold text-[#303135]">Voucher</label>
+          <button
+            type="button"
+            onClick={() => onChange({ polaroidVouchers: Object.fromEntries((['top', 'bottom'] as const).map((k) => {
+              const { x, y, rotate, scale, ...rest } = formData.polaroidVouchers?.[k] ?? {};
+              return [k, rest];
+            })) })}
+            disabled={(['top', 'bottom'] as const).every((k) => { const v = formData.polaroidVouchers?.[k]; return !v?.x && !v?.y && !v?.rotate && (v?.scale ?? 100) === 100; })}
+            className="flex items-center gap-[4px] text-[13px] font-semibold text-[#007BFF] hover:underline disabled:text-[#9EA0A5] disabled:no-underline"
+          >
+            <RotateCw size={12} /> Reset to default
+          </button>
+        </div>
         <p className="text-[12px] text-[#71747d] -mt-[8px]">Ticket shapes peeking in from the top and bottom edge.</p>
+          <ColorPicker
+            value={(formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR)}
+            onChange={(c) => onChange({ polaroidVouchers: { ...formData.polaroidVouchers, top: { ...formData.polaroidVouchers?.top, color: c }, bottom: { ...formData.polaroidVouchers?.bottom, color: c } } })}
+            defaultValue={DEFAULT_VOUCHER_COLOR}
+            trigger={
+              <button type="button" className="flex items-center gap-2 w-full text-left bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8] hover:border-[#b9bfcc]">
+                <div className="w-[16px] h-[16px] rounded-full border border-[#d8dce8] shrink-0 shadow-sm" style={{ backgroundColor: (formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR) }} />
+                <span className="text-sm text-[#71747d] font-medium uppercase truncate">{(formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR)}</span>
+              </button>
+            }
+          />
         {voucherCard('top')}
         {voucherCard('bottom')}
       </div>
