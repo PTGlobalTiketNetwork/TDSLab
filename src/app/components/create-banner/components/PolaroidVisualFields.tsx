@@ -264,10 +264,10 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
         </div>
         {v.enabled && (
           <>
+            {slider('Scale', v.scale ?? 100, '%', 75, 120, 100, (scale) => setVoucher(pos, { scale }))}
             {slider('Position X', v.x ?? 0, '%', -5, 5, 0, (x) => setVoucher(pos, { x }))}
             {slider('Position Y', v.y ?? 0, '%', -5, 5, 0, (y) => setVoucher(pos, { y }))}
             {slider('Rotation', v.rotate ?? 0, '°', -15, 15, 0, (rotate) => setVoucher(pos, { rotate }))}
-            {slider('Scale', v.scale ?? 100, '%', 75, 120, 100, (scale) => setVoucher(pos, { scale }))}
           </>
         )}
       </div>
