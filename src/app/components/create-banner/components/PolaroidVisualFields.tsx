@@ -395,7 +395,18 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
         </div>
         {vouchersOn && (
           <>
-        <div className="flex justify-end -mt-[4px]">
+          <ColorPicker
+            value={(formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR)}
+            onChange={(c) => onChange({ polaroidVouchers: { ...formData.polaroidVouchers, top: { ...formData.polaroidVouchers?.top, color: c }, bottom: { ...formData.polaroidVouchers?.bottom, color: c } } })}
+            defaultValue={DEFAULT_VOUCHER_COLOR}
+            trigger={
+              <button type="button" className="flex items-center gap-2 w-full text-left bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8] hover:border-[#b9bfcc]">
+                <div className="w-[16px] h-[16px] rounded-full border border-[#d8dce8] shrink-0 shadow-sm" style={{ backgroundColor: (formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR) }} />
+                <span className="text-sm text-[#71747d] font-medium uppercase truncate">{(formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR)}</span>
+              </button>
+            }
+          />
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={() => onChange({ polaroidVouchers: Object.fromEntries((['top', 'bottom'] as const).map((k) => {
@@ -408,17 +419,6 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
             <RotateCw size={12} /> Reset to default
           </button>
         </div>
-          <ColorPicker
-            value={(formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR)}
-            onChange={(c) => onChange({ polaroidVouchers: { ...formData.polaroidVouchers, top: { ...formData.polaroidVouchers?.top, color: c }, bottom: { ...formData.polaroidVouchers?.bottom, color: c } } })}
-            defaultValue={DEFAULT_VOUCHER_COLOR}
-            trigger={
-              <button type="button" className="flex items-center gap-2 w-full text-left bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8] hover:border-[#b9bfcc]">
-                <div className="w-[16px] h-[16px] rounded-full border border-[#d8dce8] shrink-0 shadow-sm" style={{ backgroundColor: (formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR) }} />
-                <span className="text-sm text-[#71747d] font-medium uppercase truncate">{(formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR)}</span>
-              </button>
-            }
-          />
         {voucherCard('top')}
         {voucherCard('bottom')}
           </>
