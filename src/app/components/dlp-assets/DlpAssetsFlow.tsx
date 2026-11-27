@@ -277,9 +277,17 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
 
       // Thumbnail: the DLP Header (mobile) banner, EN
       const thumbId = 'hdr-mobile';
-      const thumb: Blob = await renderer.current!.captureBannerForResize({ id, name: projectName, form_data: entryPoints[thumbId] } as any);
-      const path = `DLP_Assets/${id}_en.png`;
-      const up = await BannerService.uploadImage(thumb, path);
+      // Auto-save skips the thumbnail render + upload (traffic): it keeps whatever thumbnail the record already has,
+      // and manual Save Draft / Publish refreshes it
+      const prev = silent && draftExistsRef.current ? await BannerService.getBanner(id).catch(() => null) : null;
+      let thumbUrl: string = prev?.image_url_en || '';
+      let thumbMeta: any = prev?.metadata;
+      if (!silent) {
+        const thumb: Blob = await renderer.current!.captureBannerForResize({ id, name: projectName, form_data: entryPoints[thumbId] } as any);
+        const up = await BannerService.uploadImage(thumb, `DLP_Assets/${id}_en.png`);
+        thumbUrl = up.url;
+        thumbMeta = { dimension: 'DLP set', fileSize: `${(thumb.size / 1024).toFixed(2)} KB` };
+      }
 
       const formData = {
         ...JSON.parse(JSON.stringify(initialFormDataBase)),
@@ -304,10 +312,10 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
         creator_name: userDisplay,
         last_edited_by_id: user.id,
         last_edited_by_name: userDisplay,
-        image_url_en: up.url,
-        image_url_id: up.url,
+        image_url_en: thumbUrl,
+        image_url_id: thumbUrl,
         product: vertical,
-        metadata: { dimension: 'DLP set', fileSize: `${(thumb.size / 1024).toFixed(2)} KB` },
+        metadata: thumbMeta,
       };
       if (draftExistsRef.current) await BannerService.updateBanner(id, data as any);
       else {

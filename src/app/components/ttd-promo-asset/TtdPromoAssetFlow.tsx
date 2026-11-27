@@ -397,9 +397,17 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
 
       // Thumbnail: the first picked banner, EN (falls back to a blank 2:1 canvas if only the Brand Icon was picked)
       const thumbId = itemIds[0] ?? 'banner2x1';
-      const thumb: Blob = await renderer.current!.captureBannerForResize({ id, name: projectName, form_data: items[thumbId] ?? itemForm(thumbId) } as any);
-      const path = `TTD_Promo_Asset/${id}_en.png`;
-      const up = await BannerService.uploadImage(thumb, path);
+      // Auto-save skips the thumbnail render + upload (traffic): it keeps whatever thumbnail the record already has,
+      // and manual Save Draft / Publish refreshes it
+      const prev = silent && draftExistsRef.current ? await BannerService.getBanner(id).catch(() => null) : null;
+      let thumbUrl: string = prev?.image_url_en || '';
+      let thumbMeta: any = prev?.metadata;
+      if (!silent) {
+        const thumb: Blob = await renderer.current!.captureBannerForResize({ id, name: projectName, form_data: items[thumbId] ?? itemForm(thumbId) } as any);
+        const up = await BannerService.uploadImage(thumb, `TTD_Promo_Asset/${id}_en.png`);
+        thumbUrl = up.url;
+        thumbMeta = { dimension: 'TTD Promo Asset set', fileSize: `${(thumb.size / 1024).toFixed(2)} KB` };
+      }
 
       const formData = {
         ...JSON.parse(JSON.stringify(initialFormDataBase)),
@@ -427,9 +435,9 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         creator_name: userDisplay,
         last_edited_by_id: user.id,
         last_edited_by_name: userDisplay,
-        image_url_en: up.url,
-        image_url_id: up.url,
-        metadata: { dimension: 'TTD Promo Asset set', fileSize: `${(thumb.size / 1024).toFixed(2)} KB` },
+        image_url_en: thumbUrl,
+        image_url_id: thumbUrl,
+        metadata: thumbMeta,
       };
       if (draftExistsRef.current) await BannerService.updateBanner(id, data as any);
       else {
