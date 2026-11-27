@@ -4,12 +4,13 @@ import { TiketButton } from '../components/ui/TiketButton';
 import { BannerService } from '../../services/bannerService';
 import { AssetService } from '../../services/assetService';
 import { Banner } from '../../types/banner';
-import { 
-    Plus, 
+import {
+    Plus,
     Clock,
     FileEdit,
     Layout,
-    Activity
+    Activity,
+    FolderOpen
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import {
@@ -18,8 +19,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../components/ui/tooltip";
-import exampleImage from 'figma:asset/466e1a89edc6e2bcc55e005bc9622f9575c4eec4.png';
-import { ScaledBannerPreview } from '../components/ScaledBannerPreview';
 import { BannerFormData } from '../components/create-banner/types';
 import { CreateBannerTypeModal } from '../components/CreateBannerTypeModal';
 import { CarouselItem } from '../components/BannerTypeCarousel';
@@ -28,11 +27,6 @@ import { getUserDisplayName, getUserAvatarUrl, formatStoredName } from '../utils
 
 interface HomeProps {
     session: any;
-}
-
-function withPreviewCacheBust(url: string | null | undefined, cacheBuster: string | number) {
-    if (!url || url.startsWith('data:') || url.startsWith('blob:')) return url || null;
-    return `${url}${url.includes('?') ? '&' : '?'}t=${cacheBuster}`;
 }
 
 interface ActivityItem {
@@ -290,90 +284,49 @@ export function Home({ session }: HomeProps) {
                                 View All Drafts
                             </button>
                         </div>
-                        {/* UNIFORM GRID - 4 COLUMNS */}
+                        {/* UNIFORM GRID - 4 COLUMNS. No live preview: a draft's saved data can't always be
+                            re-rendered as a flat banner (DLP/TTD store several sub-banners nested), so this
+                            is a simple info card instead of a thumbnail. */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                             {drafts.slice(0, 4).map((draft) => {
-                                const isDraftWithData = draft.status === 'draft' && (draft as any).form_data;
-                                const draftFormData = isDraftWithData ? (draft as any).form_data as BannerFormData : null;
-                                const rawUrl = isDraftWithData
-                                      ? (draftFormData?.keyVisualUrl || draft.thumbnail || draft.imageUrl || null)
-                                      : (draft.thumbnail || draft.imageUrl || null);
-                                const cacheBuster = (draft as any).updatedAt
-                                      ? new Date((draft as any).updatedAt).getTime()
-                                      : draft.id;
-                                const previewUrl = withPreviewCacheBust(rawUrl, cacheBuster);
-                                
-                                // Get display ratio string for badge
-                                const getRatioLabel = () => {
-                                    if (draftFormData?.bannerCategory === 'Product Entry Point') {
-                                         return '5:2';
-                                    }
-                                    if (draftFormData?.bannerRatio) {
-                                        if (draftFormData.bannerRatio === 'Landscape (2:1)') return '2:1';
-                                        if (draftFormData.bannerRatio === 'Landscape (16:9)') return '16:9';
-                                        if (draftFormData.bannerRatio === 'Square (1:1)') return '1:1';
-                                        if (draftFormData.bannerRatio === 'Portrait (3:4)') return '3:4';
-                                    }
-                                    return '2:1'; // Default
-                                };
+                                // Ratio only makes sense for Promo Banner: DLP/TTD hold several ratios in one project
+                                const ratioLabel = draft.category === 'Promo Banner'
+                                    ? (() => {
+                                        const r = ((draft as any).form_data as BannerFormData | undefined)?.bannerRatio;
+                                        if (r === 'Landscape (2:1)') return '2:1';
+                                        if (r === 'Landscape (16:9)') return '16:9';
+                                        if (r === 'Square (1:1)') return '1:1';
+                                        if (r === 'Portrait (3:4)') return '3:4';
+                                        if (r === 'Desktop (5:1)') return '5:1';
+                                        if (r === 'Desktop (4:1)') return '4:1';
+                                        return null;
+                                    })()
+                                    : null;
 
                                 return (
-                                <div 
+                                <div
                                     key={draft.id}
                                     onClick={() => handleResumeDraft(draft.id, draft.category)}
-                                    className="h-full flex flex-col bg-white rounded-[12px] border border-[#d8dce8] cursor-pointer hover:shadow-lg transition-all duration-300 group overflow-hidden"
+                                    className="h-full flex flex-col gap-3 bg-white rounded-[12px] border border-[#d8dce8] p-4 cursor-pointer hover:shadow-lg hover:border-[#007BFF] transition-all duration-300 group"
                                 >
-                                    {/* IMAGE CONTAINER - Contain & Center */}
-                                    <div className="relative w-full aspect-[2/1] overflow-hidden bg-gray-50 flex items-center justify-center shrink-0">
-                                        <div className="pointer-events-none select-none w-full h-full flex items-center justify-center">
-                                            {isDraftWithData && draftFormData ? (
-                                                <ScaledBannerPreview
-                                                    formData={draftFormData}
-                                                    previewUrl={previewUrl}
-                                                    className="w-full h-full shadow-sm"
-                                                    fit="contain"
-                                                />
-                                            ) : (
-                                            <img 
-                                                src={previewUrl || exampleImage} 
-                                                alt={draft.name} 
-                                                className="w-auto h-auto max-w-full max-h-full object-contain"
-                                            />
-                                        )}
-                                        </div>
-                                        
-                                        
-                                        {/* Resume overlay on hover */}
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px] z-10">
-                                            <span className="bg-white text-[#303135] px-4 py-2 rounded-full font-bold text-[12px] flex items-center gap-2">
-                                                <FileEdit className="w-3 h-3" />
-                                                Resume
-                                            </span>
-                                        </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[#007BFF] bg-[#E3EFFB] px-2 py-1 rounded-full truncate">
+                                            <FolderOpen className="w-3 h-3 shrink-0" />
+                                            <span className="truncate">{draft.category || 'Banner'}</span>
+                                        </span>
+                                        <FileEdit className="w-3.5 h-3.5 text-[#9EA0A5] group-hover:text-[#007BFF] transition-colors shrink-0" />
                                     </div>
-
-                                    {/* METADATA FOOTER */}
-                                    <div className="p-4 flex flex-col gap-2">
-                                        {/* Banner Name */}
-                                        <h4 className="text-[14px] font-semibold text-[#303135] truncate leading-tight" title={draft.name}>
-                                            {draft.name}
-                                        </h4>
-                                        
-                                        {/* Ratio Badge + Category + Last Edited */}
-                                        <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full font-medium shrink-0">
-                                                    {getRatioLabel()}
-                                                </span>
-                                                <span className="text-[10px] text-gray-500 truncate">
-                                                    {draft.category || 'Banner'}
-                                                </span>
-                                            </div>
-                                            <span className="text-[10px] text-[#9EA0A5] whitespace-nowrap shrink-0" title={format(new Date(draft.updatedAt), 'PPpp')}>
-                                                {formatDistanceToNow(new Date(draft.updatedAt), { addSuffix: true })}
-                                            </span>
-                                        </div>
-                                    </div>
+                                    <h4 className="text-[15px] font-bold text-[#303135] leading-tight line-clamp-2" title={draft.name}>
+                                        {draft.name}
+                                    </h4>
+                                    {ratioLabel && (
+                                        <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full font-medium self-start">
+                                            {ratioLabel}
+                                        </span>
+                                    )}
+                                    <span className="text-[12px] text-[#9EA0A5] mt-auto" title={format(new Date(draft.updatedAt), 'PPpp')}>
+                                        {formatDistanceToNow(new Date(draft.updatedAt), { addSuffix: true })}
+                                    </span>
                                 </div>
                                 );
                             })}
