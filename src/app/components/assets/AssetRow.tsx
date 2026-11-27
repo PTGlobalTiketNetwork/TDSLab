@@ -18,7 +18,7 @@ export const AssetRow = forwardRef<HTMLDivElement, AssetRowProps>(
       <div 
         ref={ref}
         id={`asset-card-${asset.id}`}
-        onClick={onClick}
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
         className={`bg-white rounded-[12px] h-[64px] flex items-center px-[24px] cursor-pointer transition-all hover:shadow-sm ${
           isSelected ? 'border-[2px] border-[#007BFF] px-[23px]' : 'border border-[#d8dce8]'
         }`}

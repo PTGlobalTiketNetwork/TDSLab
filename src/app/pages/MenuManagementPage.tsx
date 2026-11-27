@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import { TiketSnackbar } from '../components/ui/TiketSnackbar';
-import { useMenuVisibility, MANAGED_MENU_ITEMS, ManagedMenuItem } from '../../context/MenuVisibilityContext';
+import { useMenuVisibility, MANAGED_MENU_ITEMS, ManagedMenuItem, BADGE_CAPABLE_MENU_ITEMS } from '../../context/MenuVisibilityContext';
 import { Switch } from '../components/ui/switch';
 
 const MENU_DESCRIPTIONS: Record<ManagedMenuItem, string> = {
@@ -23,7 +23,7 @@ const MENU_LABELS: Record<ManagedMenuItem, string> = {
 const BANNER_MENU_ITEMS = MANAGED_MENU_ITEMS.filter((item) => item !== 'Auto Translate');
 
 export function MenuManagementPage(_props: { isSidebarCollapsed?: boolean }) {
-  const { visibility, setVisibility, loading } = useMenuVisibility();
+  const { visibility, setVisibility, setAdminOnly, setShowNewBadge, loading } = useMenuVisibility();
 
   const handleToggle = async (item: ManagedMenuItem, value: boolean) => {
     await setVisibility(item, value);
@@ -35,25 +35,74 @@ export function MenuManagementPage(_props: { isSidebarCollapsed?: boolean }) {
     ));
   };
 
+  const handleAdminOnlyToggle = async (item: ManagedMenuItem, value: boolean) => {
+    await setAdminOnly(item, value);
+    toast.custom((id) => (
+      <TiketSnackbar
+        id={id}
+        message={`"${MENU_LABELS[item]}" is now ${value ? 'visible to admins only' : 'visible to everyone'}.`}
+      />
+    ));
+  };
+
+  const handleBadgeToggle = async (item: ManagedMenuItem, value: boolean) => {
+    await setShowNewBadge(item, value);
+    toast.custom((id) => (
+      <TiketSnackbar
+        id={id}
+        message={`"NEW" badge is now ${value ? 'on' : 'off'} for "${MENU_LABELS[item]}".`}
+      />
+    ));
+  };
+
   const renderRow = (item: ManagedMenuItem) => {
-    const isOn = loading ? true : (visibility[item] ?? true);
+    const cfg = visibility[item];
+    const isOn = loading ? true : (cfg?.visible ?? true);
+    const isAdminOnly = loading ? false : (cfg?.adminOnly ?? false);
+    const hasNewBadge = loading ? false : (cfg?.showNewBadge ?? false);
+    const canToggleBadge = BADGE_CAPABLE_MENU_ITEMS.includes(item);
+
     return (
-      <div key={item} className="flex items-center justify-between py-[18px] px-[24px]">
-        <div className="flex flex-col gap-0.5">
-          <span className={`text-[14px] font-medium ${isOn ? 'text-[#303135]' : 'text-[#aeb2be]'}`}>
-            {MENU_LABELS[item]}
-          </span>
-          <span className="text-[12px] text-[#aeb2be]">{MENU_DESCRIPTIONS[item]}</span>
+      <div key={item} className="flex flex-col gap-3 py-[18px] px-[24px]">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-0.5">
+            <span className={`text-[14px] font-medium ${isOn ? 'text-[#303135]' : 'text-[#aeb2be]'}`}>
+              {MENU_LABELS[item]}
+            </span>
+            <span className="text-[12px] text-[#aeb2be]">{MENU_DESCRIPTIONS[item]}</span>
+          </div>
+          <div className="flex items-center gap-3 shrink-0 ml-4">
+            <span className={`text-[12px] font-medium ${isOn ? 'text-[#1a9e5f]' : 'text-[#aeb2be]'}`}>
+              {loading ? '—' : (isOn ? 'Visible' : 'Hidden')}
+            </span>
+            <Switch
+              checked={isOn}
+              disabled={loading}
+              onCheckedChange={(val) => handleToggle(item, val)}
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0 ml-4">
-          <span className={`text-[12px] font-medium ${isOn ? 'text-[#1a9e5f]' : 'text-[#aeb2be]'}`}>
-            {loading ? '—' : (isOn ? 'Visible' : 'Hidden')}
-          </span>
-          <Switch
-            checked={isOn}
-            disabled={loading}
-            onCheckedChange={(val) => handleToggle(item, val)}
-          />
+        <div className="flex items-center gap-6">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Switch
+              className="scale-75"
+              checked={isAdminOnly}
+              disabled={loading}
+              onCheckedChange={(val) => handleAdminOnlyToggle(item, val)}
+            />
+            <span className="text-[12px] text-[#aeb2be]">Admin only</span>
+          </label>
+          {canToggleBadge && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Switch
+                className="scale-75"
+                checked={hasNewBadge}
+                disabled={loading}
+                onCheckedChange={(val) => handleBadgeToggle(item, val)}
+              />
+              <span className="text-[12px] text-[#aeb2be]">"NEW" badge</span>
+            </label>
+          )}
         </div>
       </div>
     );

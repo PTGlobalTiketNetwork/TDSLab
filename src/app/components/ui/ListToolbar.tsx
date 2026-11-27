@@ -38,7 +38,7 @@ export const LIST_INSPECTOR_MARGIN = 'mr-[432px]';
  * literal end of a long page.
  */
 export const listPageClass = (inspectorOpen: boolean) =>
-  `${inspectorOpen ? LIST_INSPECTOR_MARGIN : ''} flex flex-col px-[24px] pt-[12px] min-h-full bg-[#f8f9fd] transition-all duration-300`;
+  `${inspectorOpen ? LIST_INSPECTOR_MARGIN : ''} flex flex-col px-[24px] pt-[12px] min-h-full bg-[#f8f9fd]`;
 export const LIST_GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-x-[20px] gap-y-[20px]';
 export const LIST_STACK_CLASS = 'space-y-[16px]';
 export const LIST_SKELETON_GRID_COUNT = 9;

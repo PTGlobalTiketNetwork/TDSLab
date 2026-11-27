@@ -207,6 +207,9 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
   const steps: TiketStepItem[] = keys.map((k, i) => ({ id: i + 1, label: STEP_LABEL[k] }));
   const current = keys[Math.min(index, keys.length - 1)];
   const anyPicked = Object.values(picked).some(Boolean);
+  // DLP Header Mobile/Desktop are forced on by default (see the `picked` initializer above) — they
+  // don't count as a "change" for the exit-confirmation below, only entry points + vertical + name do.
+  const hasRealChanges = (['ep-mobile-2x1', 'ep-mobile-3x4', 'ep-desktop'] as OptionId[]).some((id) => picked[id]) || !!vertical || !!projectName.trim();
   const isLast = index >= keys.length - 1;
 
   // Saves the whole project as one DLP Assets record. Key visuals are uploaded first, the thumbnail is the first entry point banner.
@@ -319,6 +322,12 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
   };
 
   const goTo = (i: number) => { setIndex(i); setMaxIndex((m) => Math.max(m, i)); };
+  // Stepper's back chevron: previous step while mid-flow, exit (with unsaved-changes confirm) only from the first step.
+  const stepperBack = () => {
+    if (index > 0) { setIndex(index - 1); return; }
+    if (hasRealChanges) setIsExitModalOpen(true);
+    else onBack();
+  };
 
   const option = (id: OptionId, note?: string) => (
     <label key={id} className="flex items-center gap-[12px] px-[4px] py-[6px] rounded-[6px] cursor-pointer hover:bg-[#f8f9fd]">
@@ -487,7 +496,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
               <div className="flex items-end gap-[16px]">
                 {ratioThumb('2:1', 'Landscape', 2, 1, 0.55, 'left')}
                 {ratioThumb('3:4', 'Portrait', 3, 4, 0.42)}
-                {ratioThumb('5:1', 'Desktop', 5, 1, 0.5, 'left')}
+                {ratioThumb('5:1', 'Desktop', 5, 1, 0.5, 'right')}
               </div>
             ), 'w-auto'))}
           </div>
@@ -832,12 +841,12 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
         >
           <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-end pb-[16px] gap-[8px]">
             <span className="text-[16px] font-semibold leading-[20px] text-[#303135] truncate">{projectName.trim() || 'DLP Assets'}</span>
-            <TiketStepper steps={steps} currentStep={index + 1} maxStepReached={maxIndex + 1} onStepClick={(id) => goTo(id - 1)} size="compact" />
+            <TiketStepper steps={steps} currentStep={index + 1} maxStepReached={maxIndex + 1} onStepClick={(id) => goTo(id - 1)} size="compact" onBack={stepperBack} />
           </div>
         </div>
         <div className="flex flex-col gap-[8px] items-start">
           <TiketBreadcrumb items={[{ label: 'Banners' }, { label: 'DLP Assets', onClick: () => onBack() }, { label: editingId ? 'Edit Banner' : 'Create New Banner' }]} />
-          <TiketStepper steps={steps} currentStep={index + 1} maxStepReached={maxIndex + 1} onStepClick={(id) => goTo(id - 1)} />
+          <TiketStepper steps={steps} currentStep={index + 1} maxStepReached={maxIndex + 1} onStepClick={(id) => goTo(id - 1)} onBack={stepperBack} />
         </div>
         <div className={current === 'entry' || current === 'header' ? 'w-full' : 'bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] w-full p-[24px] min-h-[400px]'}>
           {body()}
@@ -847,8 +856,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
             <button
               type="button"
               onClick={() => {
-                const hasChanges = anyPicked || !!vertical || !!projectName.trim();
-                if (hasChanges) setIsExitModalOpen(true);
+                if (hasRealChanges) setIsExitModalOpen(true);
                 else onBack();
               }}
               className="h-[52px] px-[24px] bg-[#ffe5e5] rounded-[8px] text-[18px] font-bold text-[#ef4444] hover:bg-[#fecaca] transition-colors"

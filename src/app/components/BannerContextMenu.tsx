@@ -11,7 +11,7 @@ import {
   ContextMenuSubContent,
   ContextMenuTrigger,
 } from './ui/context-menu';
-import { Edit2, Scaling, Copy, Download, Trash2, FileDown, Send, X } from 'lucide-react';
+import { Edit2, Scaling, Copy, Download, Trash2, FileDown, Send, X, TextCursorInput } from 'lucide-react';
 import { useAccess } from '../../context/AccessContext';
 
 const DOWNLOAD_SCALES = [
@@ -26,6 +26,7 @@ interface BannerContextMenuProps {
   children: ReactNode;
   bulkBanners?: Banner[];
   onEdit?: (banner: Banner) => void;
+  onRename?: (banner: Banner) => void;
   onResize?: (banner: Banner) => void;
   onDuplicate?: (banner: Banner) => void;
   onDownload?: (banner: Banner, scaleFactor: number) => void;
@@ -43,6 +44,7 @@ export function BannerContextMenu({
   children,
   bulkBanners,
   onEdit,
+  onRename,
   onResize,
   onDuplicate,
   onDownload,
@@ -152,6 +154,16 @@ export function BannerContextMenu({
               <span>Edit</span>
               <ContextMenuShortcut>E</ContextMenuShortcut>
             </ContextMenuItem>
+
+            {onRename && (
+              <ContextMenuItem
+                onClick={(e) => { e.stopPropagation(); onRename(banner); }}
+                className="gap-3"
+              >
+                <TextCursorInput className="size-4" />
+                <span>Rename</span>
+              </ContextMenuItem>
+            )}
 
             {isWhitelisted && (
               <ContextMenuItem

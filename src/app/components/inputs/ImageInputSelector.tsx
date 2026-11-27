@@ -75,7 +75,7 @@ const convertToSupportedFormat = async (file: File): Promise<File> => {
 
 export function ImageInputSelector({ 
   onAssetSelected, 
-  accept = "image/png, image/jpeg, image/jpg", 
+  accept = "image/png, image/jpeg, image/jpg, image/webp",
   maxSizeMB = 50,
   hideAITab: hideAITabProp = false,
   hideHistoryTab: hideHistoryTabProp = false
@@ -165,10 +165,17 @@ export function ImageInputSelector({
 
       {/* Tab 1: Upload (Always visible if active or if hideAITab/HistoryTab is true and activeTab matches, effectively default) */}
       {(activeTab === 'upload' || (hideAITab && hideHistoryTab)) && (
-         <div 
+         <div
            onDrop={handleDrop}
            onDragOver={(e) => e.preventDefault()}
-           className="p-[24px] flex gap-[16px] items-center animate-in fade-in duration-300"
+           onPaste={(e) => {
+             const file = Array.from(e.clipboardData?.items || [])
+               .find((item) => item.type.startsWith('image/'))
+               ?.getAsFile();
+             if (file) validateAndSelect(file);
+           }}
+           tabIndex={0}
+           className="p-[24px] flex gap-[16px] items-center animate-in fade-in duration-300 focus:outline-none focus:ring-2 focus:ring-[#007BFF] focus:ring-offset-2 rounded-[8px]"
          >
               <div className="w-[80px] h-[80px] bg-[#f8f9fd] rounded-[8px] flex items-center justify-center text-[#d8dce8] shrink-0 border border-[#eff1f6]">
                   <div className="relative">
@@ -181,7 +188,7 @@ export function ImageInputSelector({
 
               <div className="flex flex-col gap-[4px] flex-1">
                   <p className="text-[16px] text-[#303135] font-medium">Max file size {maxSizeMB} MB</p>
-                  <p className="text-[14px] text-[#71747d] leading-[20px]">Recommended file type PNG, JPG, JPEG</p>
+                  <p className="text-[14px] text-[#71747d] leading-[20px]">Recommended file type PNG, JPG, WebP — or paste an image from your clipboard</p>
                   
                   <div className="mt-[4px]">
                       <input 

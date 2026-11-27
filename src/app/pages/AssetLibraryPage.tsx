@@ -172,8 +172,9 @@ export function AssetLibraryPage({ searchQuery, isSidebarCollapsed }: AssetLibra
         isSidebarCollapsed={isSidebarCollapsed}
         isLoading={isLoading}
         highlightId={highlightId}
+        onClearSelection={() => setSelectedAssetId(null)}
       />
-      <AssetInspector 
+      <AssetInspector
          selectedAsset={selectedAsset}
          onEdit={handleEdit}
          onDelete={handleDelete}

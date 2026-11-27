@@ -10,13 +10,14 @@ interface Props {
   formData: BannerFormData;
   onChange: (updates: Partial<BannerFormData>) => void;
   tabsExtra?: React.ReactNode; // right side of the tab bar
+  previewMaxWidth?: string; // overrides the ratio-based default cap below (e.g. wide landscape ratios eating the whole viewport)
 }
 
 /**
  * Entry Point Banner editor. Same forms and preview as the Promo Banner flow
  * (Content nudge, Key visual & logo, Live preview) with the layout fixed by the caller.
  */
-export function EntryPointEditor({ formData, onChange, tabsExtra }: Props) {
+export function EntryPointEditor({ formData, onChange, tabsExtra, previewMaxWidth }: Props) {
   const [sub, setSub] = useState<'content' | 'visual'>('content');
   const [activeTab, setActiveTab] = useState<'en' | 'id'>('en');
   const [deviceTab, setDeviceTab] = useState<'mobile' | 'desktop'>('mobile');
@@ -102,7 +103,7 @@ export function EntryPointEditor({ formData, onChange, tabsExtra }: Props) {
           <h2 className="text-[18px] font-bold text-[#303135] leading-[24px]">Preview</h2>
           <div
             // No scrolling inside the pinned preview. Tall ratios are narrowed so the pair never gets taller than ~viewport height — on short desktop windows it keeps the 3:4/1:1 preview from pushing the form down.
-            style={{ maxWidth: formData.bannerRatio === 'Portrait (3:4)' ? (under1200 ? 'calc(34vh + 8px)' : 'calc(68vh + 16px)') : formData.bannerRatio === 'Square (1:1)' ? 'calc(90vh + 16px)' : undefined, marginInline: 'auto', width: '100%' }}
+            style={{ maxWidth: previewMaxWidth ?? (formData.bannerRatio === 'Portrait (3:4)' ? (under1200 ? 'calc(34vh + 8px)' : 'calc(68vh + 16px)') : formData.bannerRatio === 'Square (1:1)' ? 'calc(90vh + 16px)' : undefined), marginInline: 'auto', width: '100%' }}
           >
             <LivePreview
               formData={formData}

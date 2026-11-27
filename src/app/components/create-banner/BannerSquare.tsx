@@ -8,7 +8,7 @@ import { ChevronLeft, Share } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
 import { BANNER_SPECS } from '../../../config/banner-layouts';
 import { BoundingBox } from './components/BoundingBox';
-import { getPositionsForRender, getCurrencyLabel, getUnitLabel, isAmountHidden, getDefaultPartnerLogoY, getDefaultPartnerLogoScale, getDefaultCampaignLogoY, tagsToHtml } from './utils/layoutUtils';
+import { getPositionsForRender, getCurrencyLabel, getUnitLabel, getDefaultPartnerLogoY, getDefaultPartnerLogoScale, getDefaultCampaignLogoY, tagsToHtml } from './utils/layoutUtils';
 
 // BannerSquare's native canvas is 600×600 vs. BannerLegacy's portrait 720-wide canvas.
 // The DLP Header navbar/partner-logo blocks are ported from BannerLegacy's 720-wide pixel
@@ -204,8 +204,8 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
   const labelDiscountText = content.labelDiscountText || currentDefaults.labelDiscountText;
 
   // Use explicit check for Discount Amount to show placeholder '50'
-  const discountAmountText = isAmountHidden(content.discountType, content.discountAmount) ? '' : (content.discountAmount || '50');
-  const secondDiscountAmountText = isAmountHidden(content.secondDiscountType, content.secondDiscountAmount) ? '' : (content.secondDiscountAmount || '50');
+  const discountAmountText = (content.discountAmount || '50');
+  const secondDiscountAmountText = (content.secondDiscountAmount || '50');
   const currencyLabel = getCurrencyLabel(content.discountType, content.customCurrency);
   const secondCurrencyLabel = getCurrencyLabel(content.secondDiscountType, content.secondCustomCurrency);
 
@@ -423,25 +423,8 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
       );
     };
 
-    const renderTopLabel = (which: 'first' | 'second', s: number) => {
-      if (content.showPrefix === false) return null;
-      const isSecond = which === 'second';
-      const text = isSecond ? content.secondBenefitPrefix : content.mainBenefitPrefix;
-      const pt = isSecond ? content.secondPrefixType : content.prefixType;
-      if (!text) return null;
-      const isCustom = pt === 'custom';
-      return (
-        <span
-          className={`font-banner text-center whitespace-nowrap ${isCustom ? '' : 'font-bold'}`}
-          style={{
-            color: (isSecond ? (content.secondPrefixColor ?? content.prefixColor) : content.prefixColor) || '#FEDD00',
-            fontSize: `${(isCustom ? (content.prefixFontSize || 20) : 18) * 2 * s}px`,
-            lineHeight: isCustom && typeof content.prefixLineHeight === 'number' ? content.prefixLineHeight / 100 : 1.2,
-          }}
-          dangerouslySetInnerHTML={{ __html: isCustom ? tagsToHtml(text) : tagsToHtml(text.replace(/\n/g, ' ')) }}
-        />
-      );
-    };
+    // Same preset bold/regular split as everywhere else (renderLeftColumnDlp), just centered above the number instead of stacked to its left.
+    const renderTopLabel = (which: 'first' | 'second', s: number) => renderLeftColumnDlp(2 * s, true, which, true);
 
     if (!content.hasSecondDiscount && formData.nudgeOnTop) {
       return (
@@ -779,22 +762,22 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                         );
                         }
 
-                        // Preset: Start from — both words bold
+                        // Preset: Start from — "Start" bold, "from" regular
                         if (lowerText === 'start from') {
                         return (
                             <div className="flex flex-col gap-0 leading-tight">
                             <span className="font-banner font-bold" style={{ fontSize: `${fontSize}px`, color: content.prefixColor || '#FFFFFF' }}>Start</span>
-                            <span className="font-banner font-bold -mt-[6px]" style={{ fontSize: `${fontSize}px`, color: content.prefixColor || '#FFFFFF' }}>from</span>
+                            <span className="font-banner font-normal -mt-[6px]" style={{ fontSize: `${fontSize}px`, color: '#FFFFFF' }}>from</span>
                             </div>
                         );
                         }
 
-                        // Preset: Mulai dari — both words bold
+                        // Preset: Mulai dari — "Mulai" bold, "dari" regular
                         if (lowerText === 'mulai dari') {
                         return (
                             <div className="flex flex-col gap-0 leading-tight">
                             <span className="font-banner font-bold" style={{ fontSize: `${fontSize}px`, color: content.prefixColor || '#FFFFFF' }}>Mulai</span>
-                            <span className="font-banner font-bold -mt-[6px]" style={{ fontSize: `${fontSize}px`, color: content.prefixColor || '#FFFFFF' }}>dari</span>
+                            <span className="font-banner font-normal -mt-[6px]" style={{ fontSize: `${fontSize}px`, color: '#FFFFFF' }}>dari</span>
                             </div>
                         );
                         }
@@ -1004,13 +987,13 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
         {/* Partner logo */}
         {formData.showPartnerLogo && (
             <div className="absolute right-0 z-20 pointer-events-none" style={{ top: `${(formData.partnerLogoY ?? getDefaultPartnerLogoY(formData)) * SQUARE_PARTNER_LOGO_SCALE}px`, transform: 'translateZ(0)' }}>
-                <div className="flex items-center gap-[17px] px-[20px] py-[7px] bg-white shadow-sm" style={{ borderRadius: '33px 0 0 33px', transform: `translateZ(0) scale(${formData.partnerLogoScale ?? getDefaultPartnerLogoScale(formData)})`, transformOrigin: 'top right' }}>
+                <div className="flex items-center gap-[17px] px-[20px] py-[7px]" style={{ borderRadius: '33px 0 0 33px', background: formData.partnerLogoBgEnabled === false ? 'transparent' : (formData.partnerLogoBg ?? '#FFFFFF'), transform: `translateZ(0) scale(${formData.partnerLogoScale ?? getDefaultPartnerLogoScale(formData)})`, transformOrigin: 'top right' }}>
                     {formData.partnerLogos.slice(0, 3).map((slot, idx) => {
                         const isUrl = slot.logo?.startsWith('http') || slot.logo?.startsWith('figma:');
                         const imgSrc = isUrl ? slot.logo : (slot.logo ? `https://placehold.co/132x66/0064D2/FFFFFF/png?text=${slot.logo.substring(0, 3).toUpperCase()}` : exampleImage);
                         return (
                             <div key={slot.id || idx} className="h-[33px] min-w-[67px] max-w-[133px] flex items-center justify-center">
-                                <img src={imgSrc} alt={slot.logo || "Partner"} className="h-full w-auto object-contain" crossOrigin="anonymous" onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />
+                                <img src={imgSrc} alt={slot.logo || "Partner"} className="h-full w-auto object-contain" style={{ transform: `scale(${(formData.partnerLogoAssetScale ?? 100) / 100})` }} crossOrigin="anonymous" onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />
                             </div>
                         );
                     })}

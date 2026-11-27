@@ -23,6 +23,7 @@ import {
   ensureDataUrlForCapture,
   waitForRenderStable,
   buildDlpZipManifest,
+  buildTtdZipParams,
 } from '../utils/bannerCapture';
 import { OffscreenBannerRenderer, type OffscreenBannerRendererHandle } from './OffscreenBannerRenderer';
 import TdsIcSparklingGeneral from '../../imports/TdsIcSparklingGeneral-2104-16';
@@ -38,6 +39,7 @@ import { ComparisonViewer } from './ComparisonViewer';
 import { Session } from '@supabase/supabase-js';
 import { TiketTabs } from './ui/TiketTabs';
 import { SegmentedControl } from './ui/SegmentedControl';
+import { TtdBrandIconPreview } from './ttd-promo-asset/TtdBrandIconPreview';
 
 interface InspectorPanelProps {
   selectedBanner: Banner | null;
@@ -61,6 +63,18 @@ interface InspectorPanelProps {
    *  any in-flight ZIP — the moment this panel closes (selection cleared), since it lives inside it. */
   renderer?: RefObject<OffscreenBannerRendererHandle | null>;
 }
+
+
+type TtdPreviewItem = 'banner2x1' | 'banner3x1' | 'banner5x1' | 'brandIcon';
+const TTD_PREVIEW_LABEL: Record<TtdPreviewItem, string> = { banner2x1: '2:1', banner3x1: '3:1', banner5x1: '5:1', brandIcon: 'Brand Icon' };
+const getTtdPreviewItems = (fd: BannerFormData | undefined): TtdPreviewItem[] => {
+  const ttd = fd?.bannerCategory === 'TTD Promo Asset' ? fd.ttd : undefined;
+  if (!ttd) return [];
+  return [
+    ...(['banner2x1', 'banner3x1', 'banner5x1'] as const).filter((k) => ttd[k]),
+    ...(ttd.verticalIconUrl !== undefined ? ['brandIcon' as const] : []),
+  ];
+};
 
 export function InspectorPanel({
   selectedBanner,
@@ -104,6 +118,8 @@ export function InspectorPanel({
   const [viewLanguage, setViewLanguage] = useState<'en' | 'id'>('en');
   // Device state for DLP Assets preview (Mobile/Desktop header switcher)
   const [dlpDevice, setDlpDevice] = useState<'mobile' | 'desktop'>('mobile');
+  // TTD Promo Asset preview: which picked item to show (2:1 / 3:1 / 5:1 / Brand Icon)
+  const [ttdItem, setTtdItem] = useState<TtdPreviewItem | null>(null);
 
   const enBannerRef = useRef<HTMLDivElement>(null);
   const idBannerRef = useRef<HTMLDivElement>(null);
@@ -146,6 +162,7 @@ export function InspectorPanel({
   // Reset device switcher when switching to a different banner
   useEffect(() => {
       setDlpDevice('mobile');
+      setTtdItem(null);
   }, [selectedBanner?.id]);
 
   // Watch for external updates (Syncing)
@@ -192,9 +209,12 @@ export function InspectorPanel({
   const rawImageUrl = selectedBanner?.imageUrl;
   const selectedFormData = selectedBanner?.form_data as BannerFormData | undefined;
   const selectedIsDlpAssets = selectedFormData?.bannerCategory === 'DLP Assets' && !!selectedFormData?.dlp?.header;
+  const ttdItems = getTtdPreviewItems(selectedFormData);
+  const activeTtdItem = ttdItem && ttdItems.includes(ttdItem) ? ttdItem : (ttdItems[0] ?? null);
+  const ttdBannerForm = activeTtdItem && activeTtdItem !== 'brandIcon' ? selectedFormData?.ttd?.[activeTtdItem] : undefined;
   const selectedPreviewFormData = selectedIsDlpAssets
     ? (dlpDevice === 'desktop' ? selectedFormData?.dlp?.header?.desktopForm : selectedFormData?.dlp?.header?.mobileForm)
-    : selectedFormData;
+    : ttdItems.length ? ttdBannerForm : selectedFormData;
   const selectedKeyVisualUrl = selectedPreviewFormData?.keyVisualUrl || null;
   const previewImageSource = capturePreviewUrl || selectedKeyVisualUrl || rawImageUrl;
   const withCacheBust = (url: string) => (
@@ -364,7 +384,7 @@ export function InspectorPanel({
     const noun = categories.length === 1 ? (categories[0] === 'DLP Assets' ? 'DLP' : 'banners') : 'banners';
 
     return (
-      <div className="w-[432px] h-screen bg-white border-l border-[#e8eaee] fixed right-0 top-0 flex flex-col">
+      <div className="w-[432px] h-screen bg-white border-l border-[#e8eaee] fixed right-0 top-0 z-40 flex flex-col">
         <div className="p-[24px] border-b border-[#e8eaee]">
           <div className="flex items-center justify-between">
             <h3 className="text-[20px] font-bold text-[#303135]">
@@ -572,6 +592,17 @@ export function InspectorPanel({
     }
   };
 
+  // TTD Promo Asset: same ZIP flow — its banners' EN + ID plus the Brand Icon PNG.
+  const handleDownloadTtdZip = async (ttd: NonNullable<BannerFormData['ttd']>, scaleFactor: number) => {
+    const downloadId = `zip-${scaleFactor}`;
+    setDownloadingItem(downloadId);
+    try {
+      await dlpZipRenderer.current?.downloadDlpZip(buildTtdZipParams(ttd, selectedBanner.name || 'TTD Promo Asset', scaleFactor));
+    } finally {
+      setDownloadingItem(null);
+    }
+  };
+
   const formatDate = (isoDate: string) => {
     if (!isoDate) return '-';
     const date = new Date(isoDate);
@@ -672,10 +703,12 @@ export function InspectorPanel({
   // previewFormData resolves to the correct nested sub-form for the visible preview only;
   // hidden capture-for-download and Save/Quick Save keep using the real top-level formData above.
   const isDlpAssets = formData?.bannerCategory === 'DLP Assets' && !!formData?.dlp?.header;
+  const isTtdAsset = formData?.bannerCategory === 'TTD Promo Asset' && !!formData?.ttd;
   const hasDlpDesktop = !!formData?.dlp?.header?.desktop;
+  const showTtdBrandIcon = isTtdAsset && activeTtdItem === 'brandIcon';
   const previewFormData: BannerFormData | undefined = isDlpAssets
     ? (dlpDevice === 'desktop' ? formData?.dlp?.header?.desktopForm : formData?.dlp?.header?.mobileForm)
-    : formData;
+    : isTtdAsset ? (activeTtdItem && activeTtdItem !== 'brandIcon' ? formData?.ttd?.[activeTtdItem] : undefined) : formData;
   const displayPreviewUrl = capturePreviewUrl || previewFormData?.keyVisualUrl || null;
   const displayScale = previewFormData?.keyVisualScale || 100;
   const displayPosition = previewFormData?.keyVisualPosition || { x: 50, y: 50 };
@@ -976,6 +1009,7 @@ export function InspectorPanel({
         switch (fd.bannerRatio) {
           case 'Landscape (16:9)': nativeHeight = 337.5; break;
           case 'Square (1:1)': nativeHeight = 600; break;
+          case 'Landscape (3:1)': nativeHeight = 200; break;
           case 'Landscape (2:1)':
           default: nativeHeight = 300; break;
         }
@@ -987,12 +1021,12 @@ export function InspectorPanel({
   const previewScale = previewContainerWidth / nativeWidth;
 
   return (
-    <div className="w-[432px] h-screen bg-white border-l border-[#d8dce8] fixed right-0 top-0 overflow-y-auto">
+    <div className="w-[432px] h-screen bg-white border-l border-[#d8dce8] fixed right-0 top-0 z-40 overflow-y-auto">
       {/* DLP Assets "download as ZIP" renders many different sub-banners off-screen one at a time,
           separate from the always-mounted single-banner hidden render below.
           Only mount our own instance when the caller didn't pass a persistent one (`renderer`) — this
           local instance unmounts the moment the panel closes, which used to abort an in-flight ZIP. */}
-      {isDlpAssets && !renderer && <OffscreenBannerRenderer ref={localDlpZipRenderer} />}
+      {(isDlpAssets || isTtdAsset) && !renderer && <OffscreenBannerRenderer ref={localDlpZipRenderer} />}
       {/* Hidden Banner Rendering for Downloads - Optimized for reliable html-to-image capture */}
       {formData && (
         <div style={{ 
@@ -1102,8 +1136,18 @@ export function InspectorPanel({
             />
           )}
 
+          {/* TTD Promo Asset: switch between the picked items */}
+          {isTtdAsset && ttdItems.length > 1 && (
+            <SegmentedControl
+              items={ttdItems.map((id) => ({ id, label: TTD_PREVIEW_LABEL[id] }))}
+              activeId={activeTtdItem ?? ttdItems[0]}
+              onChange={(id) => setTtdItem(id as TtdPreviewItem)}
+              fullWidth
+            />
+          )}
+
           {/* Language Tabs - Only show for dynamic banners with form_data */}
-          {formData && (
+          {formData && !showTtdBrandIcon && (
             <TiketTabs
               items={[
                 { id: 'en', label: 'EN' },
@@ -1116,6 +1160,11 @@ export function InspectorPanel({
           )}
 
           {/* Preview Image */}
+          {showTtdBrandIcon && formData?.ttd ? (
+            <div className="w-full min-h-[120px] bg-gray-50 flex items-center justify-center rounded-lg border border-gray-100 p-4">
+              <TtdBrandIconPreview ttd={formData.ttd} size={160} />
+            </div>
+          ) : (
           <Lightbox
             hasLanguageSwitcher={!!formData}
             currentLanguage={viewLanguage}
@@ -1140,7 +1189,7 @@ export function InspectorPanel({
                        }}
                      >
                        <BannerFixed
-                        key={`preview-en-${selectedBanner.id}-${dlpDevice}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
+                        key={`preview-en-${selectedBanner.id}-${dlpDevice}-${activeTtdItem}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
                          formData={previewFormData}
                          lang="en"
                          scale={displayScale}
@@ -1167,7 +1216,7 @@ export function InspectorPanel({
                        }}
                      >
                        <BannerFixed
-                        key={`preview-id-${selectedBanner.id}-${dlpDevice}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
+                        key={`preview-id-${selectedBanner.id}-${dlpDevice}-${activeTtdItem}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
                          formData={previewFormData}
                          lang="id"
                          scale={displayScale}
@@ -1247,7 +1296,7 @@ export function InspectorPanel({
                      }}
                    >
                      <BannerFixed
-                        key={`lightbox-en-${selectedBanner.id}-${dlpDevice}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
+                        key={`lightbox-en-${selectedBanner.id}-${dlpDevice}-${activeTtdItem}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
                          formData={previewFormData}
                          lang="en"
                          scale={displayScale}
@@ -1276,7 +1325,7 @@ export function InspectorPanel({
                      }}
                    >
                      <BannerFixed
-                        key={`lightbox-id-${selectedBanner.id}-${dlpDevice}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
+                        key={`lightbox-id-${selectedBanner.id}-${dlpDevice}-${activeTtdItem}-${selectedKeyVisualUrl || rawImageUrl || 'none'}`}
                          formData={previewFormData}
                          lang="id"
                          scale={displayScale}
@@ -1299,6 +1348,7 @@ export function InspectorPanel({
                  />
              )}
           </Lightbox>
+          )}
 
           {/* Action Buttons */}
           <div className="bg-[#f4f7fe] flex gap-[12px] items-start px-[16px] py-[8px] rounded-[56px]">
@@ -1386,7 +1436,7 @@ export function InspectorPanel({
                     </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[300px] p-4 bg-white" align="center" sideOffset={8}>
-                  {isDlpAssets && formData.dlp ? (
+                  {(isDlpAssets && formData.dlp) || (isTtdAsset && formData.ttd) ? (
                     /* DLP Assets: one ZIP with every sub-banner's EN + ID — no separate EN/ID menus. */
                     <div className="flex flex-col gap-3">
                       <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Download ZIP (EN + ID)</span>
@@ -1394,7 +1444,7 @@ export function InspectorPanel({
                         {[1, 1.5, 2, 3].map(factor => (
                           <button
                             key={`zip-${factor}`}
-                            onClick={() => handleDownloadDlpZip(formData.dlp!, factor)}
+                            onClick={() => (isTtdAsset ? handleDownloadTtdZip(formData.ttd!, factor) : handleDownloadDlpZip(formData.dlp!, factor))}
                             disabled={!!downloadingItem}
                             className={`px-2 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-[6px] hover:bg-gray-200 transition-colors border border-transparent hover:border-gray-300 disabled:cursor-not-allowed flex items-center justify-center min-w-[40px] ${downloadingItem && downloadingItem !== `zip-${factor}` ? 'opacity-50' : ''}`}
                           >

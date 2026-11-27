@@ -6,7 +6,7 @@ import { forwardRef, useState, useEffect } from 'react';
 import { Skeleton } from '../ui/skeleton';
 import type { DiffHighlights } from '../../../utils/diffUtils';
 import { BANNER_SPECS } from '../../../config/banner-layouts';
-import { tagsToHtml, getCurrencyLabel, getUnitLabel, isAmountHidden, getDefaultPortraitContentOffsetY, getDefaultPartnerLogoY, getDefaultPartnerLogoScale, getDefaultCampaignLogoY } from './utils/layoutUtils';
+import { tagsToHtml, getCurrencyLabel, getUnitLabel, getDefaultPortraitContentOffsetY, getDefaultLandscapeContentScale, getDefaultPartnerLogoY, getDefaultPartnerLogoScale, getDefaultCampaignLogoY } from './utils/layoutUtils';
 import { BoundingBox } from './components/BoundingBox';
 import { ImageBox } from './components/ImageBox';
 
@@ -84,8 +84,8 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
   const secondHeadlineText = content.secondHeadline || currentDefaults.secondHeadline;
   
   // Use explicit check for Discount Amount to show placeholder '50'
-  const discountAmountText = isAmountHidden(content.discountType, content.discountAmount) ? '' : (content.discountAmount || '50');
-  const secondDiscountAmountText = isAmountHidden(content.secondDiscountType, content.secondDiscountAmount) ? '' : (content.secondDiscountAmount || '0');
+  const discountAmountText = (content.discountAmount || '50');
+  const secondDiscountAmountText = (content.secondDiscountAmount || '0');
   const currencyLabel = getCurrencyLabel(content.discountType, content.customCurrency);
   const secondCurrencyLabel = getCurrencyLabel(content.secondDiscountType, content.secondCustomCurrency);
   
@@ -98,6 +98,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
   // --- Promo Banner Logic ---
   const ratioClasses = {
     'Landscape (2:1)': 'aspect-[2/1]',
+    'Landscape (3:1)': 'aspect-[3/1]', // TTD Promo Asset: 2:1 layout cloned onto a wider canvas
     'Landscape (16:9)': 'aspect-[16/9]',
     'Square (1:1)': 'aspect-[1/1]',
     'Portrait (3:4)': 'aspect-[3/4]',
@@ -165,8 +166,9 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
   const overlayColor = formData.overlayColor || '#000000';
   const rgb = hexToRgb(overlayColor);
   const opacityStart = (formData.gradientOpacity ?? 100) / 100;
-  const stopPos = formData.overlayGradientStop ?? (formData.bannerRatio === 'Landscape (2:1)' ? 20 : 10); // Start of the fade
-  const stopEnd = formData.overlayGradientEnd ?? (formData.bannerRatio === 'Landscape (2:1)' ? 70 : 100); // Where it has faded out
+  const isLandscape21ForOverlay = formData.bannerRatio === 'Landscape (2:1)' || formData.bannerRatio === 'Landscape (3:1)';
+  const stopPos = formData.overlayGradientStop ?? (isLandscape21ForOverlay ? 20 : 10); // Start of the fade
+  const stopEnd = formData.overlayGradientEnd ?? (isLandscape21ForOverlay ? 70 : 100); // Where it has faded out
 
   const gradientStyle = {
       background: `linear-gradient(90deg, rgba(${rgb},${opacityStart}) 0%, rgba(${rgb},${opacityStart}) ${stopPos}%, rgba(${rgb},0) ${Math.max(stopPos + 1, stopEnd)}%)`,
@@ -213,7 +215,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
     );
   };
 
-  const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)';
+  const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)' || formData.bannerRatio === 'Landscape (3:1)';
   // Landscape logo defaults (original): 16px, 100%
   const lgPos = 16;
   const lgScale = 1;
@@ -371,26 +373,8 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                         );
                       };
 
-                      const renderTopLabel = (which: 'first' | 'second', s: number) => {
-                        if (content.showPrefix === false) return null;
-                        const isSecond = which === 'second';
-                        const text = isSecond ? content.secondBenefitPrefix : content.mainBenefitPrefix;
-                        const pt = isSecond ? content.secondPrefixType : content.prefixType;
-                        if (!text) return null;
-                        const isCustom = pt === 'custom';
-                        return (
-                          <span
-                            className={`font-banner text-center whitespace-nowrap ${isCustom ? '' : 'font-bold'}`}
-                            style={{
-                              color: (isSecond ? (content.secondPrefixColor ?? content.prefixColor) : content.prefixColor) || '#FEDD00',
-                              fontSize: `${(isCustom ? (content.prefixFontSize || 20) : 18) * 2 * s}px`,
-                              lineHeight: isCustom && typeof content.prefixLineHeight === 'number' ? content.prefixLineHeight / 100 : 1.2,
-                            }}
-                            // Presets render on one line; custom keeps the author's line breaks and formatting
-                            dangerouslySetInnerHTML={{ __html: isCustom ? tagsToHtml(text) : tagsToHtml(text.replace(/\n/g, ' ')) }}
-                          />
-                        );
-                      };
+                      // Same preset bold/regular split as everywhere else (renderLeftColumn), just centered above the number instead of stacked to its left.
+                      const renderTopLabel = (which: 'first' | 'second', s: number) => renderLeftColumn(2 * s, true, which, true);
 
                       if (!content.hasSecondDiscount && formData.nudgeOnTop) {
                         // Option: nudge centered above the number (same style as the two-benefit labels)
@@ -537,13 +521,13 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
             {/* Partner logo */}
             {formData.showPartnerLogo && (
               <div className="absolute right-0 z-20 pointer-events-none" style={{ top: `${formData.partnerLogoY ?? getDefaultPartnerLogoY(formData)}px`, transform: 'translateZ(0)' }}>
-                <div className="flex items-center gap-[20px] px-[24px] py-[8px] bg-white shadow-sm" style={{ borderRadius: '40px 0 0 40px', transform: `translateZ(0) scale(${formData.partnerLogoScale ?? getDefaultPartnerLogoScale(formData)})`, transformOrigin: 'top right' }}>
+                <div className="flex items-center gap-[20px] px-[24px] py-[8px]" style={{ borderRadius: '40px 0 0 40px', background: formData.partnerLogoBgEnabled === false ? 'transparent' : (formData.partnerLogoBg ?? '#FFFFFF'), transform: `translateZ(0) scale(${formData.partnerLogoScale ?? getDefaultPartnerLogoScale(formData)})`, transformOrigin: 'top right' }}>
                   {formData.partnerLogos.slice(0, 3).map((slot, idx) => {
                     const isUrl = slot.logo?.startsWith('http') || slot.logo?.startsWith('figma:');
                     const imgSrc = isUrl ? slot.logo : (slot.logo ? `https://placehold.co/132x66/0064D2/FFFFFF/png?text=${slot.logo.substring(0, 3).toUpperCase()}` : exampleImage);
                     return (
                       <div key={slot.id || idx} className="h-[40px] min-w-[80px] max-w-[160px] flex items-center justify-center">
-                        <img src={imgSrc} alt={slot.logo || "Partner"} className="h-full w-auto object-contain" crossOrigin="anonymous" onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />
+                        <img src={imgSrc} alt={slot.logo || "Partner"} className="h-full w-auto object-contain" style={{ transform: `scale(${(formData.partnerLogoAssetScale ?? 100) / 100})` }} crossOrigin="anonymous" onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />
                       </div>
                     );
                   })}
@@ -669,12 +653,12 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
   const landscapeContent = (
                  <BoundingBox
                      enabled={isLandscape21 && !!onFormChange}
-                     style={isLandscape21 ? { transform: `translateY(${(formData.portraitContentOffsetY ?? 0) / 2}px) scale(${(formData.landscapeContentScale ?? 100) / 100})`, transformOrigin: 'left center' } : undefined}
-                     selfScale={(formData.landscapeContentScale ?? 100) / 100}
+                     style={isLandscape21 ? { transform: `translateY(${(formData.portraitContentOffsetY ?? getDefaultPortraitContentOffsetY(formData, content)) / 2}px) scale(${(formData.landscapeContentScale ?? getDefaultLandscapeContentScale(formData)) / 100})`, transformOrigin: 'left center' } : undefined}
+                     selfScale={(formData.landscapeContentScale ?? getDefaultLandscapeContentScale(formData)) / 100}
                      className={`${contentOnly?.center ? '[&_h3]:!text-center' : ''} ${contentOnly?.verticalCenter ? '!mt-0' : ''} flex flex-col ${contentOnly?.center ? 'items-center' : 'items-start'} gap-[2px] w-full mr-[0px] mb-[0px] ml-[0px] ${formData.headlineType === '1 Headline' ? (formData.discountEnabled === false && content.showPrefix === false ? 'mt-[0px]' : content.hasSecondDiscount ? 'mt-[26px]' : 'mt-[32px]') : formData.headlineType === 'With Sub-Headline' ? (formData.discountEnabled === false && content.showPrefix === false ? 'mt-[0px]' : 'mt-[12px]') : 'mt-[12px]'}`}
-                     offsetY={formData.portraitContentOffsetY ?? 0} offsetUnit={2} offsetMin={-200} offsetMax={200}
+                     offsetY={formData.portraitContentOffsetY ?? getDefaultPortraitContentOffsetY(formData, content)} offsetUnit={2} offsetMin={-200} offsetMax={200}
                      onOffsetChange={(v) => onFormChange?.({ portraitContentOffsetY: v })}
-                     scale={formData.landscapeContentScale ?? 100} scaleMin={60} scaleMax={200}
+                     scale={formData.landscapeContentScale ?? getDefaultLandscapeContentScale(formData)} scaleMin={60} scaleMax={200}
                      onScaleChange={(v) => onFormChange?.({ landscapeContentScale: v })}
                    >
                      <HighlightWrapper active={highlights?.headlineDiff} label="Headline Changed">
@@ -902,14 +886,14 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
          {formData.showPartnerLogo && (
             <div className="absolute right-0 z-20 pointer-events-none" style={{ top: `${formData.partnerLogoY ?? 16}px`, transform: 'translateZ(0)' }}>
               <HighlightWrapper active={highlights?.partnerLogoDiff} label="Partner Logo Changed">
-                <div className="flex items-center gap-[10px] h-[35px] pl-[20px] pr-[10px] bg-white rounded-l-full rounded-r-none shadow-sm" style={{ transform: `translateZ(0) scale(${formData.partnerLogoScale ?? lgScale})`, transformOrigin: 'top right' }}>
+                <div className="flex items-center gap-[10px] h-[35px] pl-[20px] pr-[10px] rounded-l-full rounded-r-none" style={{ background: formData.partnerLogoBgEnabled === false ? 'transparent' : (formData.partnerLogoBg ?? '#FFFFFF'), transform: `translateZ(0) scale(${formData.partnerLogoScale ?? lgScale})`, transformOrigin: 'top right' }}>
                     {formData.partnerLogos.slice(0, 3).map((slot, idx) => {
                          const isUrl = slot.logo?.startsWith('http') || slot.logo?.startsWith('figma:');
                          const imgSrc = isUrl ? slot.logo : (slot.logo ? `https://placehold.co/132x66/0064D2/FFFFFF/png?text=${slot.logo.substring(0, 3).toUpperCase()}` : exampleImage);
                          
                          return (
                          <div key={slot.id || idx} className="h-[27px] min-w-[66px] max-w-[132px] flex items-center justify-center" title={slot.logo || slot.type}>
-                            <img src={imgSrc} alt={slot.logo || "Partner"} className="h-full w-auto object-contain" crossOrigin="anonymous" onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />
+                            <img src={imgSrc} alt={slot.logo || "Partner"} className="h-full w-auto object-contain" style={{ transform: `scale(${(formData.partnerLogoAssetScale ?? 100) / 100})` }} crossOrigin="anonymous" onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />
                          </div>
                          );
                     })}

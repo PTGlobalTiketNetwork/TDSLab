@@ -1,5 +1,6 @@
 import { useState, useRef, ChangeEvent, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Upload, X, Image as ImageIcon, AlertTriangle, Info, Crop, CheckCircle2, Layers } from 'lucide-react';
+import { removeWhiteBackground } from '../../utils/removeWhiteBackground';
+import { Loader2, Upload, X, Image as ImageIcon, AlertTriangle, Info, Crop, CheckCircle2, Layers, Eraser } from 'lucide-react';
 import { CropAssetModal } from './CropAssetModal';
 import { AssetService } from '../../../services/assetService';
 import { supabase } from '../../../utils/supabase/client';
@@ -56,6 +57,7 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
   const [dimensionError, setDimensionError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isCropOpen, setIsCropOpen] = useState(false);
+  const [isRemovingBg, setIsRemovingBg] = useState(false);
 
   // ─── Bulk upload state ──────────────────────────────────────────────────────
   const [bulkFiles, setBulkFiles] = useState<BulkFile[]>([]);
@@ -130,11 +132,11 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
 
   // ─── Single upload logic ─────────────────────────────────────────────────────
   const validateAndSetFile = useCallback((file: File) => {
-    if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
-      alert('Only .png and .jpg files are supported.'); return;
+    if (!['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(file.type)) {
+      alert('Only .png, .jpg and .webp files are supported.'); return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      alert('File size must be less than 2MB.'); return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB.'); return;
     }
     const img = new Image();
     img.onload = () => {
@@ -171,6 +173,21 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (file) validateAndSetFile(file);
+  };
+
+  // Client-side only (no AI token cost) — see removeWhiteBackground.
+  const handleRemoveWhiteBackground = async () => {
+    if (!previewUrl) return;
+    setIsRemovingBg(true);
+    try {
+      const blob = await removeWhiteBackground(previewUrl);
+      const baseName = (selectedFile?.name || assetName || 'asset').replace(/\.[^.]+$/, '');
+      validateAndSetFile(new File([blob], `${baseName}.png`, { type: 'image/png' }));
+    } catch (err) {
+      console.error('Remove background failed', err);
+    } finally {
+      setIsRemovingBg(false);
+    }
   };
 
   const handleUpload = async () => {
@@ -229,9 +246,9 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
       .replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
-  const addBulkFiles = async (files: FileList) => {
+  const addBulkFiles = async (files: FileList | File[]) => {
     const valid = Array.from(files).filter(f =>
-      ['image/jpeg', 'image/png', 'image/jpg'].includes(f.type) && f.size <= 2 * 1024 * 1024
+      ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(f.type) && f.size <= 5 * 1024 * 1024
     );
     const newEntries: BulkFile[] = await Promise.all(valid.map(async (file) => {
       const { dimension, ratio, validationError } = await readImageMeta(file);
@@ -255,6 +272,21 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
     e.preventDefault();
     if (e.dataTransfer.files?.length) addBulkFiles(e.dataTransfer.files);
   };
+
+  // Paste an image straight from the clipboard (e.g. a screenshot), in whichever mode is active.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.items || [])
+        .filter((item) => item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter((f): f is File => !!f);
+      if (!files.length) return;
+      if (mode === 'bulk') addBulkFiles(files);
+      else validateAndSetFile(files[0]);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [mode, validateAndSetFile]);
 
   const removeBulkFile = (id: string) => {
     setBulkFiles(prev => prev.filter(f => f.id !== id));
@@ -295,14 +327,14 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
   const bulkReadyCount = bulkFiles.filter(f => f.status === 'pending' && !f.validationError && f.name.trim()).length;
   const constraints = getAssetConstraints(category);
 
-  const containerClass = `flex flex-col items-center pt-[140px] pb-[140px] px-6 min-h-screen bg-[#f8f9fd] transition-all duration-300 ${
+  const containerClass = `flex flex-col items-center pt-[140px] pb-[40px] px-6 min-h-screen bg-[#f8f9fd] transition-all duration-300 ${
     fullWidth ? 'ml-0' : (isSidebarCollapsed ? 'ml-[80px]' : 'ml-[268px]')
   }`;
 
   // ─── Single success screen ───────────────────────────────────────────────────
   if (uploadState === 'success') {
     return (
-      <div className={`flex flex-col items-center justify-center pt-[140px] pb-[140px] px-6 min-h-screen bg-[#f8f9fd] transition-all duration-300 ${fullWidth ? 'ml-0' : (isSidebarCollapsed ? 'ml-[80px]' : 'ml-[268px]')}`}>
+      <div className={`flex flex-col items-center pt-[140px] pb-[40px] px-6 min-h-screen bg-[#f8f9fd] transition-all duration-300 ${fullWidth ? 'ml-0' : (isSidebarCollapsed ? 'ml-[80px]' : 'ml-[268px]')}`}>
         <div className="w-full max-w-[600px] mb-6 flex items-center text-[12px] text-[#71747d] font-medium">
           <span className="cursor-pointer hover:text-[#007BFF]" onClick={handleCancel}>Logo Asset</span>
           <span className="mx-2">&gt;</span>
@@ -381,14 +413,14 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
 
             <div className="mb-8">
               <label className="block text-[14px] font-bold text-[#303135] mb-1">Upload asset</label>
-              <p className="text-[12px] text-[#71747d] mb-3">You can upload 1 file. Supported file format: .png or .jpg.</p>
+              <p className="text-[12px] text-[#71747d] mb-3">You can upload 1 file. Supported file format: .png, .jpg or .webp. You can also paste an image from your clipboard.</p>
 
               {constraints && (
                 <div className="flex items-start gap-2.5 p-3 rounded-[8px] bg-[#E0EFFF] mb-3">
                   <Info size={16} className="text-[#0064D2] shrink-0 mt-[1px]" />
                   <div className="text-[12px] text-[#003D81] leading-[18px]">
                     <span className="font-bold">Requirements:</span>{' '}
-                    {constraints.recommendation} Allowed ratio: {constraints.ratioLabel}. Max file size: 2 MB.
+                    {constraints.recommendation} Allowed ratio: {constraints.ratioLabel}. Max file size: 5 MB.
                   </div>
                 </div>
               )}
@@ -414,6 +446,17 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
                     {previewUrl && (
                       <button onClick={() => setIsCropOpen(true)} className="flex items-center gap-1 text-[14px] font-bold text-[#007BFF] hover:underline">
                         <Crop size={14} /> Crop Asset
+                      </button>
+                    )}
+                    {previewUrl && (
+                      <button
+                        onClick={handleRemoveWhiteBackground}
+                        disabled={isRemovingBg}
+                        className="flex items-center gap-1 text-[14px] font-bold text-[#007BFF] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Removes a flat white background — no AI, runs locally"
+                      >
+                        {isRemovingBg ? <Loader2 size={14} className="animate-spin" /> : <Eraser size={14} />}
+                        {isRemovingBg ? 'Removing…' : 'Remove Background'}
                       </button>
                     )}
                     <button onClick={() => fileInputRef.current?.click()} className="text-[14px] font-bold text-[#007BFF] hover:underline">
@@ -449,7 +492,7 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
                 </div>
               )}
 
-              <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept=".png,.jpg,.jpeg" className="hidden" />
+              <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept=".png,.jpg,.jpeg,.webp" className="hidden" />
             </div>
           </div>
 
@@ -474,14 +517,14 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
         <>
           <div className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] w-full max-w-[600px] p-[24px]">
             <label className="block text-[14px] font-bold text-[#303135] mb-1">Upload assets</label>
-            <p className="text-[12px] text-[#71747d] mb-3">Select multiple files at once. Supported format: .png or .jpg. Max 2 MB each.</p>
+            <p className="text-[12px] text-[#71747d] mb-3">Select multiple files at once. Supported format: .png, .jpg or .webp. Max 5 MB each.</p>
 
             {constraints && (
               <div className="flex items-start gap-2.5 p-3 rounded-[8px] bg-[#E0EFFF] mb-4">
                 <Info size={16} className="text-[#0064D2] shrink-0 mt-[1px]" />
                 <div className="text-[12px] text-[#003D81] leading-[18px]">
                   <span className="font-bold">Requirements:</span>{' '}
-                  {constraints.recommendation} Allowed ratio: {constraints.ratioLabel}. Max file size: 2 MB.
+                  {constraints.recommendation} Allowed ratio: {constraints.ratioLabel}. Max file size: 5 MB.
                 </div>
               </div>
             )}
@@ -503,7 +546,7 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
               type="file"
               ref={bulkInputRef}
               onChange={(e) => { if (e.target.files?.length) addBulkFiles(e.target.files); }}
-              accept=".png,.jpg,.jpeg"
+              accept=".png,.jpg,.jpeg,.webp"
               multiple
               className="hidden"
             />

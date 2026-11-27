@@ -11,10 +11,10 @@ interface AssetCardProps {
 export const AssetCard = forwardRef<HTMLDivElement, AssetCardProps>(
   ({ asset, isSelected, onClick, ...props }, ref) => {
     return (
-      <div 
+      <div
         ref={ref}
         id={`asset-card-${asset.id}`}
-        onClick={onClick}
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
         className={`bg-white rounded-[12px] p-[16px] h-[160px] flex flex-col justify-between cursor-pointer transition-all hover:shadow-md relative overflow-hidden group ${
           isSelected ? 'border-[2px] border-[#007BFF] p-[15px]' : 'border border-[#d8dce8]'
         }`}

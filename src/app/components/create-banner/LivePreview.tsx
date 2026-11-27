@@ -45,7 +45,7 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
   const measureRef = useRef<HTMLDivElement>(null);
   const [fitZoom, setFitZoom] = useState(1);
   const isPortraitRatio = formData.bannerRatio === 'Portrait (3:4)';
-  const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)';
+  const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)' || formData.bannerRatio === 'Landscape (3:1)';
   const isSquareRatio = formData.bannerRatio === 'Square (1:1)';
   // 2:1, 3:4 and 1:1 all show EN and ID side by side (fit to the panel, "Preview full size" for the real size) — same behavior everywhere, not just in the DLP/compact views.
   const sideBySide = isPortraitRatio || isLandscape21 || isSquareRatio;

@@ -251,7 +251,71 @@ export function buildDlpZipManifest(dlp: NonNullable<BannerFormData['dlp']>): Dl
   return list;
 }
 
+/** TTD Promo Asset ZIP order: the picked banners, each with EN + ID. The Brand Icon is added separately (see renderTtdVerticalIcon). */
+export function buildTtdZipManifest(ttd: NonNullable<BannerFormData['ttd']>): DlpZipBannerSpec[] {
+  const order: { key: 'banner2x1' | 'banner3x1' | 'banner5x1'; label: string }[] = [
+    { key: 'banner2x1', label: '01 Banner 2x1' },
+    { key: 'banner3x1', label: '02 Banner 3x1' },
+    { key: 'banner5x1', label: '03 Banner 5x1 (Desktop)' },
+  ];
+  return order.filter(({ key }) => ttd[key]).map(({ key, label }) => ({ folder: label, formData: ttd[key]! }));
+}
+
+// Bottom → top colours of the Brand Icon circle (same as the editor's `linear-gradient(to top, …)`).
+export const TTD_ICON_GRADIENT: Record<'default' | 'brand-days-otw', [string, string]> = {
+  default: ['#ECF8FF', '#CEEAFF'],
+  'brand-days-otw': ['#FEF8D0', '#FEF2A2'],
+};
+export const TTD_ICON_EDITOR_SIZE = 140; // px — offsets are stored against the editor's 140px circle
+export const TTD_ICON_EXPORT_SIZE = 144; // px at 1x; 2x = 288, 3x = 432
+
+/** Draws the TTD Brand Icon (gradient circle + positioned logo) to a transparent square PNG. */
+export async function renderTtdVerticalIcon(ttd: NonNullable<BannerFormData['ttd']>, scaleFactor: number): Promise<Blob> {
+  const size = Math.round(TTD_ICON_EXPORT_SIZE * scaleFactor);
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  ctx.clip();
+  const [bottom, top] = TTD_ICON_GRADIENT[ttd.verticalIconTheme || 'default'];
+  const grad = ctx.createLinearGradient(0, size, 0, 0);
+  grad.addColorStop(0, bottom);
+  grad.addColorStop(1, top);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  if (ttd.verticalIconUrl) {
+    const res = await fetch(ttd.verticalIconUrl);
+    const img = await createImageBitmap(await res.blob());
+    const k = size / TTD_ICON_EDITOR_SIZE;
+    const box = size * 0.66 * ((ttd.verticalIconScale ?? 100) / 100);
+    const fit = Math.min(box / img.width, box / img.height); // object-contain
+    const w = img.width * fit;
+    const h = img.height * fit;
+    const cx = size / 2 + (ttd.verticalIconOffsetX ?? 0) * k;
+    const cy = size / 2 + (ttd.verticalIconOffsetY ?? 0) * k;
+    ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+  }
+
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Failed to export Brand Icon'))), 'image/png'));
+}
+
 /** Sanitizes a project name for use as a filesystem/zip entry name. */
 export function sanitizeFileName(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'DLP Assets';
+}
+
+/** downloadDlpZip params for a TTD Promo Asset project: the picked banners + the Brand Icon PNG (when picked). */
+export function buildTtdZipParams(ttd: NonNullable<BannerFormData['ttd']>, projectName: string, scaleFactor: number) {
+  return {
+    projectName,
+    scaleFactor,
+    banners: buildTtdZipManifest(ttd),
+    ...(ttd.verticalIconUrl !== undefined
+      ? { extraFiles: async () => [{ path: '04 Brand Icon/Brand Icon.png', blob: await renderTtdVerticalIcon(ttd, scaleFactor) }] }
+      : {}),
+  };
 }

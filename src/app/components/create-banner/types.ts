@@ -6,13 +6,25 @@ export interface BannerFormData {
     header: { mobile: boolean; mobileRatio: '1:1' | '3:4'; desktop: boolean; desktopForm?: BannerFormData; mobileForm?: BannerFormData }; // desktopForm = Desktop 4:1 editor
     entryPoints: Partial<Record<'ep-mobile-2x1' | 'ep-mobile-3x4' | 'ep-desktop', BannerFormData>>;
   };
+  // TTD Promo Asset project (category 'TTD Promo Asset'): pick any combination of these 4 items.
+  // Each banner is a full BannerFormData, bannerCategory internally 'Promo Banner' so it reuses that rendering/editing.
+  ttd?: {
+    banner2x1?: BannerFormData;
+    banner3x1?: BannerFormData;
+    banner5x1?: BannerFormData;
+    verticalIconUrl?: string;
+    verticalIconTheme?: 'default' | 'brand-days-otw'; // circle background behind the Brand Icon
+    verticalIconScale?: number; // % — adjustable via the bounding box / scale slider
+    verticalIconOffsetX?: number; // px
+    verticalIconOffsetY?: number; // px
+  };
   settingsVersion?: number; // see settingsVersion.ts — missing = pre-rework banner
   bannerCategory: 'Promo Banner' | 'Homepage Promo Banner' | 'Hero Landing Page Header' | 'Product Entry Point' | 'DLP Assets' | 'TTD Promo Asset';
   
   // Promo Banner Specific (Step 1)
   verticalCategory: 'General' | 'Accom' | 'Hotel' | 'Transport' | 'Flight' | 'NFT' | 'ToDos' | 'Event' | ''; // 'Transport' only for banners saved before the split
   bannerStyle: 'Style 3 (Flagship/big campaign)' | 'Style 2 (Thematic/tactical campaign)' | 'Style 1 (Regular promo campaign)';
-  bannerRatio: 'Landscape (2:1)' | 'Landscape (16:9)' | 'Square (1:1)' | 'Portrait (3:4)' | 'Mobile (5:2)' | 'Mobile (4:1)' | 'Mobile (2:1 WhatsApp)' | 'Desktop (5:1)' | 'Desktop (4:1)' | 'Desktop (8:1)'; // 4:1 = DLP Header desktop (same layout as 5:1)
+  bannerRatio: 'Landscape (2:1)' | 'Landscape (3:1)' | 'Landscape (16:9)' | 'Square (1:1)' | 'Portrait (3:4)' | 'Mobile (5:2)' | 'Mobile (4:1)' | 'Mobile (2:1 WhatsApp)' | 'Desktop (5:1)' | 'Desktop (4:1)' | 'Desktop (8:1)'; // 4:1 = DLP Header desktop (same layout as 5:1); 3:1 = TTD Promo Asset (2:1 layout cloned onto a wider canvas)
 
   // Product Entry Point Specific
   platform?: 'Mobile' | 'Desktop';
@@ -71,6 +83,9 @@ export interface BannerFormData {
   campaignLogoX?: number;
   campaignLogoY?: number;
   partnerLogoY?: number;
+  partnerLogoAssetScale?: number; // %, default 100 — logos only, inside a pill that keeps its size (Landscape/Portrait/Square)
+  partnerLogoBgEnabled?: boolean; // background behind the partner logo pill (Landscape/Portrait/Square), default true (white)
+  partnerLogoBg?: string; // default #FFFFFF
   showCampaignLogo: boolean;
   partnerLogos: PartnerLogoSlot[];
   showPartnerLogo: boolean;
@@ -113,7 +128,9 @@ export interface BannerFormData {
   desktopCampaignLogoBgEnabled?: boolean; // background behind the campaign logo, default true
   desktopCampaignLogoBg?: string; // default #007BFF (b400)
   desktopContentOffsetX?: number; // 5:1 content X offset in px, kept inside the free area (clamped by CTA / T&C columns)
-  desktopPartnerAssetScale?: number; // %, default 100 — shrinks/grows the partner logos AND their spacing
+  desktopPartnerAssetScale?: number; // %, default 160 — scales the partner logos only; the pill keeps its size
+  desktopPartnerLogoBgEnabled?: boolean; // background behind the partner logo pill, default true (white)
+  desktopPartnerLogoBg?: string; // default #FFFFFF
   desktopTncFontSize?: number; // 5:1 T&C font size in px, default 20
   desktopGradientEnd?: number; // 5:1 overlay Stop: % from the RIGHT edge where it has faded out, default 100
   desktopOverlay2Enabled?: boolean; // 5:1 second overlay layer (same colour)

@@ -12,7 +12,7 @@ import { Switch } from '../ui/switch';
 import { DropdownSelect } from './components/DropdownSelect';
 import { LayoutConfigTool } from './LayoutConfigTool';
 import { BANNER_SPECS } from '../../../config/banner-layouts';
-import { prefixOptions, loadDefaultPositions, CURRENCY_OPTIONS, getUnitLabel, getDefaultPortraitContentOffsetY, getDefaultDesktopContentScale, analyzeUniformFormat, applyUniformFormat } from './utils/layoutUtils';
+import { prefixOptions, loadDefaultPositions, CURRENCY_OPTIONS, getUnitLabel, getDefaultPortraitContentOffsetY, getDefaultLandscapeContentScale, getDefaultDesktopContentScale, analyzeUniformFormat, applyUniformFormat } from './utils/layoutUtils';
 import { projectId } from '../../../../utils/supabase/info';
 import { getAuthToken } from '../../../utils/supabase/client';
 import { toast } from 'sonner';
@@ -34,7 +34,7 @@ interface FormStep2Props {
 }
 
 export function FormStep2({ formData, onChange, activeTab, onTabChange, isTranslating: propIsTranslating, setIsTranslating: propSetIsTranslating, deviceTab = 'mobile', onDeviceTabChange, embedded = false }: FormStep2Props) {
-  const { isWhitelisted } = useAccess();
+  const { isWhitelisted, isAdmin } = useAccess();
   const { isVisible: isMenuVisible } = useMenuVisibility();
 
   // Sticky-bar shadow rule (see useStickyBar): shadow only when stuck AND bottom-most of the stack
@@ -344,13 +344,15 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
   // DLP Mobile Header 1:1 draws the 3:4 content block, so it gets the 3:4 controls (nudge position, unit icon, benefit scale)
   const isDlpSquare = isSquare && formData.dlpRole === 'header-mobile';
   const isPortrait = formData.bannerRatio === 'Portrait (3:4)';
+  // Landscape (3:1) is a TTD Promo Asset ratio that clones the 2:1 layout onto a wider canvas — treated identically everywhere 2:1 is.
+  const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)' || formData.bannerRatio === 'Landscape (3:1)';
   // Portrait 3:4 and Landscape 2:1 share the Discount 1/2 cards, per-discount nudge, benefit scale and content position
   // DLP Header desktop: the 5:1 layout on a 4:1 canvas, no CTA
   const isDesktop41 = formData.bannerRatio === 'Desktop (4:1)';
   const desktopRatioLabel = isDesktop41 ? '4:1' : '5:1';
   const isDesktop51 = formData.bannerCategory === 'Promo Banner' && (formData.bannerRatio === 'Desktop (5:1)' || formData.bannerRatio === 'Desktop (4:1)');
   const hasDesktopVersion = formData.bannerRatio === 'Landscape (2:1)' && !!formData.provideDesktopBanner;
-  const usesBenefitCards = isPortrait || isDlpSquare || formData.bannerRatio === 'Landscape (2:1)' || isDesktop51;
+  const usesBenefitCards = isPortrait || isDlpSquare || isLandscape21 || isDesktop51;
   // Scale / position sliders exist for 3:4 and 2:1 only (Desktop 5:1 has its own in the Desktop 5:1 card)
   const usesScaleSliders = usesBenefitCards && !isDesktop51 && !isDlpSquare; // DLP 1:1 has its own square scale/position sliders
   // Desktop 5:1 content scale default: 140% with one discount, 125% with two
@@ -478,11 +480,9 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
     const isSecond = which === 'second';
     const selected = (isSecond ? currentContent.secondDiscountType : currentContent.discountType) || 'Non-IDR';
     const customValue = (isSecond ? currentContent.secondCustomCurrency : currentContent.customCurrency) || '';
-    // "None" hides the amount and unit inputs, so clear both — renderers then hide the number and unit entirely
+    // "None" only hides the currency; the amount and unit stay as they are.
     const setType = (v: ContentTranslation['discountType']) =>
-      updateContent(isSecond
-        ? { secondDiscountType: v, ...(v === 'Non-IDR' ? { secondDiscountAmount: '', secondDiscountUnit: '' } : {}) }
-        : { discountType: v, ...(v === 'Non-IDR' ? { discountAmount: '', unit: '' } : {}) });
+      updateContent(isSecond ? { secondDiscountType: v } : { discountType: v });
     return (
       <div className="flex flex-col gap-[8px]">
         <div className="flex flex-wrap items-center gap-x-[24px] gap-y-[8px]">
@@ -622,38 +622,8 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                </div>
   );
 
-  // Desktop 5:1 settings card (stand alone: shown inline; bundled with 2:1: shown in the Desktop tab)
-  // Desktop T&C font size + position reset. On the DLP 4:1 it stands alone (like Additional Label), elsewhere it sits in the card.
-  const desktopTncControl = (
-                  <div className="flex flex-col gap-[8px]">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[14px] font-bold text-[#303135]">T&C Font Size</label>
-                      <div className="flex items-center gap-[8px]">
-                        <button type="button" onClick={() => onChange({ desktopTncFontSize: Math.max(10, (formData.desktopTncFontSize ?? 20) - 1) })} className="w-[28px] h-[28px] rounded-md bg-[#e6f2ff] text-[#007BFF] font-bold hover:bg-[#d4e8ff]" title="Smaller">−</button>
-                        <input
-                          type="number"
-                          min={10}
-                          max={80}
-                          value={formData.desktopTncFontSize ?? 20}
-                          onChange={(e) => onChange({ desktopTncFontSize: Math.min(80, Math.max(10, Number(e.target.value) || 20)) })}
-                          className="w-[56px] h-[28px] text-center rounded-md border border-[#d8dce8] text-[14px] font-semibold text-[#303135]"
-                        />
-                        <button type="button" onClick={() => onChange({ desktopTncFontSize: Math.min(80, (formData.desktopTncFontSize ?? 20) + 1) })} className="w-[28px] h-[28px] rounded-md bg-[#e6f2ff] text-[#007BFF] font-bold hover:bg-[#d4e8ff]" title="Larger">+</button>
-                        <button type="button" onClick={() => onChange({ desktopTncFontSize: 20 })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset to 20px">
-                          <RotateCw size={12} />
-                        </button>
-                      </div>
-                    </div>
-                    <input type="range" min={10} max={80} step={1} value={formData.desktopTncFontSize ?? 20} onChange={(e) => onChange({ desktopTncFontSize: Number(e.target.value) })} className="w-full accent-[#007BFF]" />
-                    <div className="flex items-center justify-between">
-                      <span className="text-[12px] text-[#71747d]">Drag the T&C in the preview to move it; drag its left corners to widen the area it wraps in.</span>
-                      <button type="button" onClick={() => onChange({ desktopTncOffset: { x: 0, y: 0 }, desktopTncWidth: 720 })} className="text-[12px] font-semibold text-[#007BFF] hover:underline">Reset position & width</button>
-                    </div>
-                  </div>
-  );
-
-  // DLP 4:1: T&C font size lives in the T&C rich text editor (Terms and Condition section), so no separate block
-  const desktopSettingsCard = isDesktop41 ? null : (
+  // Desktop layout card: only the bundled 2:1 + 5:1 has layout sliders. CTA and T&C get their own cards.
+  const desktopSettingsCard = !hasDesktopVersion ? null : (
                 <div className="flex flex-col gap-[24px] rounded-[12px] border border-[#e9ebef] p-[16px]">
                   <div className="flex flex-col gap-[4px]">
                     <span className="text-[14px] font-bold text-[#303135]">Desktop {desktopRatioLabel}</span>
@@ -696,9 +666,12 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
 
                   </>)}
 
-                  {!isDesktop41 && (<>
-                  <div className="border-t border-[#e9ebef]" />
-                  <div className="flex flex-col gap-[12px]">
+
+                </div>
+  );
+
+  const desktopCtaCard = isDesktop41 ? null : (
+                  <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px]">
                     <div className="flex items-center justify-between">
                       <label className="text-[14px] font-bold text-[#303135]">CTA Button</label>
                       <Switch
@@ -734,12 +707,49 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                       </>
                     )}
                   </div>
-                  </>)}
+  );
 
-                  <div className="border-t border-[#e9ebef]" />
-                  {desktopTncControl}
+  // T&C card. On desktop banners the T&C font size + position reset live inside it.
+  const termsCard = (desktopTnc: boolean) => (
+              <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px]">
+                  <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-[8px]">
+                          <label className="text-[14px] font-bold text-[#303135]">Terms and Condition (optional)</label>
+                          {currentContent.termsAndCondition && (
+                               <ColorPicker value={currentContent.termsColor} onChange={(v) => updateContent({ termsColor: v })} defaultValue="#ffffff" />
+                          )}
+                      </div>
+                      <Switch 
+                          checked={currentContent.termsAndCondition}
+                          onCheckedChange={(checked) => updateContent({ termsAndCondition: checked })}
+                          className="data-[state=checked]:bg-[#007BFF]"
+                      />
+                  </div>
 
-                </div>
+                  {currentContent.termsAndCondition && (
+                      <div className="flex flex-col mt-[8px] animate-in fade-in slide-in-from-top-2 duration-200">
+                          <RichTextEditor
+                              value={currentContent.termsText || ''}
+                              onChange={(val) => updateContent({ termsText: val })}
+                              onGlobalColorChange={(v) => updateContent({ termsColor: v })}
+                              placeholder={activeTab === 'en' ? "*T&C apply" : "*S&K berlaku"}
+                              {...(desktopTnc ? {
+                                  fontSize: formData.desktopTncFontSize ?? 20,
+                                  defaultFontSize: 20,
+                                  onFontSizeChange: (v: number) => onChange({ desktopTncFontSize: v }),
+                                  minFontSize: 10,
+                                  maxFontSize: 80,
+                              } : {})}
+                          />
+                          {desktopTnc && (
+                              <div className="flex items-center justify-between gap-[8px] mt-[8px]">
+                                  <span className="text-[12px] text-[#71747d]">Drag the T&C in the preview to move it; drag its left corners to widen the area it wraps in.</span>
+                                  <button type="button" onClick={() => onChange({ desktopTncOffset: { x: 0, y: 0 }, desktopTncWidth: 720 })} className="shrink-0 text-[12px] font-semibold text-[#007BFF] hover:underline">Reset position & width</button>
+                              </div>
+                          )}
+                      </div>
+                  )}
+              </div>
   );
 
   // Headline Type (global, not per language): first row of the headline box
@@ -772,7 +782,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
 
         <div className="flex items-center gap-[8px]">
         {/* Auto Translate Button — whitelisted users only, and can be hidden in Menu Management */}
-        {isWhitelisted && isMenuVisible('Auto Translate') && (
+        {isWhitelisted && isMenuVisible('Auto Translate', isAdmin) && (
           <button
               type="button"
               onClick={handleAutoTranslate}
@@ -811,6 +821,8 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
         {deviceBar}
         {langTabs}
         {desktopSettingsCard}
+        {desktopCtaCard}
+        {termsCard(true)}
       </div>
     );
   }
@@ -827,7 +839,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
       */}
       
       {/* Content Layout box — groups the scale / position sliders and the vertical-centre toggle */}
-      {(isDesktop51 || isPortrait || formData.bannerRatio === 'Landscape (2:1)' || usesScaleSliders || (isSquare && formData.dlpRole === 'header-mobile')) && (
+      {(isDesktop51 || isPortrait || isLandscape21 || usesScaleSliders || (isSquare && formData.dlpRole === 'header-mobile')) && (
       <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px]">
       <span className="text-[14px] font-bold text-[#303135]">Content Layout</span>
       {/* Desktop 5:1 (stand alone): scale + position at the top, same as 2:1 and 3:4 */}
@@ -912,18 +924,18 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
       )}
 
       {/* Landscape 2:1 overall content scale */}
-      {formData.bannerRatio === 'Landscape (2:1)' && (
+      {isLandscape21 && (
         <div className="flex flex-col gap-[8px]">
           <div className="flex items-center justify-between">
             <label className="text-[14px] font-bold text-[#303135]">Content Scale</label>
             <div className="flex items-center gap-[8px]">
-              <span className="text-[13px] font-semibold text-[#007BFF]">{formData.landscapeContentScale ?? 100}%</span>
-              <button type="button" onClick={() => onChange({ landscapeContentScale: 100 })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset to 100%">
+              <span className="text-[13px] font-semibold text-[#007BFF]">{formData.landscapeContentScale ?? getDefaultLandscapeContentScale(formData)}%</span>
+              <button type="button" onClick={() => onChange({ landscapeContentScale: getDefaultLandscapeContentScale(formData) })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset to default">
                 <RotateCw size={12} />
               </button>
             </div>
           </div>
-          <input type="range" min={60} max={200} step={5} value={formData.landscapeContentScale ?? 100} onChange={(e) => onChange({ landscapeContentScale: Number(e.target.value) })} className="w-full accent-[#007BFF]" />
+          <input type="range" min={60} max={200} step={5} value={formData.landscapeContentScale ?? getDefaultLandscapeContentScale(formData)} onChange={(e) => onChange({ landscapeContentScale: Number(e.target.value) })} className="w-full accent-[#007BFF]" />
           <div className="flex justify-between text-[11px] text-[#71747d]">
             <span>60%</span>
             <span>100%</span>
@@ -1225,7 +1237,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                       </label>
                   </div>
                   {renderCurrencyPicker('first')}
-                  {currentContent.discountType !== 'Non-IDR' && (
+                  {(
                   <div className="relative">
                       <StyledInput
                           type="text"
@@ -1247,8 +1259,8 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                   )}
               </div>
 
-              {/* Unit - hidden when currency is None (amount + unit are both off) */}
-              {currentContent.discountType !== 'Non-IDR' && (
+              {/* Unit */}
+              {(
               <>
               <div className="border-t border-[#e9ebef]" />
               <div className="flex flex-col gap-[8px]">
@@ -1373,7 +1385,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                               </div>
                           </div>
                           {renderCurrencyPicker('second')}
-                          {currentContent.secondDiscountType !== 'Non-IDR' && (
+                          {(
                           <div className="relative">
                               <StyledInput
                                   type="text"
@@ -1393,8 +1405,8 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                           )}
                       </div>
 
-                      {/* Unit 2 - hidden when currency is None */}
-                      {currentContent.secondDiscountType !== 'Non-IDR' && (
+                      {/* Unit 2 */}
+                      {(
                       <>
                       <div className="border-t border-[#e9ebef]" />
                       <div className="flex flex-col gap-[8px]">
@@ -1620,10 +1632,10 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
               </div>
               )}
 
-              {isDesktop51 && desktopSettingsCard}
+              {isDesktop51 && desktopCtaCard}
 
               {/* CTA Button (optional) for 3:4 and 2:1 — form-level so it applies to both EN and ID */}
-              {(isPortrait || formData.bannerRatio === 'Landscape (2:1)') && formData.dlpRole !== 'header-mobile' && ( /* DLP Mobile Header (3:4 / 1:1) has no CTA */
+              {(isPortrait || isLandscape21) && formData.dlpRole !== 'header-mobile' && ( /* DLP Mobile Header (3:4 / 1:1) has no CTA */
                 <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px]">
                   <div className="flex items-center justify-between">
                     <label className="text-[14px] font-bold text-[#303135]">CTA Button (optional)</label>
@@ -1652,7 +1664,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                       </div>
 
                       {/* Button size — 2:1 mobile only, scale down */}
-                      {formData.bannerRatio === 'Landscape (2:1)' && (
+                      {isLandscape21 && (
                         <div className="flex flex-col gap-[8px]">
                           <div className="flex items-center justify-between">
                             <label className="text-[14px] font-bold text-[#303135]">Button Size</label>
@@ -1687,10 +1699,10 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                             <div className="flex items-center justify-between">
                               <span className="text-[14px] font-bold text-[#303135]">Width</span>
                               <div className="flex items-center gap-[8px]">
-                                <span className="text-[13px] font-semibold text-[#007BFF]">{formData.portraitCtaFixedWidth ?? (formData.bannerRatio === 'Landscape (2:1)' ? 360 : 480)}px</span>
+                                <span className="text-[13px] font-semibold text-[#007BFF]">{formData.portraitCtaFixedWidth ?? (isLandscape21 ? 360 : 480)}px</span>
                                 <button
                                   type="button"
-                                  onClick={() => onChange({ portraitCtaFixedWidth: formData.bannerRatio === 'Landscape (2:1)' ? 360 : 480 })}
+                                  onClick={() => onChange({ portraitCtaFixedWidth: isLandscape21 ? 360 : 480 })}
                                   className="text-[#71747d] hover:text-[#303135] transition-colors"
                                   title="Reset to default"
                                 >
@@ -1703,7 +1715,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                               min={200}
                               max={480}
                               step={10}
-                              value={formData.portraitCtaFixedWidth ?? (formData.bannerRatio === 'Landscape (2:1)' ? 360 : 480)}
+                              value={formData.portraitCtaFixedWidth ?? (isLandscape21 ? 360 : 480)}
                               onChange={(e) => onChange({ portraitCtaFixedWidth: Number(e.target.value) })}
                               className="w-full accent-[#007BFF]"
                             />
@@ -1726,46 +1738,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                 </div>
               )}
 
-              {/* Terms and Condition */}
-              <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px]">
-                  <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-[8px]">
-                          <label className="text-[14px] font-bold text-[#303135]">Terms and Condition (optional)</label>
-                          {currentContent.termsAndCondition && (
-                               <ColorPicker value={currentContent.termsColor} onChange={(v) => updateContent({ termsColor: v })} defaultValue="#ffffff" />
-                          )}
-                      </div>
-                      <Switch 
-                          checked={currentContent.termsAndCondition}
-                          onCheckedChange={(checked) => updateContent({ termsAndCondition: checked })}
-                          className="data-[state=checked]:bg-[#007BFF]"
-                      />
-                  </div>
-
-                  {currentContent.termsAndCondition && (
-                      <div className="flex flex-col mt-[8px] animate-in fade-in slide-in-from-top-2 duration-200">
-                          <RichTextEditor
-                              value={currentContent.termsText || ''}
-                              onChange={(val) => updateContent({ termsText: val })}
-                              onGlobalColorChange={(v) => updateContent({ termsColor: v })}
-                              placeholder={activeTab === 'en' ? "*T&C apply" : "*S&K berlaku"}
-                              {...(isDesktop41 ? {
-                                  fontSize: formData.desktopTncFontSize ?? 20,
-                                  defaultFontSize: 20,
-                                  onFontSizeChange: (v: number) => onChange({ desktopTncFontSize: v }),
-                                  minFontSize: 10,
-                                  maxFontSize: 80,
-                              } : {})}
-                          />
-                          {isDesktop41 && (
-                              <div className="flex items-center justify-between gap-[8px] mt-[8px]">
-                                  <span className="text-[12px] text-[#71747d]">Drag the T&C in the preview to move it; drag its left corners to widen the area it wraps in.</span>
-                                  <button type="button" onClick={() => onChange({ desktopTncOffset: { x: 0, y: 0 }, desktopTncWidth: 720 })} className="shrink-0 text-[12px] font-semibold text-[#007BFF] hover:underline">Reset position & width</button>
-                              </div>
-                          )}
-                      </div>
-                  )}
-              </div>
+              {termsCard(isDesktop41 || isDesktop51)}
 
           </div>
           {/* END NEW FIELDS */}

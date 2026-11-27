@@ -78,8 +78,8 @@ export function SingleAssetUploadDialog({ open, onOpenChange, category: rawCateg
   }, [assetName, open, checkName]);
 
   const validateAndSetFile = useCallback((file: File) => {
-    if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) { alert('Only .png and .jpg files are supported.'); return; }
-    if (file.size > 2 * 1024 * 1024) { alert('File size must be less than 2MB.'); return; }
+    if (!['image/jpeg', 'image/png', 'image/jpg', 'image/webp'].includes(file.type)) { alert('Only .png, .jpg and .webp files are supported.'); return; }
+    if (file.size > 5 * 1024 * 1024) { alert('File size must be less than 5MB.'); return; }
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
@@ -114,6 +114,19 @@ export function SingleAssetUploadDialog({ open, onOpenChange, category: rawCateg
     const file = e.dataTransfer.files?.[0];
     if (file) validateAndSetFile(file);
   };
+
+  // Paste an image straight from the clipboard (e.g. a screenshot) while the dialog is open.
+  useEffect(() => {
+    if (!open) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const file = Array.from(e.clipboardData?.items || [])
+        .find((item) => item.type.startsWith('image/'))
+        ?.getAsFile();
+      if (file) validateAndSetFile(file);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [open, validateAndSetFile]);
 
   const handleUpload = async () => {
     const name = assetName.trim();
@@ -176,14 +189,14 @@ export function SingleAssetUploadDialog({ open, onOpenChange, category: rawCateg
 
         <div className="mt-[16px]" style={FONT}>
           <label className="block text-[14px] font-bold text-[#303135] mb-1">Upload asset</label>
-          <p className="text-[12px] text-[#71747d] mb-3">You can upload 1 file. Supported file format: .png or .jpg.</p>
+          <p className="text-[12px] text-[#71747d] mb-3">You can upload 1 file. Supported file format: .png, .jpg or .webp. You can also paste an image from your clipboard.</p>
 
           {constraints && (
             <div className="flex items-start gap-2.5 p-3 rounded-[8px] bg-[#E0EFFF] mb-3">
               <Info size={16} className="text-[#0064D2] shrink-0 mt-[1px]" />
               <div className="text-[12px] text-[#003D81] leading-[18px]">
                 <span className="font-bold">Requirements:</span>{' '}
-                {constraints.recommendation} Allowed ratio: {constraints.ratioLabel}. Max file size: 2 MB.
+                {constraints.recommendation} Allowed ratio: {constraints.ratioLabel}. Max file size: 5 MB.
               </div>
             </div>
           )}
@@ -240,7 +253,7 @@ export function SingleAssetUploadDialog({ open, onOpenChange, category: rawCateg
             </div>
           )}
 
-          <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept=".png,.jpg,.jpeg" className="hidden" />
+          <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept=".png,.jpg,.jpeg,.webp" className="hidden" />
         </div>
 
         <div className="mt-[24px] flex justify-end gap-3" style={FONT}>

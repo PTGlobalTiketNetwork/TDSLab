@@ -555,12 +555,18 @@ export function CreateBanner({
   const handleGlobalCancel = () => {
       // If Banner Name or Vertical is missing, users can't save anyway, so just exit without confirmation
       const isEssentialInfoFilled = formData.bannerName?.trim() && formData.verticalCategory;
-      
+
       if (hasChanges && isEssentialInfoFilled) {
           setIsExitModalOpen(true);
       } else {
           onBack();
       }
+  };
+
+  // Stepper's back chevron: previous step while mid-flow, exit (with unsaved-changes confirm) only from the first step.
+  const stepperBack = () => {
+      if (currentStep > 1) { handlePreviousStep(); return; }
+      handleGlobalCancel();
   };
 
   const handleStepClick = (stepId: number) => {
@@ -1041,6 +1047,7 @@ export function CreateBanner({
             currentStep={currentStep}
             maxStepReached={maxStepReached}
             onStepClick={handleStepClick}
+            onBack={stepperBack}
           />
         </div>
 
@@ -1057,6 +1064,7 @@ export function CreateBanner({
               maxStepReached={maxStepReached}
               onStepClick={handleStepClick}
               size="compact"
+              onBack={stepperBack}
             />
           </div>
         </div>

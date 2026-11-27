@@ -141,9 +141,10 @@ export const AssetListPage = () => {
         onMove={handleMove}
         isSidebarCollapsed={false}
         isLoading={isLoading}
+        onClearSelection={() => setSelectedAssetId(null)}
       />
 
-      <AssetInspector 
+      <AssetInspector
          selectedAsset={selectedAsset}
          onEdit={handleEdit}
          onDelete={handleDelete}
