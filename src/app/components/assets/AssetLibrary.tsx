@@ -14,7 +14,8 @@ interface AssetLibraryProps {
   category: string;
   searchQuery: string;
   selectedAssetId: string | null;
-  onSelectAsset: (id: string) => void;
+  selectedAssetIds?: Set<string>;
+  onSelectAsset: (id: string, shiftKey: boolean) => void;
   onEdit?: (asset: Asset) => void;
   onDownload?: (asset: Asset) => void;
   onDelete?: (asset: Asset) => void;
@@ -30,6 +31,7 @@ export function AssetLibrary({
   category,
   searchQuery,
   selectedAssetId,
+  selectedAssetIds,
   onSelectAsset,
   onEdit,
   onDownload,
@@ -102,7 +104,7 @@ export function AssetLibrary({
         if (index !== -1) {
             const page = Math.floor(index / itemsPerPage) + 1;
             setCurrentPage(page);
-            onSelectAsset(highlightId);
+            onSelectAsset(highlightId, false);
             
             // Scroll logic
             setTimeout(() => {
@@ -122,15 +124,22 @@ export function AssetLibrary({
   }, [highlightId, filteredAssets]);
 
   const totalItems = filteredAssets.length;
-  
+
   const currentAssets = filteredAssets.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
+  const isAssetSelected = (id: string) => {
+    if (selectedAssetIds && selectedAssetIds.size > 0) {
+      return selectedAssetIds.has(id);
+    }
+    return selectedAssetId === id;
+  };
+
   return (
     <div
-      className={listPageClass(!!selectedAssetId)}
+      className={listPageClass(!!selectedAssetId || !!(selectedAssetIds && selectedAssetIds.size > 0))}
       onClick={(e) => {
         // Click on empty background (not a card, button, input or menu) unselects
         if ((e.target as HTMLElement).closest('button, input, a, select, textarea, [role="menu"], [role="menuitem"], [role="dialog"]')) return;
@@ -189,8 +198,8 @@ export function AssetLibrary({
             >
               <AssetCard
                 asset={asset}
-                isSelected={selectedAssetId === asset.id}
-                onClick={() => onSelectAsset(asset.id)}
+                isSelected={isAssetSelected(asset.id)}
+                onClick={(e) => onSelectAsset(asset.id, e.shiftKey)}
               />
             </AssetContextMenu>
           ))}
@@ -209,8 +218,8 @@ export function AssetLibrary({
               <AssetRow
                 asset={asset}
                 index={(currentPage - 1) * itemsPerPage + index}
-                isSelected={selectedAssetId === asset.id}
-                onClick={() => onSelectAsset(asset.id)}
+                isSelected={isAssetSelected(asset.id)}
+                onClick={(e) => onSelectAsset(asset.id, e.shiftKey)}
               />
             </AssetContextMenu>
           ))}

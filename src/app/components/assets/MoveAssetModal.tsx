@@ -10,17 +10,23 @@ import {
 interface MoveAssetModalProps {
   isOpen: boolean;
   asset: Asset | null;
+  assets?: Asset[];
   onConfirm: (asset: Asset, targetCategory: string) => void;
+  onConfirmBulk?: (assets: Asset[], targetCategory: string) => void;
   onCancel: () => void;
   isLoading?: boolean;
 }
 
 type Step = 'select' | 'confirm';
 
-export function MoveAssetModal({ isOpen, asset, onConfirm, onCancel, isLoading }: MoveAssetModalProps) {
+export function MoveAssetModal({ isOpen, asset, assets, onConfirm, onConfirmBulk, onCancel, isLoading }: MoveAssetModalProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('select');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const isBulk = !!assets && assets.length > 0;
+  const bulkAssets = assets || [];
+  const count = isBulk ? bulkAssets.length : 1;
 
   // Reset state when modal opens/closes
   const handleCancel = () => {
@@ -31,25 +37,42 @@ export function MoveAssetModal({ isOpen, asset, onConfirm, onCancel, isLoading }
   };
 
   const availableCategories = useMemo(() => {
+    if (isBulk) {
+      const currentCategories = new Set(bulkAssets.map((a) => a.category));
+      return ALL_ASSET_CATEGORIES.filter((c) => !(currentCategories.size === 1 && currentCategories.has(c)));
+    }
     if (!asset) return [];
     return ALL_ASSET_CATEGORIES.filter((c) => c !== asset.category);
-  }, [asset]);
+  }, [asset, isBulk, bulkAssets]);
 
+  // Bulk mode: a category is only valid if every selected asset meets its constraints.
   const validationError = useMemo(() => {
-    if (!asset || !selectedCategory) return null;
+    if (!selectedCategory) return null;
+    if (isBulk) {
+      for (const a of bulkAssets) {
+        const err = validateAssetForCategory(a.dimension, selectedCategory);
+        if (err) return `"${a.name}": ${err}`;
+      }
+      return null;
+    }
+    if (!asset) return null;
     return validateAssetForCategory(asset.dimension, selectedCategory);
-  }, [asset, selectedCategory]);
+  }, [asset, selectedCategory, isBulk, bulkAssets]);
 
   const targetConstraints = useMemo(() => {
     if (!selectedCategory) return null;
     return getAssetConstraints(selectedCategory);
   }, [selectedCategory]);
 
-  if (!isOpen || !asset) return null;
+  if (!isOpen || (!asset && !isBulk)) return null;
 
   const handleConfirm = () => {
     if (!selectedCategory || validationError) return;
-    onConfirm(asset, selectedCategory);
+    if (isBulk) {
+      onConfirmBulk?.(bulkAssets, selectedCategory);
+    } else if (asset) {
+      onConfirm(asset, selectedCategory);
+    }
     setSelectedCategory(null);
     setStep('select');
   };
@@ -89,30 +112,41 @@ export function MoveAssetModal({ isOpen, asset, onConfirm, onCancel, isLoading }
           {/* Content */}
           <div className="p-[24px]">
             <p className="text-[14px] text-[#4D4F56] mb-4">
-              Are you sure you want to move this asset?
+              {isBulk ? `Are you sure you want to move these ${count} assets?` : 'Are you sure you want to move this asset?'}
             </p>
 
             {/* Asset Preview */}
-            <div className="bg-[#f8f9fd] p-[16px] rounded-[8px] flex items-center gap-4 mb-4">
-              <div className="checkerboard w-[60px] h-[60px] rounded border border-[#d8dce8] flex items-center justify-center p-1 shrink-0">
-                <img src={asset.imageUrl} alt={asset.name} className="max-w-full max-h-full object-contain" />
+            {isBulk ? (
+              <div className="bg-[#f8f9fd] p-[16px] rounded-[8px] max-h-[160px] overflow-y-auto space-y-2 mb-4">
+                {bulkAssets.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between gap-2">
+                    <p className="text-[14px] font-bold text-[#303135] truncate flex-1">{a.name}</p>
+                    <p className="text-[12px] text-[#71747d] shrink-0">{a.category}</p>
+                  </div>
+                ))}
               </div>
-              <div className="min-w-0">
-                <p className="text-[14px] font-bold text-[#303135] truncate">
-                  {asset.name}
-                </p>
-                <p className="text-[12px] text-[#71747d] mt-1">
-                  {asset.dimension} &bull; {asset.ratio}
-                </p>
+            ) : asset ? (
+              <div className="bg-[#f8f9fd] p-[16px] rounded-[8px] flex items-center gap-4 mb-4">
+                <div className="checkerboard w-[60px] h-[60px] rounded border border-[#d8dce8] flex items-center justify-center p-1 shrink-0">
+                  <img src={asset.imageUrl} alt={asset.name} className="max-w-full max-h-full object-contain" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[14px] font-bold text-[#303135] truncate">
+                    {asset.name}
+                  </p>
+                  <p className="text-[12px] text-[#71747d] mt-1">
+                    {asset.dimension} &bull; {asset.ratio}
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : null}
 
             {/* Move Path */}
             <div className="flex items-center gap-3 p-[16px] rounded-[8px] border border-[#d8dce8] bg-white">
               <div className="flex flex-col items-center">
                 <span className="text-[12px] font-medium text-[#71747d] mb-1">From</span>
                 <span className="inline-flex items-center px-3 py-1.5 bg-[#f4f7fe] rounded-[6px] text-[13px] font-bold text-[#303135]">
-                  {asset.category}
+                  {isBulk ? (new Set(bulkAssets.map((a) => a.category)).size === 1 ? bulkAssets[0].category : 'Mixed')  : asset?.category}
                 </span>
               </div>
               <div className="flex-1 flex items-center justify-center">
@@ -144,7 +178,7 @@ export function MoveAssetModal({ isOpen, asset, onConfirm, onCancel, isLoading }
               className="h-[40px] px-[24px] bg-[#007BFF] text-white text-[14px] font-bold rounded-[8px] hover:bg-[#0064D2] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isLoading && <Loader2 className="animate-spin w-4 h-4" />}
-              Move Asset
+              {isBulk ? `Move ${count} Assets` : 'Move Asset'}
             </button>
           </div>
         </div>
@@ -163,7 +197,7 @@ export function MoveAssetModal({ isOpen, asset, onConfirm, onCancel, isLoading }
               <FolderInput size={22} strokeWidth={2} />
             </div>
             <h3 className="text-[20px] font-bold text-[#303135]">
-              Move Asset
+              {isBulk ? `Move ${count} Assets` : 'Move Asset'}
             </h3>
           </div>
           <button
@@ -177,19 +211,30 @@ export function MoveAssetModal({ isOpen, asset, onConfirm, onCancel, isLoading }
         {/* Content */}
         <div className="p-[24px]">
           {/* Asset Preview */}
-          <div className="bg-[#f8f9fd] p-[16px] rounded-[8px] flex items-center gap-4 mb-5">
-            <div className="checkerboard w-[60px] h-[60px] rounded border border-[#d8dce8] flex items-center justify-center p-1 shrink-0">
-              <img src={asset.imageUrl} alt={asset.name} className="max-w-full max-h-full object-contain" />
+          {isBulk ? (
+            <div className="bg-[#f8f9fd] p-[16px] rounded-[8px] max-h-[160px] overflow-y-auto space-y-2 mb-5">
+              {bulkAssets.map((a) => (
+                <div key={a.id} className="flex items-center justify-between gap-2">
+                  <p className="text-[14px] font-bold text-[#303135] truncate flex-1">{a.name}</p>
+                  <p className="text-[12px] text-[#71747d] shrink-0">{a.category} &bull; {a.dimension}</p>
+                </div>
+              ))}
             </div>
-            <div className="min-w-0">
-              <p className="text-[14px] font-bold text-[#303135] truncate">
-                {asset.name}
-              </p>
-              <p className="text-[12px] text-[#71747d] mt-1">
-                Currently in <span className="font-bold text-[#303135]">{asset.category}</span> &bull; {asset.dimension} &bull; {asset.ratio}
-              </p>
+          ) : asset ? (
+            <div className="bg-[#f8f9fd] p-[16px] rounded-[8px] flex items-center gap-4 mb-5">
+              <div className="checkerboard w-[60px] h-[60px] rounded border border-[#d8dce8] flex items-center justify-center p-1 shrink-0">
+                <img src={asset.imageUrl} alt={asset.name} className="max-w-full max-h-full object-contain" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[14px] font-bold text-[#303135] truncate">
+                  {asset.name}
+                </p>
+                <p className="text-[12px] text-[#71747d] mt-1">
+                  Currently in <span className="font-bold text-[#303135]">{asset.category}</span> &bull; {asset.dimension} &bull; {asset.ratio}
+                </p>
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {/* Target Category Picker */}
           <label className="block text-[14px] font-medium text-[#71747d] mb-2">
@@ -210,7 +255,13 @@ export function MoveAssetModal({ isOpen, asset, onConfirm, onCancel, isLoading }
             {dropdownOpen && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#d8dce8] rounded-[8px] shadow-lg z-10 py-1 max-h-[240px] overflow-y-auto">
                 {availableCategories.map((cat) => {
-                  const catValidation = validateAssetForCategory(asset.dimension, cat);
+                  let catValidation: string | null = null;
+                  if (isBulk) {
+                    const failing = bulkAssets.find((a) => validateAssetForCategory(a.dimension, cat));
+                    if (failing) catValidation = `"${failing.name}": ${validateAssetForCategory(failing.dimension, cat)}`;
+                  } else if (asset) {
+                    catValidation = validateAssetForCategory(asset.dimension, cat);
+                  }
                   const catConstraints = getAssetConstraints(cat);
                   const isDisabled = !!catValidation;
                   return (
@@ -258,7 +309,7 @@ export function MoveAssetModal({ isOpen, asset, onConfirm, onCancel, isLoading }
             <div className="flex items-start gap-2.5 p-3 rounded-[8px] bg-[#E0EFFF] mb-3">
               <Check size={16} className="text-[#0064D2] shrink-0 mt-[1px]" />
               <div className="text-[12px] text-[#003D81] leading-[18px]">
-                <span className="font-bold">Asset meets requirements</span> for {selectedCategory}: {targetConstraints.recommendation}
+                <span className="font-bold">{isBulk ? 'Assets meet requirements' : 'Asset meets requirements'}</span> for {selectedCategory}: {targetConstraints.recommendation}
               </div>
             </div>
           )}
