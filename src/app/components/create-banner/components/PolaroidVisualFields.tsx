@@ -275,6 +275,7 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
   };
 
   const isGradient = formData.polaroidBgMode === 'gradient';
+  const vouchersOn = !!(formData.polaroidVouchers?.top?.enabled || formData.polaroidVouchers?.bottom?.enabled);
   return (
     <>
       <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] w-full">
@@ -382,7 +383,19 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
 
       <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] w-full">
         <div className="flex items-center justify-between">
-          <label className="text-[14px] font-bold text-[#303135]">Voucher</label>
+          <div className="flex flex-col">
+            <label className="text-[14px] font-bold text-[#303135]">Voucher</label>
+            <span className="text-[12px] text-[#71747d]">Ticket shapes peeking in from the top and bottom edge.</span>
+          </div>
+          <Switch
+            checked={vouchersOn}
+            onCheckedChange={(checked) => onChange({ polaroidVouchers: { ...formData.polaroidVouchers, top: { ...formData.polaroidVouchers?.top, enabled: checked }, bottom: { ...formData.polaroidVouchers?.bottom, enabled: checked } } })}
+            className="data-[state=checked]:bg-[#007BFF]"
+          />
+        </div>
+        {vouchersOn && (
+          <>
+        <div className="flex justify-end -mt-[4px]">
           <button
             type="button"
             onClick={() => onChange({ polaroidVouchers: Object.fromEntries((['top', 'bottom'] as const).map((k) => {
@@ -395,7 +408,6 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
             <RotateCw size={12} /> Reset to default
           </button>
         </div>
-        <p className="text-[12px] text-[#71747d] -mt-[8px]">Ticket shapes peeking in from the top and bottom edge.</p>
           <ColorPicker
             value={(formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR)}
             onChange={(c) => onChange({ polaroidVouchers: { ...formData.polaroidVouchers, top: { ...formData.polaroidVouchers?.top, color: c }, bottom: { ...formData.polaroidVouchers?.bottom, color: c } } })}
@@ -409,6 +421,8 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
           />
         {voucherCard('top')}
         {voucherCard('bottom')}
+          </>
+        )}
       </div>
       <Dialog open={!!previewUrl} onOpenChange={(o) => { if (!o) setPreviewUrl(null); }}>
         <DialogContent className="max-w-[90vw] w-auto p-[16px]">
