@@ -660,7 +660,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                                 <div>{lang === 'id' ? 'Kode' : 'Promo'}</div>
                                 <div>{lang === 'id' ? 'Promo:' : 'Code:'}</div>
                             </div>
-                            <div className="self-stretch shrink-0 border-l border-dashed opacity-60" style={{ borderColor: 'currentColor' }} />
+                            <div className="self-stretch shrink-0 border-l border-dashed opacity-60" style={{ borderColor: 'currentColor', margin: '-8px 0 -6px' }} />
                             <div className="font-bold uppercase tracking-tight leading-[0.8] whitespace-nowrap" style={{ fontSize: `${content.additionalLabelFontSize || 16}px` }}>
                                 {renderHtml(content.additionalLabelText, "") || 'VOUCHERCODE'}
                             </div>
@@ -1059,7 +1059,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                             <div>{lang === 'id' ? 'Kode' : 'Promo'}</div>
                             <div>{lang === 'id' ? 'Promo:' : 'Code:'}</div>
                         </div>
-                        <div className="self-stretch shrink-0 border-l border-dashed opacity-60" style={{ borderColor: 'currentColor' }} />
+                        <div className="self-stretch shrink-0 border-l border-dashed opacity-60" style={{ borderColor: 'currentColor', margin: '-8px 0 -6px' }} />
                         <div className="font-bold uppercase tracking-tight leading-[0.8]" style={{ fontSize: `${content.additionalLabelFontSize || 16}px` }}>
                             {renderHtml(content.additionalLabelText, "") || 'VOUCHERCODE'}
                         </div>
