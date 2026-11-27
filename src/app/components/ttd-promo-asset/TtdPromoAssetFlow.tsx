@@ -755,7 +755,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         return (
           <div className="flex flex-col gap-[16px]">
             {editors.map((id) => (
-              <div key={id} data-ttd-card className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] px-[24px] scroll-mt-[calc(var(--sticky-base,0px)+80px)]" style={{ '--ep-head-top': 'calc(var(--sticky-base, 0px) + 72px)' } as React.CSSProperties}>
+              <div key={id} data-ttd-card className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] px-[24px] scroll-mt-[calc(var(--sticky-base,0px)+88px)]" style={{ '--ep-head-top': 'calc(var(--sticky-base, 0px) + 80px)' } as React.CSSProperties}>
                 <div className="sticky top-[var(--ep-head-top)] z-[30] -mx-[24px] px-[24px] h-[56px] bg-white rounded-t-[12px] flex items-center justify-between gap-[12px]">
                   <span className="text-[16px] font-bold text-[#303135]">{ITEM_TITLE[id]}</span>
                   <div className="flex items-center gap-[8px] shrink-0">
@@ -984,9 +984,9 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
       <Header compact flat={scrolled} fullWidth showLogo hideSearch userName={userName} userId={userId} userAvatar={userAvatar} onLogout={() => supabase.auth.signOut()} />
       <div className="mt-[104px] w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]">
         <div ref={stepBarRef}
-          className={`fixed top-[80px] left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[72px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+          className={`fixed top-[80px] left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[80px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
         >
-          <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-center py-[12px] gap-[8px]">
+          <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-center py-[16px] gap-[8px]">
             <span className="text-[16px] font-semibold leading-[20px] text-[#303135] truncate">{projectName.trim() || 'TTD Promo Asset'}</span>
             <TiketStepper steps={steps} currentStep={index + 1} maxStepReached={maxIndex + 1} onStepClick={(id) => goTo(id - 1)} size="compact" onBack={stepperBack} />
           </div>
