@@ -416,7 +416,7 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
             disabled={(['top', 'bottom'] as const).every((k) => { const v = formData.polaroidVouchers?.[k]; return !v?.x && !v?.y && !v?.rotate && (v?.scale ?? 100) === 100; })}
             className="flex items-center gap-[4px] text-[13px] font-semibold text-[#007BFF] hover:underline disabled:text-[#9EA0A5] disabled:no-underline"
           >
-            <RotateCw size={12} /> Reset to default
+            <RotateCw size={12} /> Reset slider to default
           </button>
         </div>
         {voucherCard('top')}
