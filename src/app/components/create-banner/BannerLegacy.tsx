@@ -621,7 +621,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                             <div>{lang === 'id' ? 'Kode' : 'Promo'}</div>
                             <div>{lang === 'id' ? 'Promo:' : 'Code:'}</div>
                           </div>
-                          <div className="self-stretch shrink-0 border-l border-dashed opacity-60" style={{ borderColor: 'currentColor', margin: `${-8 * cs}px 0 ${-6 * cs}px` }} />
+                          <div className="self-stretch shrink-0 border-l border-dashed opacity-60" style={{ borderColor: 'currentColor', borderLeftWidth: '0.5px', margin: `${-8 * cs}px 0 ${-6 * cs}px` }} />
                           <div className="font-bold uppercase tracking-tight leading-[0.8] whitespace-nowrap" style={{ fontSize: `${(content.additionalLabelFontSize || 16) * cs}px` }}>
                             {renderHtml(content.additionalLabelText, "") || 'VOUCHERCODE'}
                           </div>
@@ -777,7 +777,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                                  <div>{lang === 'id' ? 'Kode' : 'Promo'}</div>
                                  <div>{lang === 'id' ? 'Promo:' : 'Code:'}</div>
                              </div>
-                             <div className="self-stretch shrink-0 border-l border-dashed opacity-60" style={{ borderColor: 'currentColor', margin: '-8px 0 -6px' }} />
+                             <div className="self-stretch shrink-0 border-l border-dashed opacity-60" style={{ borderColor: 'currentColor', borderLeftWidth: '0.5px', margin: '-8px 0 -6px' }} />
                              <div className="font-bold uppercase tracking-tight leading-[0.8] whitespace-nowrap" style={{ fontSize: `${content.additionalLabelFontSize || 16}px` }}>
                                  {renderHtml(content.additionalLabelText, "") || 'VOUCHERCODE'}
                              </div>
