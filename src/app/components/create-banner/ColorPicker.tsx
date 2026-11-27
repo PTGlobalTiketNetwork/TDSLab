@@ -124,6 +124,16 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
   const [activeTab, setActiveTab] = useState<'tokens' | 'custom'>('tokens');
   
   const currentColor = value || defaultValue;
+  // Native screen eyedropper (Chromium/Edge); hidden where the browser doesn't support it.
+  const canEyedrop = typeof window !== 'undefined' && 'EyeDropper' in window;
+  const pickFromScreen = async () => {
+    try {
+      const result = await new (window as any).EyeDropper().open();
+      onChange(String(result.sRGBHex).toUpperCase());
+    } catch {
+      // cancelled with Esc
+    }
+  };
 
   const filteredTokens = useMemo(() => {
     if (!search) return colorTokens;
@@ -239,7 +249,17 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
                 <HexColorPicker color={currentColor} onChange={onChange} className="!w-full !h-[200px]" />
                 
                 <div className="flex gap-2 w-full items-center">
-                  <div className="w-10 h-10 rounded-md border border-[#d8dce8]" style={{ backgroundColor: currentColor }} />
+                  <div className="w-10 h-10 rounded-md border border-[#d8dce8] shrink-0" style={{ backgroundColor: currentColor }} />
+                  {canEyedrop && (
+                    <button
+                      type="button"
+                      onClick={pickFromScreen}
+                      title="Pick a colour from the screen"
+                      className="w-10 h-10 shrink-0 rounded-md border border-[#d8dce8] flex items-center justify-center text-[#4d4f56] hover:bg-[#f4f7fe] hover:text-[#007BFF] transition-colors"
+                    >
+                      <Pipette size={16} />
+                    </button>
+                  )}
                   <div className="relative flex-1">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">#</span>
                     <StyledInput 

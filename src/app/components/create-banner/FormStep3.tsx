@@ -1,6 +1,6 @@
 import { useStickyBar, STICKY_SHADOW } from '@/hooks/useStickyBar';
 import { BannerFormData, PartnerLogoSlot } from './types';
-import { getDefaultPartnerLogoScale, getDefaultPartnerLogoY, getDefaultCampaignLogoY } from './utils/layoutUtils';
+import { getDefaultPartnerLogoScale, getDefaultPartnerLogoY, getDefaultCampaignLogoY, getDefaultDesktopCampaignAssetScale } from './utils/layoutUtils';
 import { svgPaths } from './assets/Icons';
 import { Slider } from '../ui/slider';
 import { Switch } from '../ui/switch';
@@ -318,18 +318,21 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
           const rows: [string, string, number, number, number][] = sticky
             ? [['Pill scale (campaign & partner logo)', 'desktopPillScale', 30, 300, 5], ['Campaign logo asset size', 'desktopCampaignAssetScale', 50, 200, 5]]
             : [['Campaign logo scale', 'desktopCampaignLogoScale', 30, 400, 5], ...(partnerOn ? [['Partner logo scale', 'desktopPillScale', 30, 300, 5] as [string, string, number, number, number]] : [])];
-          return rows.map(([label, key, min, max, step]) => (
+          return rows.map(([label, key, min, max, step]) => {
+            const def = key === 'desktopCampaignAssetScale' ? getDefaultDesktopCampaignAssetScale(formData) : 100;
+            return (
             <div key={key} className="flex flex-col gap-[8px]">
               <div className="flex items-center justify-between">
                 <span className="text-[14px] font-bold text-[#303135]">{label}</span>
                 <div className="flex items-center gap-[8px]">
-                  <span className="text-[13px] font-semibold text-[#007BFF]">{(formData as any)[key] ?? 100}%</span>
-                  <button type="button" onClick={() => onChange({ [key]: 100 } as any)} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset"><RotateCw size={12} /></button>
+                  <span className="text-[13px] font-semibold text-[#007BFF]">{(formData as any)[key] ?? def}%</span>
+                  <button type="button" onClick={() => onChange({ [key]: def } as any)} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset"><RotateCw size={12} /></button>
                 </div>
               </div>
-              <Slider min={min} max={max} step={step} value={[(formData as any)[key] ?? 100]} onValueChange={([v]) => onChange({ [key]: v } as any)} className="w-full" />
+              <Slider min={min} max={max} step={step} value={[(formData as any)[key] ?? def]} onValueChange={([v]) => onChange({ [key]: v } as any)} className="w-full" />
             </div>
-          ));
+            );
+          });
         })()}
         {(formData.desktopCampaignLogoMode ?? 'sticky') === 'sticky' ? (
           <>
@@ -469,13 +472,13 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
 
                                     <div className="flex flex-col gap-[8px]">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-[14px] font-bold text-[#303135]">Partner asset size (spacing shrinks with it)</span>
+                                            <span className="text-[14px] font-bold text-[#303135]">Partner asset size</span>
                                             <div className="flex items-center gap-[8px]">
-                                                <span className="text-[13px] font-semibold text-[#007BFF]">{formData.desktopPartnerAssetScale ?? 100}%</span>
-                                                <button type="button" onClick={() => onChange({ desktopPartnerAssetScale: 100 })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset"><RotateCw size={12} /></button>
+                                                <span className="text-[13px] font-semibold text-[#007BFF]">{formData.desktopPartnerAssetScale ?? 160}%</span>
+                                                <button type="button" onClick={() => onChange({ desktopPartnerAssetScale: 160 })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset"><RotateCw size={12} /></button>
                                             </div>
                                         </div>
-                                        <Slider min={50} max={150} step={5} value={[formData.desktopPartnerAssetScale ?? 100]} onValueChange={([v]) => onChange({ desktopPartnerAssetScale: v })} className="w-full" />
+                                        <Slider min={50} max={200} step={5} value={[formData.desktopPartnerAssetScale ?? 160]} onValueChange={([v]) => onChange({ desktopPartnerAssetScale: v })} className="w-full" />
                                     </div>
                     <div className="flex flex-col gap-[8px]">
                         <div className="flex items-center justify-between">
@@ -486,9 +489,37 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
                             </div>
                         </div>
                         <Slider min={16} max={80} step={2} value={[formData.desktopPartnerGap ?? 36]} onValueChange={([v]) => onChange({ desktopPartnerGap: v })} className="w-full" />
-                        <span className="text-[12px] text-[#71747d]">Never tighter than 16px, even when the assets are scaled down.</span>
+                        <span className="text-[12px] text-[#71747d]">Never tighter than 16px.</span>
                     </div>
 
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[14px] font-bold text-[#303135]">Background</span>
+                                    <Switch
+                                        checked={formData.desktopPartnerLogoBgEnabled !== false}
+                                        onCheckedChange={(checked) => onChange({ desktopPartnerLogoBgEnabled: checked })}
+                                        className="data-[state=checked]:bg-[#007BFF]"
+                                    />
+                                </div>
+                                {formData.desktopPartnerLogoBgEnabled !== false && (
+                                    <div className="flex items-start gap-[10px] flex-wrap">
+                                        {([['N0', '#FFFFFF'], ['B100', '#E0EFFF'], ['Y500', '#FEDD00'], ['B400', '#007BFF'], ['B500', '#0064D2'], ['Black', '#000000']] as const).map(([name, hex]) => {
+                                            const active = (formData.desktopPartnerLogoBg ?? '#FFFFFF').toUpperCase() === hex;
+                                            return (
+                                                <button key={hex} type="button" title={name} onClick={() => onChange({ desktopPartnerLogoBg: hex })} className="flex flex-col items-center gap-[4px]">
+                                                    <span className={`block w-[28px] h-[28px] rounded-full transition-all ${active ? 'ring-2 ring-offset-1 ring-[#303135] scale-110' : 'ring-1 ring-[#e0e0e0]'}`} style={{ backgroundColor: hex }} />
+                                                    <span className={`text-[11px] leading-none ${active ? 'font-bold text-[#303135]' : 'text-[#71747d]'}`}>{name}</span>
+                                                </button>
+                                            );
+                                        })}
+                                        <ColorPicker
+                                            variant="chip"
+                                            chipActive={!['#FFFFFF', '#E0EFFF', '#FEDD00', '#007BFF', '#0064D2', '#000000'].includes((formData.desktopPartnerLogoBg ?? '#FFFFFF').toUpperCase())}
+                                            value={formData.desktopPartnerLogoBg ?? '#FFFFFF'}
+                                            onChange={(v) => onChange({ desktopPartnerLogoBg: v })}
+                                            defaultValue="#FFFFFF"
+                                        />
+                                    </div>
+                                )}
 
                                 <RadioGroup
                                     value={formData.desktopPartnerLogoMode ?? 'same'}
@@ -902,7 +933,7 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
                                 onChange({ keyVisualUrl: url, keyVisualFile: null });
                             }
                         }}
-                        accept="image/png, image/jpeg, image/jpg"
+                        accept="image/png, image/jpeg, image/jpg, image/webp"
                         hideAITab={true}
                         hideHistoryTab={true}
                     />
@@ -1142,10 +1173,10 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
                             </div>
                             
                             {/* Type Selection */}
-                            <RadioGroup 
-                                value={slot.type} 
+                            <RadioGroup
+                                value={slot.type}
                                 onValueChange={(val) => updatePartnerSlot(slot.id, 'type', val)}
-                                className="flex gap-[24px]"
+                                className="flex flex-wrap gap-x-[24px] gap-y-[8px]"
                             >
                                 {(['Payment', 'Airlines', 'Hotel', 'Brand & Entity', 'Partner', 'Product Icon', 'Other'] as const).map(type => {
                                     const isBrandEntity = type === 'Brand & Entity';
@@ -1216,6 +1247,15 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
                             className="w-full"
                         />
                         <div className="flex items-center justify-between mt-[8px]">
+                            <span className="text-[14px] font-bold text-[#303135]">Asset size</span>
+                            <div className="flex items-center gap-[8px]">
+                                <span className="text-[13px] font-semibold text-[#007BFF]">{formData.partnerLogoAssetScale ?? 100}%</span>
+                                <button type="button" onClick={() => onChange({ partnerLogoAssetScale: 100 })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset"><RotateCw size={12} /></button>
+                            </div>
+                        </div>
+                        <Slider min={50} max={150} step={5} value={[formData.partnerLogoAssetScale ?? 100]} onValueChange={([v]) => onChange({ partnerLogoAssetScale: v })} className="w-full" />
+                        <span className="text-[12px] text-[#71747d]">Resizes the logos only — the pill keeps its size.</span>
+                        <div className="flex items-center justify-between mt-[8px]">
                             <span className="text-[14px] font-bold text-[#303135]">Position Y</span>
                             <div className="flex items-center gap-[8px]">
                                 <span className="text-[13px] font-semibold text-[#007BFF]">{formData.partnerLogoY ?? pPos}px</span>
@@ -1237,6 +1277,34 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
                             onValueChange={([val]) => onChange({ partnerLogoY: val })}
                             className="w-full"
                         />
+                        <div className="flex items-center justify-between mt-[8px]">
+                            <span className="text-[14px] font-bold text-[#303135]">Background</span>
+                            <Switch
+                                checked={formData.partnerLogoBgEnabled !== false}
+                                onCheckedChange={(checked) => onChange({ partnerLogoBgEnabled: checked })}
+                                className="data-[state=checked]:bg-[#007BFF]"
+                            />
+                        </div>
+                        {formData.partnerLogoBgEnabled !== false && (
+                            <div className="flex items-start gap-[10px] flex-wrap">
+                                {([['N0', '#FFFFFF'], ['B100', '#E0EFFF'], ['Y500', '#FEDD00'], ['B400', '#007BFF'], ['B500', '#0064D2'], ['Black', '#000000']] as const).map(([name, hex]) => {
+                                    const active = (formData.partnerLogoBg ?? '#FFFFFF').toUpperCase() === hex;
+                                    return (
+                                        <button key={hex} type="button" title={name} onClick={() => onChange({ partnerLogoBg: hex })} className="flex flex-col items-center gap-[4px]">
+                                            <span className={`block w-[28px] h-[28px] rounded-full transition-all ${active ? 'ring-2 ring-offset-1 ring-[#303135] scale-110' : 'ring-1 ring-[#e0e0e0]'}`} style={{ backgroundColor: hex }} />
+                                            <span className={`text-[11px] leading-none ${active ? 'font-bold text-[#303135]' : 'text-[#71747d]'}`}>{name}</span>
+                                        </button>
+                                    );
+                                })}
+                                <ColorPicker
+                                    variant="chip"
+                                    chipActive={!['#FFFFFF', '#E0EFFF', '#FEDD00', '#007BFF', '#0064D2', '#000000'].includes((formData.partnerLogoBg ?? '#FFFFFF').toUpperCase())}
+                                    value={formData.partnerLogoBg ?? '#FFFFFF'}
+                                    onChange={(v) => onChange({ partnerLogoBg: v })}
+                                    defaultValue="#FFFFFF"
+                                />
+                            </div>
+                        )}
                     </div>
                     )}
                     {isDesktopStandalone && (
@@ -1251,13 +1319,13 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
                             <Slider min={30} max={300} step={5} value={[formData.desktopPillScale ?? 100]} onValueChange={([v]) => onChange({ desktopPillScale: v })} className="w-full" />
                             <div className="flex flex-col gap-[8px]">
                             <div className="flex items-center justify-between">
-                                <span className="text-[14px] font-bold text-[#303135]">Partner asset size (spacing shrinks with it)</span>
+                                <span className="text-[14px] font-bold text-[#303135]">Partner asset size</span>
                                 <div className="flex items-center gap-[8px]">
-                                    <span className="text-[13px] font-semibold text-[#007BFF]">{formData.desktopPartnerAssetScale ?? 100}%</span>
-                                    <button type="button" onClick={() => onChange({ desktopPartnerAssetScale: 100 })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset"><RotateCw size={12} /></button>
+                                    <span className="text-[13px] font-semibold text-[#007BFF]">{formData.desktopPartnerAssetScale ?? 160}%</span>
+                                    <button type="button" onClick={() => onChange({ desktopPartnerAssetScale: 160 })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset"><RotateCw size={12} /></button>
                                 </div>
                             </div>
-                            <Slider min={50} max={150} step={5} value={[formData.desktopPartnerAssetScale ?? 100]} onValueChange={([v]) => onChange({ desktopPartnerAssetScale: v })} className="w-full" />
+                            <Slider min={50} max={200} step={5} value={[formData.desktopPartnerAssetScale ?? 160]} onValueChange={([v]) => onChange({ desktopPartnerAssetScale: v })} className="w-full" />
                         </div>
                     <div className="flex flex-col gap-[8px]">
                         <div className="flex items-center justify-between">
@@ -1268,8 +1336,37 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
                             </div>
                         </div>
                         <Slider min={16} max={80} step={2} value={[formData.desktopPartnerGap ?? 36]} onValueChange={([v]) => onChange({ desktopPartnerGap: v })} className="w-full" />
-                        <span className="text-[12px] text-[#71747d]">Never tighter than 16px, even when the assets are scaled down.</span>
+                        <span className="text-[12px] text-[#71747d]">Never tighter than 16px.</span>
                     </div>
+
+                            <div className="flex items-center justify-between">
+                                <span className="text-[14px] font-bold text-[#303135]">Background</span>
+                                <Switch
+                                    checked={formData.desktopPartnerLogoBgEnabled !== false}
+                                    onCheckedChange={(checked) => onChange({ desktopPartnerLogoBgEnabled: checked })}
+                                    className="data-[state=checked]:bg-[#007BFF]"
+                                />
+                            </div>
+                            {formData.desktopPartnerLogoBgEnabled !== false && (
+                                <div className="flex items-start gap-[10px] flex-wrap">
+                                    {([['N0', '#FFFFFF'], ['B100', '#E0EFFF'], ['Y500', '#FEDD00'], ['B400', '#007BFF'], ['B500', '#0064D2'], ['Black', '#000000']] as const).map(([name, hex]) => {
+                                        const active = (formData.desktopPartnerLogoBg ?? '#FFFFFF').toUpperCase() === hex;
+                                        return (
+                                            <button key={hex} type="button" title={name} onClick={() => onChange({ desktopPartnerLogoBg: hex })} className="flex flex-col items-center gap-[4px]">
+                                                <span className={`block w-[28px] h-[28px] rounded-full transition-all ${active ? 'ring-2 ring-offset-1 ring-[#303135] scale-110' : 'ring-1 ring-[#e0e0e0]'}`} style={{ backgroundColor: hex }} />
+                                                <span className={`text-[11px] leading-none ${active ? 'font-bold text-[#303135]' : 'text-[#71747d]'}`}>{name}</span>
+                                            </button>
+                                        );
+                                    })}
+                                    <ColorPicker
+                                        variant="chip"
+                                        chipActive={!['#FFFFFF', '#E0EFFF', '#FEDD00', '#007BFF', '#0064D2', '#000000'].includes((formData.desktopPartnerLogoBg ?? '#FFFFFF').toUpperCase())}
+                                        value={formData.desktopPartnerLogoBg ?? '#FFFFFF'}
+                                        onChange={(v) => onChange({ desktopPartnerLogoBg: v })}
+                                        defaultValue="#FFFFFF"
+                                    />
+                                </div>
+                            )}
 
                         </div>
                     )}

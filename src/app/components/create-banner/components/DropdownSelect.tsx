@@ -80,41 +80,18 @@ export function DropdownSelect({
         <div className="absolute border border-[#d8dce8] border-solid inset-0 pointer-events-none rounded-[8px]" />
         <div className="flex flex-row items-center size-full">
           <div className="content-stretch flex gap-[12px] items-center px-[16px] py-[12px] relative w-full">
-            <div className="content-stretch flex flex-col grow items-start overflow-clip relative shrink-0">
+            <div className="content-stretch flex flex-col grow items-start overflow-clip relative shrink-0 min-w-0">
                {selectedOption ? (
                   <>
-                   {/* Placeholder small label if needed, but design shows just filled text or placeholder */}
-                   {/* Based on attachment 2, if selected, it shows "Placeholder" as label and "Filled text" as value? 
-                       Wait, the design "Text Group" in Forms02Dropdown shows "Placeholder" then "FilledText".
-                       But commonly this is "Label" then "Value". 
-                       The prompt screenshot 2 shows "Placeholder" (small) and "Filled text" (large).
-                       Let's assume the top small text is the field label (which is outside this component in the parent form usually),
-                       OR it's a floating label. 
-                       However, the attachment 1 shows just "Placeholder".
-                       The attachment 2 shows "Placeholder" (small) + "Filled text". 
-                       This looks like a floating label or a value with label.
-                       BUT the parent component `FormStepConfig` ALREADY has a label "Vertical".
-                       So I should probably just show the Value.
-                       Let's stick to the simpler "Value" only for now, or "Placeholder" if empty.
-                       Actually, let's implement the "Text Group" from the Figma import if value is selected.
-                   */}
-                   {/* If I look at the `TextGroup` in Figma import:
-                       Placeholder: text-[#71747d] text-[12px]
-                       FilledText: text-[#303135] text-[14px]
-                       
-                       If I use this pattern:
-                   */}
-                   {selectedOption && (
-                     <p className="font-sans leading-[1.34] text-[#71747d] text-[12px] w-full overflow-hidden text-ellipsis whitespace-nowrap">
-                       {placeholder}
-                     </p>
-                   )}
-                   <p className={`font-sans leading-[1.43] text-[14px] w-full ${selectedOption ? 'text-[#303135]' : 'text-[#71747d]'}`}>
-                     {selectedOption ? selectedOption.label : placeholder}
+                   <p className="font-sans leading-[1.34] text-[#71747d] text-[12px] w-full overflow-hidden text-ellipsis whitespace-nowrap">
+                     {placeholder}
+                   </p>
+                   <p className="font-sans leading-[1.43] text-[14px] w-full overflow-hidden text-ellipsis whitespace-nowrap text-[#303135]">
+                     {selectedOption.label}
                    </p>
                   </>
                ) : (
-                  <p className="font-sans leading-[1.43] text-[#71747d] text-[14px] w-full">
+                  <p className="font-sans leading-[1.43] text-[#71747d] text-[14px] w-full overflow-hidden text-ellipsis whitespace-nowrap">
                     {placeholder}
                   </p>
                )}

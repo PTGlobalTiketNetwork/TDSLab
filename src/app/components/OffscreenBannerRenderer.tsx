@@ -15,7 +15,7 @@ export interface OffscreenBannerRendererHandle {
   /** Capture the current EN banner composition for handoff to another tool. */
   captureBannerForResize: (banner: Banner) => Promise<Blob>;
   /** DLP Assets: render every sub-banner's EN + ID and bundle them into one ZIP download. */
-  downloadDlpZip: (params: { projectName: string; scaleFactor: number; banners: DlpZipBannerSpec[] }) => Promise<void>;
+  downloadDlpZip: (params: { projectName: string; scaleFactor: number; banners: DlpZipBannerSpec[]; extraFiles?: () => Promise<{ path: string; blob: Blob }[]> }) => Promise<void>;
 }
 
 export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>((_, ref) => {
@@ -236,11 +236,11 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
     return { en: en.blob, id: id.blob };
   }, []);
 
-  const downloadDlpZip = useCallback(async (params: { projectName: string; scaleFactor: number; banners: DlpZipBannerSpec[] }) => {
-    const { projectName, scaleFactor, banners } = params;
+  const downloadDlpZip = useCallback(async (params: { projectName: string; scaleFactor: number; banners: DlpZipBannerSpec[]; extraFiles?: () => Promise<{ path: string; blob: Blob }[]> }) => {
+    const { projectName, scaleFactor, banners, extraFiles } = params;
     const scaleLabel = scaleFactor !== 1 ? ` at ${scaleFactor}x` : '';
 
-    if (!banners.length) {
+    if (!banners.length && !extraFiles) {
       toast.custom((t) => <TiketSnackbar id={t} message="Nothing to download" variant="error" />);
       return;
     }
@@ -259,7 +259,7 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
     const loadingToast = toast.custom((t) => (
       <TiketSnackbar
         id={t}
-        message={`Preparing ZIP (${banners.length} banners)${scaleLabel}...`}
+        message={`Preparing ZIP${banners.length ? ` (${banners.length} banners)` : ''}${scaleLabel}...`}
         variant="default"
         icon={<Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
       />
@@ -283,7 +283,18 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
         }
       }
 
-      if (!captured.length) {
+      // Non-banner files (e.g. the TTD Brand Icon PNG) go into the zip as-is.
+      let extras: { path: string; blob: Blob }[] = [];
+      if (extraFiles) {
+        try {
+          extras = await extraFiles();
+        } catch (err) {
+          console.error('ZIP: failed to render extra files:', err);
+          failedFolders.push('extra files');
+        }
+      }
+
+      if (!captured.length && !extras.length) {
         throw new Error('Every banner failed to render — nothing to download.');
       }
 
@@ -294,13 +305,14 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
           dir?.file('EN.png', en);
           dir?.file('ID.png', id);
         }
+        for (const { path, blob } of extras) zip.file(path, blob);
         const zipBlob = await zip.generateAsync({ type: 'blob' });
         downloadBlob(zipBlob, `${sanitizeFileName(projectName)}.zip`);
 
         toast.dismiss(loadingToast);
         const failedNote = failedFolders.length ? ` (${failedFolders.length} failed to render and were skipped)` : '';
         toast.custom((t) => (
-          <TiketSnackbar id={t} message={`${captured.length} banners (${captured.length * 2} files: EN + ID) downloaded as ZIP${scaleLabel}${failedNote}`} variant={failedFolders.length ? 'error' : 'default'} />
+          <TiketSnackbar id={t} message={`${captured.length * 2 + extras.length} files downloaded as ZIP${scaleLabel}${failedNote}`} variant={failedFolders.length ? 'error' : 'default'} />
         ), { duration: 4000 });
       } catch (zipErr) {
         // ZIP packaging itself failed (e.g. jszip/CSP/memory issue) — fall back to plain
@@ -312,6 +324,7 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
           downloadBlob(id, `${sanitizeFileName(projectName)} - ${sanitizeFileName(folder)} - ID.png`);
           await new Promise((r) => setTimeout(r, 300));
         }
+        for (const { path, blob } of extras) downloadBlob(blob, `${sanitizeFileName(projectName)} - ${sanitizeFileName(path)}`);
         toast.dismiss(loadingToast);
         toast.custom((t) => (
           <TiketSnackbar id={t} message={`ZIP packaging failed — downloaded ${captured.length} banners individually instead`} variant="error" />

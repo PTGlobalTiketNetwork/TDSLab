@@ -23,6 +23,7 @@ import {
   ensureDataUrlForCapture,
   waitForRenderStable,
   buildDlpZipManifest,
+  buildTtdZipParams,
 } from '../utils/bannerCapture';
 import { OffscreenBannerRenderer, type OffscreenBannerRendererHandle } from './OffscreenBannerRenderer';
 import TdsIcSparklingGeneral from '../../imports/TdsIcSparklingGeneral-2104-16';
@@ -364,7 +365,7 @@ export function InspectorPanel({
     const noun = categories.length === 1 ? (categories[0] === 'DLP Assets' ? 'DLP' : 'banners') : 'banners';
 
     return (
-      <div className="w-[432px] h-screen bg-white border-l border-[#e8eaee] fixed right-0 top-0 flex flex-col">
+      <div className="w-[432px] h-screen bg-white border-l border-[#e8eaee] fixed right-0 top-0 z-40 flex flex-col">
         <div className="p-[24px] border-b border-[#e8eaee]">
           <div className="flex items-center justify-between">
             <h3 className="text-[20px] font-bold text-[#303135]">
@@ -572,6 +573,17 @@ export function InspectorPanel({
     }
   };
 
+  // TTD Promo Asset: same ZIP flow — its banners' EN + ID plus the Brand Icon PNG.
+  const handleDownloadTtdZip = async (ttd: NonNullable<BannerFormData['ttd']>, scaleFactor: number) => {
+    const downloadId = `zip-${scaleFactor}`;
+    setDownloadingItem(downloadId);
+    try {
+      await dlpZipRenderer.current?.downloadDlpZip(buildTtdZipParams(ttd, selectedBanner.name || 'TTD Promo Asset', scaleFactor));
+    } finally {
+      setDownloadingItem(null);
+    }
+  };
+
   const formatDate = (isoDate: string) => {
     if (!isoDate) return '-';
     const date = new Date(isoDate);
@@ -672,6 +684,7 @@ export function InspectorPanel({
   // previewFormData resolves to the correct nested sub-form for the visible preview only;
   // hidden capture-for-download and Save/Quick Save keep using the real top-level formData above.
   const isDlpAssets = formData?.bannerCategory === 'DLP Assets' && !!formData?.dlp?.header;
+  const isTtdAsset = formData?.bannerCategory === 'TTD Promo Asset' && !!formData?.ttd;
   const hasDlpDesktop = !!formData?.dlp?.header?.desktop;
   const previewFormData: BannerFormData | undefined = isDlpAssets
     ? (dlpDevice === 'desktop' ? formData?.dlp?.header?.desktopForm : formData?.dlp?.header?.mobileForm)
@@ -987,12 +1000,12 @@ export function InspectorPanel({
   const previewScale = previewContainerWidth / nativeWidth;
 
   return (
-    <div className="w-[432px] h-screen bg-white border-l border-[#d8dce8] fixed right-0 top-0 overflow-y-auto">
+    <div className="w-[432px] h-screen bg-white border-l border-[#d8dce8] fixed right-0 top-0 z-40 overflow-y-auto">
       {/* DLP Assets "download as ZIP" renders many different sub-banners off-screen one at a time,
           separate from the always-mounted single-banner hidden render below.
           Only mount our own instance when the caller didn't pass a persistent one (`renderer`) — this
           local instance unmounts the moment the panel closes, which used to abort an in-flight ZIP. */}
-      {isDlpAssets && !renderer && <OffscreenBannerRenderer ref={localDlpZipRenderer} />}
+      {(isDlpAssets || isTtdAsset) && !renderer && <OffscreenBannerRenderer ref={localDlpZipRenderer} />}
       {/* Hidden Banner Rendering for Downloads - Optimized for reliable html-to-image capture */}
       {formData && (
         <div style={{ 
@@ -1386,7 +1399,7 @@ export function InspectorPanel({
                     </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[300px] p-4 bg-white" align="center" sideOffset={8}>
-                  {isDlpAssets && formData.dlp ? (
+                  {(isDlpAssets && formData.dlp) || (isTtdAsset && formData.ttd) ? (
                     /* DLP Assets: one ZIP with every sub-banner's EN + ID — no separate EN/ID menus. */
                     <div className="flex flex-col gap-3">
                       <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Download ZIP (EN + ID)</span>
@@ -1394,7 +1407,7 @@ export function InspectorPanel({
                         {[1, 1.5, 2, 3].map(factor => (
                           <button
                             key={`zip-${factor}`}
-                            onClick={() => handleDownloadDlpZip(formData.dlp!, factor)}
+                            onClick={() => (isTtdAsset ? handleDownloadTtdZip(formData.ttd!, factor) : handleDownloadDlpZip(formData.dlp!, factor))}
                             disabled={!!downloadingItem}
                             className={`px-2 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-[6px] hover:bg-gray-200 transition-colors border border-transparent hover:border-gray-300 disabled:cursor-not-allowed flex items-center justify-center min-w-[40px] ${downloadingItem && downloadingItem !== `zip-${factor}` ? 'opacity-50' : ''}`}
                           >

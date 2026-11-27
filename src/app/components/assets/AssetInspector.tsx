@@ -28,7 +28,7 @@ export function AssetInspector({
   }
 
   return (
-    <div className="w-[432px] h-[calc(100vh-100px)] bg-white border-l border-[#d8dce8] fixed right-0 top-[100px] overflow-y-auto z-10">
+    <div className="w-[432px] h-[calc(100vh-100px)] bg-white border-l border-[#d8dce8] fixed right-0 top-[100px] overflow-y-auto z-40">
       <div className="flex flex-col gap-[24px] px-[32px] pt-[32px] pb-[32px]">
         {/* Preview Image & Actions */}
         <div className="flex flex-col gap-[16px] items-center w-full">

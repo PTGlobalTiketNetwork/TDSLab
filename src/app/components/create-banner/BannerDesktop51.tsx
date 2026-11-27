@@ -3,7 +3,7 @@ import { BannerFormData } from './types';
 import { BannerLegacy } from './BannerLegacy';
 import { BoundingBox } from './components/BoundingBox';
 import { ImageBox } from './components/ImageBox';
-import { tagsToHtml, getDefaultDesktopContentScale } from './utils/layoutUtils';
+import { tagsToHtml, getDefaultDesktopContentScale, getDefaultDesktopCampaignAssetScale } from './utils/layoutUtils';
 import exampleImage from 'figma:asset/c593b610d3877a5faf067379a77363d554217a35.png';
 
 interface BannerDesktop51Props {
@@ -65,7 +65,7 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
   const showPartnerOn = standalone ? !!formData.showPartnerLogo : !!formData.desktopShowPartnerLogo;
   const partners = standalone ? (formData.partnerLogos ?? []) : (formData.desktopPartnerLogoMode === 'custom' ? (formData.desktopPartnerLogos ?? []) : (formData.partnerLogos ?? []));
   const pillScale = formData.desktopPillScale ?? 100;
-  const assetScale = (formData.desktopCampaignAssetScale ?? 100) / 100;
+  const assetScale = (formData.desktopCampaignAssetScale ?? getDefaultDesktopCampaignAssetScale(formData)) / 100;
   const cLogoScale = formData.desktopCampaignLogoScale ?? 100;
   const cLogoX = formData.desktopCampaignLogoX ?? 24;
   const cLogoY = formData.desktopCampaignLogoY ?? 24;
@@ -158,10 +158,12 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
           {/* Logos. Campaign logo: radio "sticky" (pill at the top-left, same template as the partner logos, own background colour)
               or "free" (placed anywhere, no background). One scale drives both the campaign and the partner logo. */}
           {(() => {
-            const pa = (formData.desktopPartnerAssetScale ?? 100) / 100; // partner logos AND their spacing
+            // The pill is laid out at the default 160% asset size; "Partner asset size" only scales the logos inside it.
+            const pa = 1.6;
+            const logoScale = (formData.desktopPartnerAssetScale ?? 160) / 160;
             const pillBase: React.CSSProperties = { display: 'flex', alignItems: 'center', height: 52, paddingLeft: 32, paddingRight: 32, gap: 32, borderRadius: '0 43px 43px 0', width: 'fit-content' };
             const partnerGap = Math.max(16, (formData.desktopPartnerGap ?? 36) * pa); // spacing between assets: never tighter than 16px
-            const partnerPill: React.CSSProperties = { ...pillBase, paddingLeft: Math.max(12, 20 * pa), paddingRight: Math.max(12, 20 * pa), gap: partnerGap };
+            const partnerPill: React.CSSProperties = { ...pillBase, height: 'auto', minHeight: 52, paddingTop: Math.max(8, 10 * pa), paddingBottom: Math.max(8, 10 * pa), paddingLeft: Math.max(12, 20 * pa), paddingRight: Math.max(12, 20 * pa), gap: partnerGap };
             const campaignImg = <img src={campaignSrc} alt="Campaign logo" crossOrigin="anonymous" draggable={false} style={{ height: Math.min(48, 30 * assetScale), width: 'auto', maxWidth: Math.min(140, 110 * assetScale), objectFit: 'contain' }} onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />;
             const sticky = (formData.desktopCampaignLogoMode ?? 'sticky') === 'sticky';
             const showPartner = showPartnerOn && partners.length > 0;
@@ -172,14 +174,14 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
                     {showCampaign && sticky && showPartner ? (
                       // Both on (Figma 83:743): one pill — campaign logo segment with a slanted edge, then the partner logos
                       <>
-                        <div style={{ height: 52, padding: '0 36px 0 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2, flexShrink: 0, background: formData.desktopCampaignLogoBgEnabled === false ? '#FFFFFF' : (formData.desktopCampaignLogoBg ?? '#007BFF'), borderRadius: '0 100px 100px 0' }}>
+                        <div style={{ minHeight: 52, padding: '0 36px 0 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2, flexShrink: 0, background: formData.desktopCampaignLogoBgEnabled === false ? '#FFFFFF' : (formData.desktopCampaignLogoBg ?? '#007BFF'), borderRadius: '0 100px 100px 0' }}>
                           <img src={campaignSrc} alt="Campaign logo" crossOrigin="anonymous" draggable={false} style={{ height: Math.min(48, 30 * assetScale), width: 'auto', maxWidth: Math.min(140, 110 * assetScale), objectFit: 'contain' }} onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />
                         </div>
-                        <div className="bg-white" style={{ ...partnerPill, marginLeft: -44, paddingLeft: 44 + Math.max(12, 16 * pa) }}>
+                        <div style={{ ...partnerPill, marginLeft: -44, paddingLeft: 44 + Math.max(12, 16 * pa), background: formData.desktopPartnerLogoBgEnabled === false ? 'transparent' : (formData.desktopPartnerLogoBg ?? '#FFFFFF') }}>
                           {partners.slice(0, 4).map((slot, idx) => {
                             const isUrl = slot.logo?.startsWith('http') || slot.logo?.startsWith('figma:');
                             const imgSrc = isUrl ? slot.logo : (slot.logo ? `https://placehold.co/132x66/0064D2/FFFFFF/png?text=${slot.logo.substring(0, 3).toUpperCase()}` : exampleImage);
-                            return <img key={slot.id || idx} src={imgSrc} alt="Partner" crossOrigin="anonymous" draggable={false} style={{ height: 34 * pa, width: 'auto', maxWidth: 140 * pa, objectFit: 'contain' }}  onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />;
+                            return <img key={slot.id || idx} src={imgSrc} alt="Partner" crossOrigin="anonymous" draggable={false} style={{ height: 34 * pa, width: 'auto', maxWidth: 140 * pa, objectFit: 'contain', transform: `scale(${logoScale})` }}  onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />;
                           })}
                         </div>
                       </>
@@ -189,11 +191,11 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
                           <div style={{ ...pillBase, paddingLeft: 24, paddingRight: 36, justifyContent: 'center', borderRadius: '0 100px 100px 0', background: formData.desktopCampaignLogoBgEnabled === false ? 'transparent' : (formData.desktopCampaignLogoBg ?? '#007BFF') }}>{campaignImg}</div>
                         )}
                         {showPartner && (
-                          <div className="bg-white" style={partnerPill}>
+                          <div style={{ ...partnerPill, background: formData.desktopPartnerLogoBgEnabled === false ? 'transparent' : (formData.desktopPartnerLogoBg ?? '#FFFFFF') }}>
                             {partners.slice(0, 4).map((slot, idx) => {
                               const isUrl = slot.logo?.startsWith('http') || slot.logo?.startsWith('figma:');
                               const imgSrc = isUrl ? slot.logo : (slot.logo ? `https://placehold.co/132x66/0064D2/FFFFFF/png?text=${slot.logo.substring(0, 3).toUpperCase()}` : exampleImage);
-                              return <img key={slot.id || idx} src={imgSrc} alt="Partner" crossOrigin="anonymous" draggable={false} style={{ height: 34 * pa, width: 'auto', maxWidth: 140 * pa, objectFit: 'contain' }}  onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />;
+                              return <img key={slot.id || idx} src={imgSrc} alt="Partner" crossOrigin="anonymous" draggable={false} style={{ height: 34 * pa, width: 'auto', maxWidth: 140 * pa, objectFit: 'contain', transform: `scale(${logoScale})` }}  onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />;
                             })}
                           </div>
                         )}

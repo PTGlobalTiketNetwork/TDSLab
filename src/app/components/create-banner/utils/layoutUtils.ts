@@ -34,16 +34,13 @@ export const getCurrencyLabel = (type: CurrencyType | undefined, customCurrency?
     }
 };
 
-// Currency "None" with no amount typed = no discount number at all (don't fall back to the '50' / '0' placeholder).
-// Saved banners that have an amount with "None" (old "Non-IDR" = number without Rp) still render the number.
-export const isAmountHidden = (type: CurrencyType | undefined, amount: string | undefined): boolean =>
-    type === 'Non-IDR' && !amount;
 
 /** DLP Header 3:4 partner logo defaults: Y 194px (vs. 20px for Promo 3:4) and 120% scale (vs. 160%). */
 export const getDefaultPartnerLogoY = (formData: Pick<BannerFormData, 'dlpRole'>): number =>
     formData.dlpRole === 'header-mobile' ? 194 : 20;
+/** Partner logo scale default: 120% for the DLP Header mobile (3:4/1:1), 160% for Portrait (3:4) or Desktop (5:1) — shared by Promo Banner, DLP and TTD — else 100%. */
 export const getDefaultPartnerLogoScale = (formData: Pick<BannerFormData, 'dlpRole' | 'bannerRatio'>): number =>
-    formData.dlpRole === 'header-mobile' ? 1.2 : (formData.bannerRatio === 'Portrait (3:4)' ? 1.6 : 1);
+    formData.dlpRole === 'header-mobile' ? 1.2 : ((formData.bannerRatio === 'Portrait (3:4)' || formData.bannerRatio === 'Desktop (5:1)') ? 1.6 : 1);
 /** DLP Header 3:4 campaign logo Y default: 180px (vs. 20px for Promo 3:4). */
 export const getDefaultCampaignLogoY = (formData: Pick<BannerFormData, 'dlpRole'>): number =>
     formData.dlpRole === 'header-mobile' ? 180 : 20;
@@ -54,15 +51,23 @@ export const getDefaultCampaignLogoY = (formData: Pick<BannerFormData, 'dlpRole'
  * sits lower/centered instead of leaving empty space; 0 otherwise (and for non-DLP 3:4 banners).
  */
 export const getDefaultPortraitContentOffsetY = (
-    formData: Pick<BannerFormData, 'headlineType' | 'showPortraitCta' | 'dlpRole'>,
+    formData: Pick<BannerFormData, 'headlineType' | 'showPortraitCta' | 'dlpRole' | 'bannerRatio' | 'showCampaignLogo'>,
     content: { labelDiscount?: string; additionalLabel?: boolean },
 ): number => {
+    // Banner 3:1 (TTD Promo Asset): content sits slightly higher by default (-16px); a campaign
+    // logo needs that room at the top, so the content drops back down to 0 while it's shown.
+    if (formData.bannerRatio === 'Landscape (3:1)') return formData.showCampaignLogo ? 0 : -16;
     if (formData.dlpRole !== 'header-mobile') return 0;
     const hasLabelDiscount = !!content.labelDiscount && formData.headlineType !== 'With Sub-Headline';
     const hasAdditionalLabel = !!content.additionalLabel && formData.headlineType !== 'With Sub-Headline';
     const hasExtras = hasLabelDiscount || hasAdditionalLabel; // DLP header never shows a CTA
     return hasExtras ? 0 : -36;
 };
+
+/** Landscape content block scale default: 105% for Banner 3:1 (TTD Promo Asset — this ratio is exclusive to it), else 100%. */
+export const getDefaultLandscapeContentScale = (
+    formData: Pick<BannerFormData, 'bannerRatio'>,
+): number => (formData.bannerRatio === 'Landscape (3:1)' ? 105 : 100);
 
 /** Desktop 5:1/4:1 content scale default: 180% for the DLP Header 4:1, else 140% (125% with a second discount). */
 export const getDefaultDesktopContentScale = (
@@ -71,6 +76,10 @@ export const getDefaultDesktopContentScale = (
     if (formData.dlpRole === 'header-desktop') return 180;
     return (formData.content.en.hasSecondDiscount || formData.content.id.hasSecondDiscount) ? 125 : 140;
 };
+
+/** Campaign logo size inside its sticky pill: 145% on the 5:1 (stand alone or bundled with a 2:1), 100% on the DLP Header 4:1. */
+export const getDefaultDesktopCampaignAssetScale = (formData: Pick<BannerFormData, 'bannerRatio'>): number =>
+    formData.bannerRatio === 'Desktop (4:1)' ? 100 : 145;
 
 const WEIGHT_TAGS = ['sb', 'b', 'eb', 'r'] as const;
 type WeightTag = typeof WEIGHT_TAGS[number];

@@ -13,7 +13,7 @@ import { useAllBannersPresence } from '../../hooks/useAllBannersPresence';
 import { getUserDisplayName, getUserAvatarUrl } from '../utils/userDisplay';
 import { OffscreenBannerRenderer, OffscreenBannerRendererHandle } from '../components/OffscreenBannerRenderer';
 import { handoffStore } from '../../utils/indexedDB';
-import { buildDlpZipManifest } from '../utils/bannerCapture';
+import { buildDlpZipManifest, buildTtdZipParams } from '../utils/bannerCapture';
 import { TiketTabs } from '../components/ui/TiketTabs';
 import { getBannerCategory } from '../components/CategoryBadge';
 import { needsMigration, SETTINGS_VERSION } from '../components/create-banner/settingsVersion';
@@ -526,6 +526,32 @@ export function BannerListPage({
     return newBannerId;
   };
 
+  // Rename from the context menu — updates the stored name (and form_data.bannerName) without opening the editor.
+  const [renameTarget, setRenameTarget] = useState<{ banner: Banner; name: string } | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const handleRename = async () => {
+    if (!renameTarget) return;
+    const name = renameTarget.name.trim();
+    if (!name || name === renameTarget.banner.name) { setRenameTarget(null); return; }
+    setIsRenaming(true);
+    try {
+      const { banner } = renameTarget;
+      await BannerService.updateBanner(banner.id, {
+        name,
+        ...(banner.form_data ? { form_data: { ...banner.form_data, bannerName: name } } : {}),
+      } as any);
+      setRenameTarget(null);
+      await loadBanners();
+      onDataChange?.();
+      toast.custom((id) => <TiketSnackbar id={id} message={`Renamed to "${name}"`} />);
+    } catch (error) {
+      console.error('Rename failed:', error);
+      toast.custom((id) => <TiketSnackbar id={id} message="Failed to rename" variant="error" />);
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
   const handleDuplicate = async (banner: Banner): Promise<void> => {
     try {
       const newBannerId = await createBannerDuplicate(banner);
@@ -744,6 +770,8 @@ export function BannerListPage({
             banners: buildDlpZipManifest(dlp),
           });
         }
+      } else if (getBannerCategory(banner) === 'TTD Promo Asset' && banner.form_data?.ttd) {
+        await offscreenRendererRef.current?.downloadDlpZip(buildTtdZipParams(banner.form_data.ttd, banner.name || 'TTD Promo Asset', 2));
       } else {
         await handleDownload(banner, 2);
       }
@@ -843,6 +871,7 @@ export function BannerListPage({
           availableRatios={availableRatios}
           availableVerticals={availableVerticals}
           onEditBanner={(banner) => handleEdit(banner)}
+          onRenameBanner={(banner) => setRenameTarget({ banner, name: banner.name || '' })}
           onResizeBanner={handleResize}
           onDuplicateBanner={handleDuplicate}
           onDownloadBanner={handleDownload}
@@ -862,6 +891,30 @@ export function BannerListPage({
             />
           ) : undefined}
         />
+        <AlertDialog open={!!renameTarget} onOpenChange={(o) => { if (!o && !isRenaming) setRenameTarget(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Rename</AlertDialogTitle>
+            </AlertDialogHeader>
+            <input
+              autoFocus
+              value={renameTarget?.name ?? ''}
+              onChange={(e) => setRenameTarget((t) => (t ? { ...t, name: e.target.value } : t))}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleRename(); } }}
+              onFocus={(e) => e.currentTarget.select()}
+              className="w-full h-[44px] px-[12px] rounded-[8px] border border-[#d8dce8] text-[14px] text-[#303135] focus:outline-none focus:border-[#007BFF]"
+            />
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isRenaming}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isRenaming || !renameTarget?.name.trim()}
+                onClick={(e) => { e.preventDefault(); void handleRename(); }}
+              >
+                {isRenaming ? 'Saving...' : 'Rename'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <AlertDialog open={!!migrateTarget} onOpenChange={(o) => { if (!o) setMigrateTarget(null); }}>
           <AlertDialogContent>
             <AlertDialogHeader>

@@ -25,6 +25,7 @@
  */
 
 import React from 'react';
+import { ChevronLeft } from 'lucide-react';
 
 export interface TiketStepItem {
   id: number;
@@ -39,6 +40,8 @@ export interface TiketStepperProps {
   className?: string;
   /** 'compact': for a fixed sticky bar (e.g. scrolled header) — sized directly (20px circle, 16px label) instead of CSS `zoom`, so the label never renders below 16px. */
   size?: 'default' | 'compact';
+  /** When provided, a back chevron renders to the left of the steps (e.g. to leave the flow — the caller decides whether that needs an unsaved-changes confirmation first). */
+  onBack?: () => void;
 }
 
 export function TiketStepper({
@@ -48,6 +51,7 @@ export function TiketStepper({
   onStepClick,
   className = '',
   size = 'default',
+  onBack,
 }: TiketStepperProps) {
   const compact = size === 'compact';
   const circleSize = compact ? 'w-[20px] h-[20px]' : 'w-[24px] h-[24px]';
@@ -56,6 +60,16 @@ export function TiketStepper({
   const connectorSize = compact ? 'w-[18px] h-[20px]' : 'w-[24px] h-[24px]';
   return (
     <div className={`flex items-center gap-[8px] ${className}`}>
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back"
+          className={`flex items-center justify-center ${circleSize} rounded-full text-[#71747d] hover:text-[#007bff] hover:bg-[#e7f2ff] transition-colors shrink-0`}
+        >
+          <ChevronLeft size={compact ? 14 : 16} />
+        </button>
+      )}
       {steps.map((step, index) => {
         const isCompleted = currentStep > step.id;
         const isCurrent = currentStep === step.id;

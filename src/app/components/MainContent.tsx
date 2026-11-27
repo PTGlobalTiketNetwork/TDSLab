@@ -32,6 +32,7 @@ interface MainContentProps {
   availableRatios: string[];
   availableVerticals: string[];
   onEditBanner?: (banner: Banner) => void;
+  onRenameBanner?: (banner: Banner) => void;
   onResizeBanner?: (banner: Banner) => void;
   onDuplicateBanner?: (banner: Banner) => void;
   onDownloadBanner?: (banner: Banner, scaleFactor: number) => void;
@@ -71,6 +72,7 @@ export function MainContent({
   onEditBanner,
   onResizeBanner,
   onDuplicateBanner,
+  onRenameBanner,
   onDownloadBanner,
   onDeleteBanner,
   onBulkDelete,
@@ -224,6 +226,7 @@ export function MainContent({
                 banner={banner}
                 bulkBanners={isInMultiSelection ? bulkBanners : undefined}
                 onEdit={onEditBanner}
+                onRename={onRenameBanner}
                 onResize={onResizeBanner}
                 onDuplicate={onDuplicateBanner}
                 onDownload={onDownloadBanner}
@@ -268,6 +271,7 @@ export function MainContent({
                 banner={banner}
                 bulkBanners={isInMultiSelection ? bulkBanners : undefined}
                 onEdit={onEditBanner}
+                onRename={onRenameBanner}
                 onResize={onResizeBanner}
                 onDuplicate={onDuplicateBanner}
                 onDownload={onDownloadBanner}

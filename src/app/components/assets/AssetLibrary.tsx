@@ -22,6 +22,7 @@ interface AssetLibraryProps {
   isSidebarCollapsed?: boolean;
   isLoading?: boolean;
   highlightId?: string | null;
+  onClearSelection?: () => void;
 }
 
 export function AssetLibrary({
@@ -37,6 +38,7 @@ export function AssetLibrary({
   isSidebarCollapsed = false,
   isLoading = false,
   highlightId,
+  onClearSelection,
 }: AssetLibraryProps) {
   const [viewMode, setViewMode] = useState<AssetViewMode>('grid');
   const [productFilter, setProductFilter] = useState("All");
@@ -127,7 +129,14 @@ export function AssetLibrary({
   );
 
   return (
-    <div className={listPageClass(!!selectedAssetId)}>
+    <div
+      className={listPageClass(!!selectedAssetId)}
+      onClick={(e) => {
+        // Click on empty background (not a card, button, input or menu) unselects
+        if ((e.target as HTMLElement).closest('button, input, a, select, textarea, [role="menu"], [role="menuitem"], [role="dialog"]')) return;
+        onClearSelection?.();
+      }}
+    >
       <ListToolbar
         viewMode={viewMode}
         onViewModeChange={setViewMode}
