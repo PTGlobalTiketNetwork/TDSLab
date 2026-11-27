@@ -40,6 +40,16 @@ Rangkuman buat diskusi. Semua PR dibuat oleh **yojdottix** dan sudah **merged** 
 - Kartu: banners created, assets delivered (EN + ID dihitung terpisah), estimated hours saved, avg time in tool, published.
 - Grafik tren, rincian per kategori / vertical / ratio, tabel per creator, plus kalimat ringkasan siap copy.
 - Waktu dihitung hanya saat tab terlihat dan ada aktivitas dalam 60 detik terakhir.
+- **Rumus "Estimated hours saved"** (per banner dalam rentang yang dipilih, lalu dijumlah):
+  ```
+  estimasi manual per banner (menit, default 30, bisa diubah di halaman Analytics)
+    − waktu aktual di tool (menit)
+  = menit hemat (0 kalau hasilnya negatif, biar banner yang makan waktu lebih lama tidak mengurangi total)
+  ```
+  Dijumlah untuk semua banner di rentang itu, lalu dibagi 60 untuk jadi jam. "Estimasi manual" adalah angka yang kamu set sendiri (anggapan lama bikin manual tanpa tool); bukan diukur, murni asumsi pembanding.
+- **"Waktu aktual di tool"** per banner datang dari `creationTimer` (`utils/creationTimer.ts`): mulai menghitung begitu form banner dibuka, +1 detik tiap detik selama tab ini sedang terlihat **dan** ada aktivitas (mouse/keyboard/scroll/touch) dalam 60 detik terakhir — idle atau pindah tab tidak dihitung. Detik ini tersimpan di `metadata.creation_seconds` setiap kali banner disimpan.
+- Kalau sebuah banner belum pernah punya `creation_seconds` (dibuat sebelum tracker ini ada, atau gagal tersimpan), "waktu aktual"-nya diisi rata-rata dari semua banner yang sudah punya data asli — supaya banner lama tidak dihitung hemat 30 menit penuh (yang akan membesar-besarkan angka).
+- Kartu "Avg time in tool" hanya menghitung banner yang benar-benar punya `creation_seconds` asli (tidak termasuk yang dipakaikan rata-rata di atas).
 
 **Desktop 5:1**
 - Ukuran 2000×400, teks memakai tampilan yang sama dengan 2:1. CTA di kanan, T&C di kanan bawah.
@@ -239,12 +249,18 @@ Rangkuman buat diskusi. Semua PR dibuat oleh **yojdottix** dan sudah **merged** 
 
 **List & lain-lain**
 - List TTD: filter "All Template" (Gradient / 2 Highlight / 3 Highlight) menggantikan Product/Ratio.
-- Analytics: range Daily dengan grafik per jam.
+- Analytics: range Daily dengan grafik per jam, **default dibuka di Daily** (sebelumnya Monthly).
 - Upload asset: ikon hapus kotak di kanan atas, teks "Browse file or paste from clipboard", logo baru langsung muncul di form.
 - Color picker: urutan Neutral, Blue, Yellow, Red; swatch transparan pakai checkerboard; hex 8 digit.
+- Home: "Recent Drafts" diganti jadi kartu info sederhana (kategori, nama, waktu) tanpa preview gambar, karena preview lama gagal untuk draft DLP/TTD (nested per-ukuran, bukan satu banner datar) dan malah menampilkan placeholder "Legacy Preview Disabled". Badge rasio hanya muncul untuk kategori Promo Banner.
+- Fix: membuka draft TTD Promo Asset dari Home membawa ke editor Promo Banner yang salah (peta slug kategori belum punya entri TTD) — sekarang ke editor TTD yang benar.
+- Fix: menyimpan/mengedit asset di Logo Assets menampilkan 2 snackbar sekaligus ("Asset updated successfully" hijau + versi hitam) — snackbar duplikatnya dihapus.
+- **Logo Assets: multi-select** (klik = pilih satu, Shift+klik = tambah/kurangi dari seleksi, Esc = batal pilih), panel kanan beralih ke ringkasan + Bulk Actions (**Move**, **Download**, **Delete** — tanpa Duplicate) saat 2+ terpilih. *(File asli tempat fitur ini pertama dibangun, `AssetListPage.tsx`, ternyata tidak pernah dipakai route manapun — logic-nya dipindah ke `AssetLibraryPage.tsx`, file yang benar-benar dipakai `/assets/:category`, dan file lama itu dihapus.)*
+- Favicon: kotak biru B500 (`#0064D2`) dengan lingkaran B400 (`#007BFF`) di tengah.
 
 ## File baru
 - `hooks/useAutoSaveDraft.tsx` — hook auto-save + indikator
+- `public/favicon.svg` — favicon
 
 ## Perlu dicek
 - Semua perubahan di PR #16 baru lolos `pnpm build`; belum dites di browser.
