@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, ChangeEvent } from 'react';
-import { Loader2, Image as ImageIcon, AlertTriangle, Info, Eraser, Undo2 } from 'lucide-react';
+import { Loader2, Image as ImageIcon, AlertTriangle, Info, Eraser, Undo2, X } from 'lucide-react';
 import { removeWhiteBackground } from '../../utils/removeWhiteBackground';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../ui/dialog';
 import { AssetService } from '../../../services/assetService';
@@ -133,6 +133,16 @@ export function SingleAssetUploadDialog({ open, onOpenChange, category: rawCateg
     setBeforeErase(null);
   };
 
+  // Clears the picked file/preview so the user can start over, keeping the typed asset name.
+  const clearAsset = () => {
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setBeforeErase(null);
+    setFileMetadata({ size: 'Auto', dimension: 'Auto', ratio: 'Auto' });
+    setDimensionError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) validateAndSetFile(file);
@@ -180,6 +190,7 @@ export function SingleAssetUploadDialog({ open, onOpenChange, category: rawCateg
       setUploadStatus('done');
       await new Promise((res) => setTimeout(res, 600)); // let the user see the bar complete
       onUploaded(created);
+      window.dispatchEvent(new CustomEvent('assets:changed', { detail: created }));
     } catch {
       clearInterval(tick);
       setUploadStatus('error');
@@ -240,11 +251,14 @@ export function SingleAssetUploadDialog({ open, onOpenChange, category: rawCateg
               <div className="w-10 h-10 mb-3 text-[#aeb2be] group-hover:text-[#007BFF] transition-colors">
                 <ImageIcon size={40} strokeWidth={1.5} />
               </div>
-              <span className="text-[14px] font-bold text-[#303135] group-hover:text-[#007BFF] transition-colors">Browse file</span>
+              <span className="text-[14px] font-bold text-[#303135] group-hover:text-[#007BFF] transition-colors">Browse file or paste from clipboard</span>
               <span className="text-[12px] text-[#aeb2be] mt-1">or drag and drop a file here</span>
             </div>
           ) : (
-            <div className="w-full h-[160px] border border-[#d8dce8] rounded-[8px] flex flex-col items-center justify-center bg-white">
+            <div className="w-full h-[160px] border border-[#d8dce8] rounded-[8px] flex flex-col items-center justify-center bg-white relative">
+              <button type="button" onClick={clearAsset} title="Clear asset" className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-[6px] border border-[#d8dce8] bg-white text-[#71747d] hover:text-[#d4183d] hover:border-[#d4183d] transition-colors">
+                <X size={14} />
+              </button>
               {/* Checkerboard so an erased (transparent) background is visible */}
               <div className="flex-1 flex items-center justify-center p-4 w-full h-full rounded-t-[8px]" style={beforeErase ? { backgroundImage: 'conic-gradient(#f0f1f4 25%, #fff 0 50%, #f0f1f4 0 75%, #fff 0)', backgroundSize: '16px 16px' } : undefined}>
                 <img src={previewUrl} alt="Preview" className="max-w-[80%] max-h-[90px] object-contain" />

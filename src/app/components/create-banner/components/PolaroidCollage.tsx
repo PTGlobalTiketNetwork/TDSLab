@@ -9,19 +9,21 @@ type Frame = { cx: number; cy: number; w: number; h: number; rot: number; border
 type Layout = { w: number; h: number; frames: Frame[] }; // frames[i] shows photo i (0 = key visual); default layer order = frame order
 
 const sq = (cx: number, cy: number, s: number, rot: number): Frame => ({ cx, cy, w: s, h: s, rot, border: s * 0.032, shadowY: 1 });
-const wide = (cx: number, cy: number, w: number, h: number, rot: number, border: number): Frame => ({ cx, cy, w, h, rot, border, shadowY: -1 });
+const wide = (cx: number, cy: number, w: number, h: number, rot: number, border: number): Frame => ({ cx, cy, w, h, rot, border, shadowY: 1 });
 
 const LAYOUTS: Record<'2:1' | '3:1' | '5:1', Record<'highlight-2' | 'highlight-3', Layout>> = {
   '2:1': {
-    'highlight-3': { w: 360, h: 180, frames: [sq(235.97, 100.76, 107.49, 6.88), wide(319.99, 135.6, 121.82, 88.03, -9.64, 3.95), sq(283.02, 42.53, 104.46, -27.32)] },
+    // frame order = photo number (1/2/3); photo 2 sits further back (top), photo 3 sits in front of it (bottom-right)
+    'highlight-3': { w: 360, h: 180, frames: [sq(235.97, 100.76, 107.49, 6.88), sq(283.02, 42.53, 104.46, -27.32), wide(319.99, 135.6, 121.82, 88.03, -9.64, 3.95)] },
     'highlight-2': { w: 360, h: 180, frames: [sq(256.17, 63.05, 123.03, 6.88), wide(301.56, 131.23, 145.5, 105.14, -9.64, 3.95)] },
   },
   '3:1': {
-    'highlight-3': { w: 360, h: 120, frames: [sq(232.47, 67.79, 94.33, 6.88), wide(306.2, 98.36, 106.9, 77.25, -9.64, 3.46), sq(273.75, 16.69, 91.66, -27.32)] },
+    'highlight-3': { w: 360, h: 120, frames: [sq(232.47, 67.79, 94.33, 6.88), sq(273.75, 16.69, 91.66, -27.32), wide(306.2, 98.36, 106.9, 77.25, -9.64, 3.46)] },
     'highlight-2': { w: 360, h: 120, frames: [sq(258.56, 34.19, 90.2, 6.88), wide(298.41, 89.82, 107.66, 77.8, -9.64, 3.46)] },
   },
   '5:1': {
-    'highlight-3': { w: 1000, h: 200, frames: [sq(127.86, 101.49, 146.4, 9.67), wide(272.5, 167.49, 180.27, 130.27, -9.64, 5.84), sq(215.66, 40.19, 154.58, -33.61)] },
+    // Positions tuned in Figma (node 107:1092)
+    'highlight-3': { w: 1000, h: 200, frames: [sq(136.56, 107.02, 146.4, 9.67), sq(235, 30.71, 154.58, -33.61), wide(289.1, 158.79, 180.27, 130.27, -9.64, 5.84)] },
     'highlight-2': { w: 1000, h: 200, frames: [sq(146.29, 65.91, 168.49, 6.88), wide(263.48, 139.22, 193.92, 140.13, -15.62, 5.26)] },
   },
 };
@@ -32,6 +34,61 @@ export const DEFAULT_CROP = { x: 50, y: 50, scale: 100 };
 export const DEFAULT_GROUP = { scale: 100, x: 0, y: 0 };
 export const OVERLAY_MAX_OPACITY = 80; // keep the overlay a background accent, never a full photo
 export const DEFAULT_OVERLAY: NonNullable<BannerFormData['polaroidOverlay']> = { enabled: true, source: 'upload', opacity: 40, fadeStart: 15, fadeEnd: 60, x: 50, y: 50, scale: 100 };
+
+// Polaroid layout version. v2 swapped highlight-3 frames 1 and 2 (frame order = photo number);
+// forms saved before that have photo 2/3 data in each other's slots, so swap them back once.
+export const POLAROID_LAYOUT_VERSION = 2;
+const migrateCache = new WeakMap<BannerFormData, BannerFormData>();
+export function migratePolaroidLayout(form: BannerFormData): BannerFormData {
+  if (!form || typeof form !== 'object') return form;
+  if ((form.polaroidLayoutVersion ?? 0) >= POLAROID_LAYOUT_VERSION) return form;
+  const cached = migrateCache.get(form);
+  if (cached) return cached;
+  let out: BannerFormData = { ...form, polaroidLayoutVersion: POLAROID_LAYOUT_VERSION };
+  if (form.ttdTemplate === 'highlight-3') {
+    const swap = <T,>(a: T[] | undefined, i: number, j: number) => {
+      if (!a) return a;
+      const c = [...a];
+      const len = Math.max(c.length, i + 1, j + 1);
+      c.length = len;
+      [c[i], c[j]] = [c[j], c[i]];
+      // trim trailing holes so we don't introduce undefined entries
+      while (c.length && c[c.length - 1] === undefined) c.pop();
+      return c;
+    };
+    out = {
+      ...out,
+      polaroidImages: swap(form.polaroidImages, 0, 1),
+      polaroidCrops: swap(form.polaroidCrops, 1, 2),
+      polaroidRotations: swap(form.polaroidRotations, 1, 2),
+      // Missing order meant the old default [0,1,2] in old frames, i.e. [0,2,1] in new photo indices.
+      polaroidOrder: (form.polaroidOrder ?? [0, 1, 2]).map((i) => (i === 1 ? 2 : i === 2 ? 1 : i)),
+    };
+  }
+  migrateCache.set(form, out);
+  return out;
+}
+const savedCache = new WeakMap<BannerFormData, BannerFormData>();
+// Applies migratePolaroidLayout to a saved banner's form_data, including nested TTD / DLP sub-forms.
+export function migrateSavedFormData<T extends BannerFormData | undefined | null>(fd: T): T {
+  if (!fd || typeof fd !== 'object') return fd;
+  const hit = savedCache.get(fd as BannerFormData);
+  if (hit) return hit as T;
+  const m = (f?: BannerFormData) => (f ? migratePolaroidLayout(f) : f);
+  let out = migratePolaroidLayout(fd as BannerFormData);
+  if (out.ttd) {
+    const ttd: any = { ...out.ttd };
+    for (const k of Object.keys(ttd)) if (ttd[k] && typeof ttd[k] === 'object' && 'bannerRatio' in ttd[k]) ttd[k] = m(ttd[k]);
+    out = { ...out, ttd };
+  }
+  if (out.dlp) {
+    const eps: any = { ...(out.dlp.entryPoints ?? {}) };
+    for (const k of Object.keys(eps)) eps[k] = m(eps[k]);
+    out = { ...out, dlp: { ...out.dlp, entryPoints: eps, header: out.dlp.header && { ...out.dlp.header, desktopForm: m(out.dlp.header.desktopForm), mobileForm: m(out.dlp.header.mobileForm) } } };
+  }
+  savedCache.set(fd as BannerFormData, out);
+  return out as T;
+}
 
 export const isPolaroidTemplate = (f: Pick<BannerFormData, 'ttdTemplate'>) => f.ttdTemplate === 'highlight-2' || f.ttdTemplate === 'highlight-3';
 export const polaroidCount = (f: Pick<BannerFormData, 'ttdTemplate'>) => (f.ttdTemplate === 'highlight-3' ? 3 : f.ttdTemplate === 'highlight-2' ? 2 : 0);
@@ -81,6 +138,9 @@ interface Props {
    *  so dragging a photo moves the polaroids even where they sit under the (draggable) text, while the visible
    *  polaroids stay behind the text. */
   handlesOnly?: boolean;
+  /** Show a small "2"/"3" badge on the stacked/overlapping photos so they're easy to tell apart in every in-app
+   *  preview (editor, dashboard summary cards, etc). Off only for the actual exported banner image. */
+  showNumberBadges?: boolean;
 }
 
 // Group offset is stored in ‰ of the banner (so it means the same on every render size).
@@ -158,7 +218,7 @@ export const panCrop = (url: string | null | undefined, crop: Crop, frameW: numb
     Math.round(clamp(fromPx(toPx(v, travel, frame) - d, travel, frame), CROP_MIN, CROP_MAX) * 10) / 10;
   return { x: step(crop.x, dx, travelX, frameW), y: step(crop.y, dy, travelY, frameH) };
 };
-export const MAX_TILT = 5; // deg each card can be rotated away from its Figma angle
+export const MAX_TILT = 8; // deg each card can be rotated away from its Figma angle
 
 export function groupGeometry(formData: BannerFormData, scale: number) {
   const layout = LAYOUTS[ratioKey(formData.bannerRatio)][formData.ttdTemplate === 'highlight-3' ? 'highlight-3' : 'highlight-2'];
@@ -183,7 +243,7 @@ export function groupGeometry(formData: BannerFormData, scale: number) {
 }
 
 /** Background + tilted polaroid photos. Fills its (positioned) parent; sits where the key visual and overlay usually go. */
-export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesOnly }: Props) {
+export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesOnly, showNumberBadges = true }: Props) {
   const layout = LAYOUTS[ratioKey(formData.bannerRatio)][formData.ttdTemplate === 'highlight-3' ? 'highlight-3' : 'highlight-2'];
   const ref = useRef<HTMLDivElement>(null);
   const [k, setK] = useState(1); // element px per Figma px
@@ -316,6 +376,7 @@ export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesO
         {[...order].reverse().map((i) => {
           const f = layout.frames[i];
           const crop = crops[i] ?? DEFAULT_CROP;
+          const rotDeg = f.rot + clamp(formData.polaroidRotations?.[i] ?? 0, -MAX_TILT, MAX_TILT);
           return (
             <div
               key={i}
@@ -327,7 +388,7 @@ export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesO
                 top: (f.cy - f.h / 2 - box.t) * k,
                 width: f.w * k,
                 height: f.h * k,
-                transform: `rotate(${f.rot + clamp(formData.polaroidRotations?.[i] ?? 0, -MAX_TILT, MAX_TILT)}deg)`,
+                transform: `rotate(${rotDeg}deg)`,
                 border: `${f.border * k}px solid ${handlesOnly ? 'transparent' : '#FFFFFF'}`,
                 background: handlesOnly ? 'transparent' : '#D9D9D9',
                 boxShadow: handlesOnly ? undefined : `0 ${f.shadowY * f.border * k}px ${f.border * 1.6 * k}px rgba(0,0,0,0.3)`,
@@ -345,6 +406,17 @@ export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesO
                   className="block select-none pointer-events-none"
                   style={cropStyle(crop)}
                 />
+              )}
+              {/* Helps tell the stacked/overlapping photos apart */}
+              {showNumberBadges && !handlesOnly && !srcs[i] && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div
+                    className="flex items-center justify-center w-[28px] h-[28px] rounded-full bg-black/60 text-white text-[14px] font-bold leading-none"
+                    style={{ transform: `rotate(${-rotDeg}deg)` }}
+                  >
+                    {i + 1}
+                  </div>
+                </div>
               )}
             </div>
           );

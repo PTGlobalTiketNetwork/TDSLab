@@ -1,4 +1,5 @@
 import { BannerFormData } from './types';
+import { gradientStopsCss, DEFAULT_OVERLAY_GRADIENT_STOPS } from './components/GradientEditor';
 import { FileText, CheckCircle, ChevronLeft, Share } from 'lucide-react';
 import TdsIcOvalPlus from '../../../imports/TdsIcOvalPlus-2016-512';
 import exampleImage from 'figma:asset/c593b610d3877a5faf067379a77363d554217a35.png';
@@ -33,6 +34,7 @@ interface BannerLegacyProps {
     onFormChange?: (updates: Partial<BannerFormData>) => void;
     /** Render only the 2:1 content column (headline, benefit, labels) — used by the Desktop 5:1 banner so it shows the very same component. */
     contentOnly?: { width: number; center?: boolean; verticalCenter?: boolean };
+    showPolaroidBadges?: boolean;
 }
 
 export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({ 
@@ -54,7 +56,8 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
     onElementMove,
     isShimmering,
     onFormChange,
-    contentOnly
+    contentOnly,
+    showPolaroidBadges = true
 }, ref) => {
   const content = formData.content[lang];
   // Text shadow on headline / benefit / labels: off unless the banner turns it on (applies to existing banners too)
@@ -86,9 +89,10 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
   const subHeadlineText = content.subHeadline || currentDefaults.subHeadline;
   const secondHeadlineText = content.secondHeadline || currentDefaults.secondHeadline;
   
-  // Use explicit check for Discount Amount to show placeholder '50'
-  const discountAmountText = (content.discountAmount || '50');
-  const secondDiscountAmountText = (content.secondDiscountAmount || '0');
+  // Show the typed amount as-is; only fall back to the placeholder when empty, and only if the
+  // currency isn't "None" (an empty amount with "None" currency means no nominal at all).
+  const discountAmountText = content.discountAmount || (content.discountType === 'Non-IDR' ? '' : '50');
+  const secondDiscountAmountText = content.secondDiscountAmount || (content.secondDiscountType === 'Non-IDR' ? '' : '0');
   const currencyLabel = getCurrencyLabel(content.discountType, content.customCurrency);
   const secondCurrencyLabel = getCurrencyLabel(content.secondDiscountType, content.secondCustomCurrency);
   
@@ -173,8 +177,15 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
   const stopPos = formData.overlayGradientStop ?? (isLandscape21ForOverlay ? 20 : 10); // Start of the fade
   const stopEnd = formData.overlayGradientEnd ?? (isLandscape21ForOverlay ? 70 : 100); // Where it has faded out
 
+  const overlaySolid = formData.overlayMode === 'solid';
+  const solidOp = (formData.overlaySolidOpacity ?? 100) / 100;
+  const solidCov = formData.overlaySolidCoverage ?? 50;
+  const solidBg = (dir: string) => `linear-gradient(${dir}, rgba(${rgb},${solidOp}) 0%, rgba(${rgb},${solidOp}) ${solidCov}%, transparent ${solidCov}%)`;
+  // Solid + gradient fill: the gradient sits on its own Coverage-sized block so the hard edge survives
+  const solidGrad = overlaySolid && formData.overlaySolidFill === 'gradient';
+  const solidGradEl = (anchor: React.CSSProperties) => <div className="absolute" style={{ ...anchor, background: gradientStopsCss(formData.overlaySolidGradientStops ?? DEFAULT_OVERLAY_GRADIENT_STOPS, formData.overlaySolidGradientType, formData.overlaySolidGradientAngle ?? 90), opacity: solidOp }} />;
   const gradientStyle = {
-      background: `linear-gradient(90deg, rgba(${rgb},${opacityStart}) 0%, rgba(${rgb},${opacityStart}) ${stopPos}%, rgba(${rgb},0) ${Math.max(stopPos + 1, stopEnd)}%)`,
+      background: solidGrad ? 'none' : overlaySolid ? solidBg('90deg') : `linear-gradient(90deg, rgba(${rgb},${opacityStart}) 0%, rgba(${rgb},${opacityStart}) ${stopPos}%, rgba(${rgb},0) ${Math.max(stopPos + 1, stopEnd)}%)`,
       transform: 'translateZ(0)', // Fix Safari stacking context
   };
   // Optional second overlay layer: same colour and opacity, its own stop position
@@ -186,7 +197,11 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
 
   const renderHtml = (text: string | undefined, className: string, style?: React.CSSProperties) => {
     if (!text) return null;
-    const htmlContent = tagsToHtml(text, 'font-style: italic; display: inline-block; transform: skewX(-10deg); transform-origin: 0 100%;');
+    // Trailing newlines (even inside closing tags) would render as an empty extra line.
+    const trimmed = text.replace(/\s+$/, '');
+    if (!trimmed) return null;
+    const htmlContent = tagsToHtml(trimmed, 'font-style: italic; display: inline-block; transform: skewX(-10deg); transform-origin: 0 100%;')
+      .replace(/(?:\s|<br\/>)+((?:<\/span>\s*)*)$/, '$1');
     return <span className={`${className}`} style={style} dangerouslySetInnerHTML={{ __html: htmlContent }} />;
   };
 
@@ -281,14 +296,14 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
             {line(isID ? 'hingga' : 'up to', 'normal', { color: 'white', ...tight })}
         </>);
     } else {
-        const isCustom = pt === 'custom';
+        const isCustom = pt === 'custom' || pt === 'buy_x_get_y';
         const customSize = (content.prefixFontSize || 20) * fontScale;
         const isMultiline = lines.length >= 4;
 
         // Render the whole value at once: tags may span line breaks (e.g. <i>+ instant\ncashback</i>)
         contentNode = (
             <span
-                className={`${base} text-left whitespace-nowrap block`}
+                className={`${base} ${contentOnly?.center ? 'text-center' : 'text-left'} whitespace-nowrap block`}
                 style={{
                     color,
                     fontSize: isCustom ? `${customSize}px` : `${fs}px`,
@@ -320,8 +335,8 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
     }
 
     return (
-        <div className="flex flex-col justify-end h-auto self-stretch items-end text-left">
-            <div className={`flex flex-col items-start mt-[0px] mr-[0px] mb-[6px] ml-[0px] ${shouldAlignBottom ? 'self-end' : ''}`} style={{ transform: `translateY(${Math.round(2 * fontScale)}px)` }}>{contentNode}</div>
+        <div className={`flex flex-col justify-end h-auto self-stretch ${contentOnly?.center ? 'items-center text-center' : 'items-end text-left'}`}>
+            <div className={`flex flex-col mt-[0px] mr-[0px] mb-[6px] ml-[0px] ${contentOnly?.center ? 'items-center' : 'items-start'} ${shouldAlignBottom ? 'self-end' : ''}`} style={{ transform: `translateY(${Math.round(2 * fontScale)}px)` }}>{contentNode}</div>
         </div>
     );
   };
@@ -380,9 +395,10 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                       const renderTopLabel = (which: 'first' | 'second', s: number) => renderLeftColumn(2 * s, true, which, true);
 
                       if (!content.hasSecondDiscount && formData.nudgeOnTop) {
-                        // Option: nudge centered above the number (same style as the two-benefit labels)
+                        // Option: nudge centered above the number (same style as the two-benefit labels) — always
+                        // centered regardless of `align`, since this composition only reads correctly centered.
                         return (
-                          <div className={`flex flex-col ${align === 'center' ? 'items-center' : 'items-start'}`} style={{ marginTop: `${16 * cs}px` }}>
+                          <div className="flex flex-col items-center w-full" style={{ marginTop: `${16 * cs}px` }}>
                             {hasPrefix && renderLeftColumn(2 * cs, true, 'first', true)}
                             <div style={{ marginTop: `${22 * cs}px` }}>{renderValue('first')}</div>
                           </div>
@@ -407,7 +423,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                       const labelWidth = (text?: string, type?: string) => {
                         if (!text || content.showPrefix === false) return 0;
                         const plain = text.replace(/<[^>]*>/g, '');
-                        const size = (type === 'custom' ? (content.prefixFontSize || 20) : 18) * 2;
+                        const size = ((type === 'custom' || type === 'buy_x_get_y') ? (content.prefixFontSize || 20) : 18) * 2;
                         return plain.length * size * 0.55;
                       };
                       const estWidth = (Math.max(groupWidth(currencyLabel, discountAmountText, discountAmountText ? content.unit : undefined), labelWidth(content.mainBenefitPrefix, content.prefixType))
@@ -491,7 +507,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
             </div>
 
             {/* Gradient overlay — same controls as 2:1, direction bottom-to-top */}
-            <div className="absolute bottom-0 left-0 right-0 h-[640px] z-10 pointer-events-none" style={{ background: `linear-gradient(to top, rgba(${rgb},${opacityStart}) 0%, rgba(${rgb},${opacityStart}) ${stopPos}%, rgba(${rgb},0) ${Math.max(stopPos + 1, stopEnd)}%)`, transform: 'translateZ(0)' }} />
+            <div className="absolute bottom-0 left-0 right-0 h-[640px] z-10 pointer-events-none" style={{ background: solidGrad ? 'none' : overlaySolid ? solidBg('to top') : `linear-gradient(to top, rgba(${rgb},${opacityStart}) 0%, rgba(${rgb},${opacityStart}) ${stopPos}%, rgba(${rgb},0) ${Math.max(stopPos + 1, stopEnd)}%)`, transform: 'translateZ(0)' }}>{solidGrad && solidGradEl({ left: 0, right: 0, bottom: 0, height: `${solidCov}%` })}</div>
             {/* DLP Header mobile: iOS status bar + transparent top bar (joy-proto `status-bar/ios` + `top-transparent/icons`), built at 360 logical px and scaled 2x */}
             {formData.dlpRole === 'header-mobile' && formData.dlpNavbar !== false && (
               <div data-dlp-navbar className="absolute top-0 left-0 z-20 pointer-events-none" style={{ width: 360, transform: 'scale(2)', transformOrigin: 'top left', fontFamily: 'inherit' }}>
@@ -519,12 +535,12 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                 </div>
               </div>
             )}
-            {formData.overlay2Enabled && <div className="absolute bottom-0 left-0 right-0 h-[640px] z-10 pointer-events-none" style={{ background: `linear-gradient(to top, rgba(${rgb},${opacity2}) 0%, rgba(${rgb},${opacity2}) ${formData.overlayGradientStop2 ?? 40}%, rgba(${rgb},0) ${Math.max((formData.overlayGradientStop2 ?? 40) + 1, formData.overlayGradientEnd2 ?? 100)}%)`, transform: 'translateZ(0)' }} />}
+            {formData.overlay2Enabled && !overlaySolid && <div className="absolute bottom-0 left-0 right-0 h-[640px] z-10 pointer-events-none" style={{ background: `linear-gradient(to top, rgba(${rgb},${opacity2}) 0%, rgba(${rgb},${opacity2}) ${formData.overlayGradientStop2 ?? 40}%, rgba(${rgb},0) ${Math.max((formData.overlayGradientStop2 ?? 40) + 1, formData.overlayGradientEnd2 ?? 100)}%)`, transform: 'translateZ(0)' }} />}
 
             {/* Partner logo */}
             {formData.showPartnerLogo && (
               <div className="absolute right-0 z-20 pointer-events-none" style={{ top: `${formData.partnerLogoY ?? getDefaultPartnerLogoY(formData)}px`, transform: 'translateZ(0)' }}>
-                <div className="flex items-center gap-[20px] px-[24px] py-[8px]" style={{ borderRadius: '40px 0 0 40px', background: formData.partnerLogoBgEnabled === false ? 'transparent' : (formData.partnerLogoBg ?? '#FFFFFF'), transform: `translateZ(0) scale(${formData.partnerLogoScale ?? getDefaultPartnerLogoScale(formData)})`, transformOrigin: 'top right' }}>
+                <div className="flex items-center gap-[20px] px-[24px] py-[8px]" style={{ borderRadius: '40px 0 0 40px', overflow: 'hidden', boxShadow: '0 4px 6px rgba(0,0,0,0.2)', background: formData.partnerLogoBgEnabled === false ? 'transparent' : (formData.partnerLogoBg ?? '#FFFFFF'), transform: `translateZ(0) scale(${formData.partnerLogoScale ?? getDefaultPartnerLogoScale(formData)})`, transformOrigin: 'top right' }}>
                   {formData.partnerLogos.slice(0, 3).map((slot, idx) => {
                     const isUrl = slot.logo?.startsWith('http') || slot.logo?.startsWith('figma:');
                     const imgSrc = isUrl ? slot.logo : (slot.logo ? `https://placehold.co/132x66/0064D2/FFFFFF/png?text=${slot.logo.substring(0, 3).toUpperCase()}` : exampleImage);
@@ -593,15 +609,27 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                         {content.labelDiscountType === 'With icon' && (
                           <div style={{ width: `${32 * cs}px`, height: `${32 * cs}px`, '--fill-0': content.labelDiscountIconColor || 'white' } as React.CSSProperties}><TdsIcOvalPlus /></div>
                         )}
-                        <div className={`font-bold ${textShadowClass} font-banner text-center`} style={{ fontSize: `${28 * cs}px`, color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "")}</div>
+                        <div className={`font-bold ${textShadowClass} font-banner text-center`} style={{ fontSize: `${(content.labelDiscountFontSize || 28) * cs}px`, color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "")}</div>
                       </div>
                     )}
 
                     {/* Additional label */}
                     {content.additionalLabel && formData.headlineType !== 'With Sub-Headline' && (
+                      content.additionalLabelType === 'Voucher' ? (
+                        <div className="inline-flex items-center font-banner shadow-sm" style={{ gap: `${8 * cs}px`, borderRadius: `${6 * cs}px`, padding: `${6 * cs}px ${8 * cs}px`, marginTop: `${16 * cs}px`, backgroundColor: content.additionalLabelBackgroundColor || '#FFFFFF', color: content.additionalLabelTextColor || '#007BFF' }}>
+                          <div className="font-normal leading-[1.15] text-left shrink-0" style={{ fontSize: `${(content.additionalLabelFontSize || 16) * 0.4 * cs}px` }}>
+                            <div>{lang === 'id' ? 'Kode' : 'Promo'}</div>
+                            <div>{lang === 'id' ? 'Promo:' : 'Code:'}</div>
+                          </div>
+                          <div className="font-bold uppercase tracking-tight leading-[0.8] whitespace-nowrap" style={{ fontSize: `${(content.additionalLabelFontSize || 16) * cs}px` }}>
+                            {renderHtml(content.additionalLabelText, "") || 'VOUCHERCODE'}
+                          </div>
+                        </div>
+                      ) : (
                       <div className="font-bold tracking-wider font-banner shadow-sm" style={{ fontSize: `${24 * cs}px`, borderRadius: '999px', padding: `${8 * cs}px ${24 * cs}px`, marginTop: `${16 * cs}px`, backgroundColor: content.additionalLabelBackgroundColor || '#FEDD00', color: content.additionalLabelTextColor || '#0064D2' }}>
                         {renderHtml(content.additionalLabelText, "") || 'LIMITED OFFER'}
                       </div>
+                      )
                     )}
                   </BoundingBox>
 
@@ -672,16 +700,19 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                              </h3>
                          )}
                          {secondLineText && formData.headlineType !== '1 Headline' && (
-                            <h3 className={`${textShadowClass} font-banner font-bold text-left ${isTwoHeadlines ? 'leading-[1.1] -mt-[4px] line-clamp-2 w-full break-words' : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[2px]' : '-mt-[4px]')}`} style={{ fontSize: isTwoHeadlines ? `${content.headlineFontSize || defaultHeadlineSize}px` : `${content.subHeadlineFontSize || 18}px`, color: content.subHeadlineColor || 'white' }}>
+                            <h3 className={`${textShadowClass} font-banner font-bold text-left ${isTwoHeadlines ? 'leading-[1.1] mt-[4px] line-clamp-2 w-full break-words' : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[2px]' : '-mt-[4px]')}`} style={{ fontSize: isTwoHeadlines ? `${content.headlineFontSize || defaultHeadlineSize}px` : `${content.subHeadlineFontSize || 18}px`, color: content.subHeadlineColor || 'white' }}>
                                 {renderHtml(secondLineText, "")}
                             </h3>
                          )}
                        </>
                      </HighlightWrapper>
-                     {!isTwoHeadlines && (
+                     {!isTwoHeadlines && !(formData.discountEnabled === false && !renderLeftColumn()) && (
                      <HighlightWrapper active={highlights?.nudgeDiff} label="Nudge Changed">
                        {isLandscape21 && (content.hasSecondDiscount || formData.nudgeOnTop) ? renderBenefit(0.5 * ((formData.portraitBenefitScale ?? 100) / 100), contentOnly ? contentOnly.width - 40 : 290, 0, contentOnly?.center ? 'center' : 'start') : (
-                       <div style={isLandscape21 ? { transform: `scale(${(formData.portraitBenefitScale ?? 100) / 100})`, transformOrigin: contentOnly?.center ? 'center' : 'left center' } : undefined}>
+                       // `zoom` (not `transform: scale`) so the scaled size also affects layout flow — otherwise the
+                       // Additional Perks row below stays positioned for the UNSCALED height and the spacing between
+                       // them never adjusts as portraitBenefitScale changes.
+                       <div style={isLandscape21 ? { zoom: (formData.portraitBenefitScale ?? 100) / 100 } as React.CSSProperties : undefined}>
                        <div className={`flex ${content.mainBenefitPrefix && content.showPrefix !== false ? 'items-stretch' : 'items-baseline'} gap-[4px] ${formData.headlineType === '1 Headline' ? (content.hasSecondDiscount ? 'mt-[-4px]' : 'mt-[16px]') : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[10px]' : 'mt-[-6px]')}`}>
                          {renderLeftColumn()}
                          {formData.discountEnabled !== false && (
@@ -730,21 +761,36 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                              {content.labelDiscountType === 'With icon' && (
                                  <div className="w-[16px] h-[16px]" style={{ '--fill-0': content.labelDiscountIconColor || 'white' } as React.CSSProperties}><TdsIcOvalPlus /></div>
                              )}
-                             <div className={`text-[14px] font-bold ${textShadowClass} font-banner`} style={{ color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "", { transform: 'translateY(0)' })}</div>
+                             <div className={`font-bold ${textShadowClass} font-banner`} style={{ fontSize: `${content.labelDiscountFontSize || 14}px`, color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "", { transform: 'translateY(0)' })}</div>
                           </div>
                       )}
                      </HighlightWrapper>
                      <HighlightWrapper active={highlights?.additionalLabelDiff} label="Additional Label Changed">
                       {content.additionalLabel && formData.headlineType !== 'With Sub-Headline' && (
-                          <div 
+                          content.additionalLabelType === 'Voucher' ? (
+                          <div
+                             className="inline-flex items-center gap-[8px] font-banner shadow-sm mt-[8px]"
+                             style={{ borderRadius: '6px', padding: '6px 8px', backgroundColor: content.additionalLabelBackgroundColor || '#FFFFFF', color: content.additionalLabelTextColor || '#007BFF' }}
+                          >
+                             <div className="font-normal leading-[1.15] text-left shrink-0" style={{ fontSize: `${(content.additionalLabelFontSize || 16) * 0.4}px` }}>
+                                 <div>{lang === 'id' ? 'Kode' : 'Promo'}</div>
+                                 <div>{lang === 'id' ? 'Promo:' : 'Code:'}</div>
+                             </div>
+                             <div className="font-bold uppercase tracking-tight leading-[0.8] whitespace-nowrap" style={{ fontSize: `${content.additionalLabelFontSize || 16}px` }}>
+                                 {renderHtml(content.additionalLabelText, "") || 'VOUCHERCODE'}
+                             </div>
+                          </div>
+                          ) : (
+                          <div
                              className={`text-[12px] font-bold px-[12px] py-[4px] rounded-[999px] tracking-wider font-banner shadow-sm mt-[8px]`}
-                             style={{ 
+                             style={{
                                  backgroundColor: content.additionalLabelBackgroundColor || '#FEDD00',
                                  color: content.additionalLabelTextColor || '#0064D2'
                              }}
                           >
                              {renderHtml(content.additionalLabelText, "") || 'LIMITED OFFER'}
                           </div>
+                          )
                       )}
                      </HighlightWrapper>
                      {/* 2:1 CTA — same settings as the 3:4 CTA (colours, width mode); sizes are half of the 720px canvas values */}
@@ -818,7 +864,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
         >
          {/* TTD Highlight templates: background colour + polaroid photos instead of the full-bleed key visual and overlay */}
          {isPolaroidTemplate(formData) ? (
-         <div className="absolute inset-0 z-0"><PolaroidCollage formData={formData} keyVisualUrl={previewUrl} /></div>
+         <div className="absolute inset-0 z-0"><PolaroidCollage formData={formData} keyVisualUrl={previewUrl} showNumberBadges={showPolaroidBadges} /></div>
          ) : (<>
          {/* Background Image with Progressive Blur-Up */}
          <div className="absolute inset-0 z-0">
@@ -874,8 +920,8 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
              )}
          </div>
          
-         <div className="absolute inset-0 pointer-events-none z-10" style={gradientStyle} />
-         {formData.overlay2Enabled && <div className="absolute inset-0 pointer-events-none z-10" style={gradientStyle2} />}
+         <div className="absolute inset-0 pointer-events-none z-10" style={gradientStyle}>{solidGrad && solidGradEl({ left: 0, top: 0, bottom: 0, width: `${solidCov}%` })}</div>
+         {formData.overlay2Enabled && !overlaySolid && <div className="absolute inset-0 pointer-events-none z-10" style={gradientStyle2} />}
          </>)}
 
          <div className="absolute left-0 top-0 h-full w-[55%] z-20 pointer-events-none" style={{ transform: 'translateZ(0)' }}>
@@ -900,7 +946,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
          {formData.showPartnerLogo && (
             <div className="absolute right-0 z-20 pointer-events-none" style={{ top: `${formData.partnerLogoY ?? 16}px`, transform: 'translateZ(0)' }}>
               <HighlightWrapper active={highlights?.partnerLogoDiff} label="Partner Logo Changed">
-                <div className="flex items-center gap-[10px] h-[35px] pl-[20px] pr-[10px] rounded-l-full rounded-r-none" style={{ background: formData.partnerLogoBgEnabled === false ? 'transparent' : (formData.partnerLogoBg ?? '#FFFFFF'), transform: `translateZ(0) scale(${formData.partnerLogoScale ?? lgScale})`, transformOrigin: 'top right' }}>
+                <div className="flex items-center gap-[10px] h-[35px] pl-[20px] pr-[10px] rounded-l-full rounded-r-none overflow-hidden" style={{ boxShadow: '0 4px 6px rgba(0,0,0,0.2)', background: formData.partnerLogoBgEnabled === false ? 'transparent' : (formData.partnerLogoBg ?? '#FFFFFF'), transform: `translateZ(0) scale(${formData.partnerLogoScale ?? lgScale})`, transformOrigin: 'top right' }}>
                     {formData.partnerLogos.slice(0, 3).map((slot, idx) => {
                          const isUrl = slot.logo?.startsWith('http') || slot.logo?.startsWith('figma:');
                          const imgSrc = isUrl ? slot.logo : (slot.logo ? `https://placehold.co/132x66/0064D2/FFFFFF/png?text=${slot.logo.substring(0, 3).toUpperCase()}` : exampleImage);

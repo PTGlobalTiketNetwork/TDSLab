@@ -1,6 +1,7 @@
 import { Switch } from '../../ui/switch';
+import { Dialog, DialogContent, DialogTitle } from '../../ui/dialog';
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, FlipHorizontal2, FlipVertical2, GripVertical, Loader2, RotateCw, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, FlipHorizontal2, FlipVertical2, GripVertical, Loader2, Maximize2, RotateCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { BannerFormData } from '../types';
 import { ColorPicker } from '../ColorPicker';
@@ -24,8 +25,9 @@ interface Props {
 export function PolaroidVisualFields({ formData, onChange }: Props) {
   const order = polaroidOrder(formData);
   const [uploading, setUploading] = useState<number | null>(null);
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
-  const [dragOver, setDragOver] = useState<number | null>(null);
+  const [imgDragFrom, setImgDragFrom] = useState<number | null>(null);
+  const [imgDragOver, setImgDragOver] = useState<number | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const keyVisualPreview = useMemo(
     () => (formData.keyVisualFile instanceof Blob ? URL.createObjectURL(formData.keyVisualFile) : formData.keyVisualUrl || null),
@@ -63,27 +65,37 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
     onChange({ polaroidOrder: next });
   };
 
+  // Swap which uploaded image sits in which photo slot (drag thumbnail onto thumbnail), leaving each slot's
+  // own crop/scale/rotation/layer order untouched — only the picture itself moves.
+  const getImage = (src: number): { file?: File | null; url?: string } =>
+    src === 0
+      ? { file: formData.keyVisualFile ?? null, url: formData.keyVisualFile ? undefined : formData.keyVisualUrl }
+      : { url: formData.polaroidImages?.[src - 1] || undefined };
+  const swapImages = (a: number, b: number) => {
+    if (a === b) return;
+    const imgA = getImage(a);
+    const imgB = getImage(b);
+    const updates: Partial<BannerFormData> = {};
+    const apply = (src: number, img: { file?: File | null; url?: string }) => {
+      if (src === 0) {
+        updates.keyVisualFile = img.file ?? null;
+        updates.keyVisualUrl = img.file ? undefined : img.url;
+      } else {
+        const next = updates.polaroidImages ? [...updates.polaroidImages] : [...(formData.polaroidImages ?? [])];
+        next[src - 1] = img.url || '';
+        updates.polaroidImages = next;
+      }
+    };
+    apply(a, imgB);
+    apply(b, imgA);
+    onChange(updates);
+  };
+
   const crop = (src: number) => formData.polaroidCrops?.[src] ?? DEFAULT_CROP;
   const setCrop = (src: number, patch: Partial<NonNullable<BannerFormData['polaroidCrops']>[number]>) => {
     const next = Array.from({ length: Math.max(3, formData.polaroidCrops?.length ?? 0) }, (_, i) => formData.polaroidCrops?.[i] ?? DEFAULT_CROP);
     next[src] = { ...next[src], ...patch };
     onChange({ polaroidCrops: next });
-  };
-  // Drag the thumbnail to move the focus point (same feel as panning a cropped image)
-  const panThumb = (e: React.PointerEvent<HTMLDivElement>, src: number) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const { clientWidth: w, clientHeight: h } = e.currentTarget;
-    const startCrop = crop(src);
-    const start = { px: e.clientX, py: e.clientY };
-    let raf = 0;
-    let last: PointerEvent | null = null;
-    const apply = () => { raf = 0; const ev = last!; setCrop(src, panCrop(srcOf(src), startCrop, w, h, ev.clientX - start.px, ev.clientY - start.py)); };
-    const move = (ev: PointerEvent) => { last = ev; if (!raf) raf = requestAnimationFrame(apply); }; // one update per frame
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
   };
   const overlay = { ...DEFAULT_OVERLAY, enabled: false, ...formData.polaroidOverlay };
   const setOverlay = (patch: Partial<typeof overlay>) => onChange({ polaroidOverlay: { ...overlay, ...patch } });
@@ -161,33 +173,44 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
     return (
       <div
         key={src}
-        draggable
-        onDragStart={(e) => { setDragFrom(layer); e.dataTransfer.effectAllowed = 'move'; }}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(layer); }}
-        onDragLeave={() => setDragOver((v) => (v === layer ? null : v))}
-        onDrop={(e) => { e.preventDefault(); if (dragFrom !== null) move(dragFrom, layer); setDragFrom(null); setDragOver(null); }}
-        onDragEnd={() => { setDragFrom(null); setDragOver(null); }}
-        className={`flex flex-col gap-[12px] rounded-[10px] border p-[12px] bg-white transition-colors ${dragOver === layer && dragFrom !== layer ? 'border-[#007BFF] bg-[#f2f8ff]' : 'border-[#e9ebef]'} ${dragFrom === layer ? 'opacity-50' : ''}`}
+        onDragOver={(e) => { if (imgDragFrom !== null) { e.preventDefault(); setImgDragOver(src); } }}
+        onDragLeave={() => setImgDragOver((v) => (v === src ? null : v))}
+        onDrop={(e) => { e.preventDefault(); if (imgDragFrom !== null) swapImages(imgDragFrom, src); setImgDragFrom(null); setImgDragOver(null); }}
+        className={`flex flex-col gap-[12px] rounded-[10px] border p-[12px] bg-white transition-colors ${imgDragOver === src && imgDragFrom !== src ? 'border-[#007BFF] bg-[#f2f8ff]' : 'border-[#e9ebef]'} ${imgDragFrom === src ? 'opacity-50' : ''}`}
       >
         <div className="flex items-center gap-[8px]">
-          <GripVertical size={16} className="text-[#9EA0A5] cursor-grab shrink-0" />
+          <GripVertical
+            size={16}
+            className="text-[#9EA0A5] cursor-grab shrink-0"
+            draggable={!!url}
+            onDragStart={(e) => { if (!url) { e.preventDefault(); return; } setImgDragFrom(src); e.dataTransfer.effectAllowed = 'move'; }}
+            onDragEnd={() => { setImgDragFrom(null); setImgDragOver(null); }}
+            title="Drag onto another photo to swap the uploaded image"
+          />
           <span className="text-[13px] font-bold text-[#303135] flex-1">Photo {src + 1} <span className="font-normal text-[#71747d]">· {layer === 0 ? 'front' : layer === order.length - 1 ? 'back' : 'middle'}</span></span>
           <button type="button" onClick={() => move(layer, layer - 1)} disabled={layer === 0} className="p-[4px] rounded-[6px] text-[#5e6066] hover:bg-[#f5f6fa] disabled:opacity-30" title="Bring forward"><ChevronUp size={14} /></button>
           <button type="button" onClick={() => move(layer, layer + 1)} disabled={layer === order.length - 1} className="p-[4px] rounded-[6px] text-[#5e6066] hover:bg-[#f5f6fa] disabled:opacity-30" title="Send backward"><ChevronDown size={14} /></button>
         </div>
         {url ? (
           <div className="flex gap-[12px]">
-            {/* Same crop as the polaroid frame: drag inside to reposition the image, scroll to zoom */}
             <div
-              className="relative w-[120px] shrink-0 self-start rounded-[6px] overflow-hidden border border-[#d8dce8] bg-[#f8f9fd] cursor-move"
-              style={{ aspectRatio: String(frameAspect(formData, src)), touchAction: 'none' }}
-              draggable={false}
-              onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              onPointerDown={(e) => panThumb(e, src)}
-              onWheel={(e) => setCrop(src, { scale: Math.min(300, Math.max(100, Math.round(c.scale - e.deltaY / 4))) })}
-              title="Drag to reposition, scroll to zoom"
+              className="relative w-[120px] shrink-0 self-start rounded-[6px] overflow-hidden border border-[#d8dce8] bg-[#f8f9fd] cursor-grab"
+              style={{ aspectRatio: String(frameAspect(formData, src)) }}
+              draggable
+              onDragStart={(e) => { setImgDragFrom(src); e.dataTransfer.effectAllowed = 'move'; }}
+              onDragEnd={() => { setImgDragFrom(null); setImgDragOver(null); }}
+              onDoubleClick={() => setPreviewUrl(url)}
+              title="Double-click to view full size · drag onto another photo to swap"
             >
-              <img src={url} alt={`Photo ${src + 1}`} className="pointer-events-none select-none" style={cropStyle(c)} draggable={false} />
+              <img src={url} alt={`Photo ${src + 1}`} className="w-full h-full object-cover pointer-events-none select-none" draggable={false} />
+              <button
+                type="button"
+                onClick={() => setPreviewUrl(url)}
+                className="absolute top-[4px] left-[4px] bg-white/90 p-[4px] rounded-full shadow-sm hover:text-[#007BFF] transition-colors"
+                title="View full size"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => (src === 0 ? onChange({ keyVisualFile: null, keyVisualUrl: undefined }) : setExtra(src, ''))}
@@ -333,6 +356,12 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
           </>
         )}
       </div>
+      <Dialog open={!!previewUrl} onOpenChange={(o) => { if (!o) setPreviewUrl(null); }}>
+        <DialogContent className="max-w-[90vw] w-auto p-[16px]">
+          <DialogTitle className="sr-only">Photo preview</DialogTitle>
+          {previewUrl && <img src={previewUrl} alt="Full size" className="max-w-[85vw] max-h-[80vh] object-contain mx-auto" />}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

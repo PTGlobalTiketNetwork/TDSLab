@@ -20,9 +20,10 @@ import { getUserDisplayName } from '../../utils/userDisplay';
 import { SETTINGS_VERSION } from '../create-banner/settingsVersion';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import { startCreationTimer, stopCreationTimer } from '../../../utils/creationTimer';
-import { buildDlpZipManifest } from '../../utils/bannerCapture';
+import { buildDlpZipManifest, DESKTOP_EXPORT_CAP_NOTE, dlpZipBaseName } from '../../utils/bannerCapture';
 import { Download } from 'lucide-react';
 import type { BannerFormData } from '../create-banner/types';
+import { migrateSavedFormData } from '../create-banner/components/PolaroidCollage';
 import type { Banner } from '../../../types/banner';
 
 // Blue like the Next button
@@ -82,7 +83,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
     startCreationTimer(initialSeconds);
     return () => stopCreationTimer();
   }, []);
-  const saved = initialData?.dlp;
+  const saved = migrateSavedFormData(initialData)?.dlp;
   const [picked, setPicked] = useState<Partial<Record<OptionId, boolean>>>(() => saved ? {
     'hdr-mobile': saved.header.mobile,
     'hdr-desktop-4x1': saved.header.desktop,
@@ -139,12 +140,21 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
     // Overlay color/layer-count are shared concepts but live in different fields for mobile vs desktop ratios — read from whichever side the source is, write to whichever side the target is.
     const overlayColor = isDesktopId(from) ? src.desktopOverlayColor : src.overlayColor;
     const overlay2Enabled = isDesktopId(from) ? src.desktopOverlay2Enabled : src.overlay2Enabled;
+    const overlayMode = isDesktopId(from) ? src.desktopOverlayMode : src.overlayMode;
+    const solidCoverage = isDesktopId(from) ? src.desktopOverlaySolidCoverage : src.overlaySolidCoverage;
+    const solidOpacity = isDesktopId(from) ? src.desktopOverlaySolidOpacity : src.overlaySolidOpacity;
+    const solidFill = isDesktopId(from) ? src.desktopOverlaySolidFill : src.overlaySolidFill;
+    const solidGradientStops = isDesktopId(from) ? src.desktopOverlaySolidGradientStops : src.overlaySolidGradientStops;
+    const solidGradientType = isDesktopId(from) ? src.desktopOverlaySolidGradientType : src.overlaySolidGradientType;
+    const solidGradientAngle = isDesktopId(from) ? src.desktopOverlaySolidGradientAngle : src.overlaySolidGradientAngle;
     const overlayUpdates: Partial<BannerFormData> = isDesktopId(to)
-      ? { desktopOverlayColor: overlayColor, desktopOverlay2Enabled: overlay2Enabled }
-      : { overlayColor, overlay2Enabled };
+      ? { desktopOverlayColor: overlayColor, desktopOverlay2Enabled: overlay2Enabled, desktopOverlayMode: overlayMode, desktopOverlaySolidCoverage: solidCoverage, desktopOverlaySolidOpacity: solidOpacity, desktopOverlaySolidFill: solidFill, desktopOverlaySolidGradientStops: solidGradientStops, desktopOverlaySolidGradientType: solidGradientType, desktopOverlaySolidGradientAngle: solidGradientAngle }
+      : { overlayColor, overlay2Enabled, overlayMode, overlaySolidCoverage: solidCoverage, overlaySolidOpacity: solidOpacity, overlaySolidFill: solidFill, overlaySolidGradientStops: solidGradientStops, overlaySolidGradientType: solidGradientType, overlaySolidGradientAngle: solidGradientAngle };
     return {
       ...JSON.parse(JSON.stringify({
         content: src.content,
+        headlineFormatSynced: src.headlineFormatSynced,
+        labelDiscountFormatSynced: src.labelDiscountFormatSynced,
         headlineType: src.headlineType,
         discountEnabled: src.discountEnabled,
         showCampaignLogo: src.showCampaignLogo,
@@ -153,8 +163,12 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
         partnerLogos: src.partnerLogos,
         keyVisualUrl: src.keyVisualUrl,
         keyVisualRotation: src.keyVisualRotation,
-        keyVisualFlipH: src.keyVisualFlipH,
-        keyVisualFlipV: src.keyVisualFlipV,
+        // Desktop 5:1 has its own flip (falls back to the mobile one when unset)
+        ...(() => {
+          const fh = isDesktopId(from) ? (src.desktopKeyVisualFlipH ?? src.keyVisualFlipH) : src.keyVisualFlipH;
+          const fv = isDesktopId(from) ? (src.desktopKeyVisualFlipV ?? src.keyVisualFlipV) : src.keyVisualFlipV;
+          return isDesktopId(to) ? { desktopKeyVisualFlipH: fh, desktopKeyVisualFlipV: fv } : { keyVisualFlipH: fh, keyVisualFlipV: fv };
+        })(),
         ...overlayUpdates,
       })),
       keyVisualFile: src.keyVisualFile, // File object: shared, not cloned
@@ -173,6 +187,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
   const applyToTargets = () => {
     if (!applyDialog) return;
     applyDialog.targets.forEach((t) => epChange(t, copyUpdates(applyDialog.from, t)));
+    toast.custom((t) => <TiketSnackbar id={t} message="Content copied, adjust in other ratio manually." />, { duration: 4000 });
     setApplyDialog(null);
   };
   const [sizeOpen, setSizeOpen] = useState<Record<string, boolean>>({});
@@ -207,9 +222,11 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
   const steps: TiketStepItem[] = keys.map((k, i) => ({ id: i + 1, label: STEP_LABEL[k] }));
   const current = keys[Math.min(index, keys.length - 1)];
   const anyPicked = Object.values(picked).some(Boolean);
-  // DLP Header Mobile/Desktop are forced on by default (see the `picked` initializer above) — they
-  // don't count as a "change" for the exit-confirmation below, only entry points + vertical + name do.
-  const hasRealChanges = (['ep-mobile-2x1', 'ep-mobile-3x4', 'ep-desktop'] as OptionId[]).some((id) => picked[id]) || !!vertical || !!projectName.trim();
+  // Only real banner content counts for the exit-confirmation (same as To Do): picking options, the vertical
+  // and the project name are just wizard setup, so leaving right after them goes straight back without a prompt.
+  const stripFiles = (forms: Record<string, BannerFormData>) => JSON.stringify(Object.fromEntries(Object.entries(forms).map(([k, f]) => [k, { ...f, keyVisualFile: undefined }])));
+  const initialEpFormsRef = useRef(stripFiles(epForms));
+  const hasRealChanges = Object.values(epForms).some((f) => !!f.keyVisualFile) || stripFiles(epForms) !== initialEpFormsRef.current;
   const isLast = index >= keys.length - 1;
 
   // Saves the whole project as one DLP Assets record. Key visuals are uploaded first, the thumbnail is the first entry point banner.
@@ -315,7 +332,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
         entryPoints: Object.fromEntries(epIds.map((e) => [e, epForm(e)])),
       };
       const banners = buildDlpZipManifest(dlp);
-      await renderer.current?.downloadDlpZip({ projectName: projectName.trim() || 'DLP Assets', scaleFactor, banners });
+      await renderer.current?.downloadDlpZip({ projectName: projectName.trim() || 'DLP Assets', zipName: dlpZipBaseName(vertical, projectName), scaleFactor, banners });
     } finally {
       setIsZipping(false);
     }
@@ -642,6 +659,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
                         </button>
                       ))}
                     </div>
+                    {/desktop|5:1|4:1/i.test(`${id} ${title}`) && <p className="text-[11px] text-gray-500">{DESKTOP_EXPORT_CAP_NOTE}</p>}
                   </div>
                 </PopoverContent>
               </Popover>
@@ -685,6 +703,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
                         </button>
                       ))}
                     </div>
+                    <p className="text-[11px] text-gray-500">{DESKTOP_EXPORT_CAP_NOTE}</p>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -969,7 +988,8 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
                <button
                 type="button"
                 onClick={() => onBack()}
-                className="w-full h-[48px] px-[24px] text-[#d4183d] text-[16px] font-bold rounded-[8px] transition-colors flex items-center justify-center gap-2"
+                disabled={isSaving || isSavingDraft}
+                className="w-full h-[48px] px-[24px] text-[#d4183d] text-[16px] font-bold rounded-[8px] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: '#FFDFDF', borderColor: '#FFDFDF' }}
               >
                 <Trash2 size={16} />

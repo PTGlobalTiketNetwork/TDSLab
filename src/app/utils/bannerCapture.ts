@@ -135,6 +135,22 @@ export interface CaptureBannerOptions {
   minBytes?: number;
   /** Inline style overrides passed to html-to-image. */
   style?: Partial<CSSStyleDeclaration>;
+  /** Cap on the exported image width in px; pixelRatio is lowered so width never exceeds it. */
+  maxOutputWidth?: number;
+}
+
+/** Desktop banners are never exported wider than this, at any download scale. */
+export const DESKTOP_MAX_EXPORT_WIDTH = 1600;
+export const DESKTOP_EXPORT_CAP_NOTE = 'Desktop banners max 1600px wide';
+
+export function isDesktopBannerRatio(ratio?: string | null): boolean {
+  return !!ratio && ratio.startsWith('Desktop');
+}
+
+/** Effective pixel ratio for a banner of `nativeWidth` px: min(scale, 1600 / nativeWidth) for desktop. */
+export function cappedPixelRatio(scale: number, nativeWidth: number, isDesktop: boolean): number {
+  if (!isDesktop || !nativeWidth) return scale;
+  return Math.min(scale, DESKTOP_MAX_EXPORT_WIDTH / nativeWidth);
 }
 
 export interface CaptureResult {
@@ -157,9 +173,14 @@ export async function captureBannerElement(
   maxAttempts = 2,
 ): Promise<CaptureResult> {
   const fontCss = options.fontCss ?? (await getBase64FontCSS());
-  const pixelRatio = options.pixelRatio ?? 1;
-
   const rect = element.getBoundingClientRect();
+  let pixelRatio = options.pixelRatio ?? 1;
+  if (options.maxOutputWidth) {
+    // offsetWidth is the untransformed layout width, which is what html-to-image renders at.
+    const layoutW = element.offsetWidth || rect.width;
+    if (layoutW > 0) pixelRatio = Math.min(pixelRatio, options.maxOutputWidth / layoutW);
+  }
+
   const minBytes =
     options.minBytes ??
     estimateMinBytes(
@@ -306,6 +327,15 @@ export async function renderTtdVerticalIcon(ttd: NonNullable<BannerFormData['ttd
 /** Sanitizes a project name for use as a filesystem/zip entry name. */
 export function sanitizeFileName(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'DLP Assets';
+}
+
+/** DLP ZIP base name: "DLP (<Product>) - <Project name>" (the "<Product> - " name prefix is not repeated). */
+export function dlpZipBaseName(product: string | null | undefined, projectName: string): string {
+  const p = (product || '').trim();
+  let name = (projectName || '').trim();
+  if (p && name.toLowerCase().startsWith(`${p.toLowerCase()} - `)) name = name.slice(p.length + 3).trim();
+  const base = p ? `DLP (${p}) - ${name || 'DLP Assets'}` : `DLP - ${name || 'DLP Assets'}`;
+  return sanitizeFileName(base);
 }
 
 /** downloadDlpZip params for a TTD Promo Asset project: the picked banners + the Brand Icon PNG (when picked). */

@@ -23,7 +23,7 @@ import {
   CollapsibleTrigger,
 } from "../ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
+import { Radio } from "../create-banner/components/Radio";
 import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { Lightbox } from '../Lightbox';
@@ -1021,56 +1021,51 @@ export function GenerativeResize({ session }: GenerativeResizeProps) {
                             <label className="text-[12px] font-semibold text-[#71747d] uppercase tracking-wider">
                                 Focus & Layout
                             </label>
-                            <RadioGroup value={composition} onValueChange={setComposition} className="grid grid-cols-1 gap-2" disabled={isGenerating}>
+                            <div className="grid grid-cols-1 gap-2">
                                 {/* Center - Always Available */}
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="center" id="comp-center" />
-                                    <Label htmlFor="comp-center" className="text-[14px] flex items-center gap-2 cursor-pointer">
+                                <Radio name="composition" checked={composition === 'center'} onChange={() => setComposition('center')} disabled={isGenerating}>
+                                    <span className="text-[14px] flex items-center gap-2">
                                         <Grid3X3 className="w-4 h-4 text-[#71747d]" />
                                         Center Focus (Default)
-                                    </Label>
-                                </div>
+                                    </span>
+                                </Radio>
 
                                 {/* Landscape Options */}
                                 {getOrientation(ratio) === 'landscape' && (
                                     <>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="split-left" id="comp-split-left" />
-                                        <Label htmlFor="comp-split-left" className="text-[14px] flex items-center gap-2 cursor-pointer">
+                                    <Radio name="composition" checked={composition === 'split-left'} onChange={() => setComposition('split-left')} disabled={isGenerating}>
+                                        <span className="text-[14px] flex items-center gap-2">
                                             <ArrowRightLeft className="w-4 h-4 text-[#71747d]" />
                                             Split: Text Left / Image Right
-                                        </Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="split-right" id="comp-split-right" />
-                                        <Label htmlFor="comp-split-right" className="text-[14px] flex items-center gap-2 cursor-pointer">
+                                        </span>
+                                    </Radio>
+                                    <Radio name="composition" checked={composition === 'split-right'} onChange={() => setComposition('split-right')} disabled={isGenerating}>
+                                        <span className="text-[14px] flex items-center gap-2">
                                             <ArrowRightLeft className="w-4 h-4 text-[#71747d]" />
                                             Split: Image Left / Text Right
-                                        </Label>
-                                    </div>
+                                        </span>
+                                    </Radio>
                                     </>
                                 )}
 
                                 {/* Portrait Options */}
                                 {getOrientation(ratio) === 'portrait' && (
                                     <>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="split-top" id="comp-split-top" />
-                                        <Label htmlFor="comp-split-top" className="text-[14px] flex items-center gap-2 cursor-pointer">
+                                    <Radio name="composition" checked={composition === 'split-top'} onChange={() => setComposition('split-top')} disabled={isGenerating}>
+                                        <span className="text-[14px] flex items-center gap-2">
                                             <MoveVertical className="w-4 h-4 text-[#71747d]" />
                                             Split: Text Top / Image Bottom
-                                        </Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="split-bottom" id="comp-split-bottom" />
-                                        <Label htmlFor="comp-split-bottom" className="text-[14px] flex items-center gap-2 cursor-pointer">
+                                        </span>
+                                    </Radio>
+                                    <Radio name="composition" checked={composition === 'split-bottom'} onChange={() => setComposition('split-bottom')} disabled={isGenerating}>
+                                        <span className="text-[14px] flex items-center gap-2">
                                             <MoveVertical className="w-4 h-4 text-[#71747d]" />
                                             Split: Image Top / Text Bottom
-                                        </Label>
-                                    </div>
+                                        </span>
+                                    </Radio>
                                     </>
                                 )}
-                            </RadioGroup>
+                            </div>
                         </div>
 
                         {/* Toggles */}

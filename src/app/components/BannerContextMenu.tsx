@@ -13,6 +13,8 @@ import {
 } from './ui/context-menu';
 import { Edit2, Scaling, Copy, Download, Trash2, FileDown, Send, X, TextCursorInput } from 'lucide-react';
 import { useAccess } from '../../context/AccessContext';
+import { DESKTOP_EXPORT_CAP_NOTE, cappedPixelRatio, isDesktopBannerRatio } from '../utils/bannerCapture';
+import { desktopCanvasHeight } from './create-banner/BannerDesktop51';
 
 const DOWNLOAD_SCALES = [
   { factor: 1, label: '1x', description: 'Standard' },
@@ -60,6 +62,7 @@ export function BannerContextMenu({
   const hasFormData = !!(banner as any).form_data;
   const hasImage = !!banner.imageUrl;
   const nativeDims = useMemo(() => getNativeDimensions(banner), [banner]);
+  const isDesktop = isDesktopBannerRatio((banner as any).form_data?.bannerRatio);
 
   const isBulk = bulkBanners && bulkBanners.length >= 2;
   const bulkCount = isBulk ? bulkBanners.length : 0;
@@ -199,8 +202,9 @@ export function BannerContextMenu({
                   Downloads EN & ID versions
                 </div>
                 {DOWNLOAD_SCALES.map(({ factor, label, description }) => {
+                  const eff = nativeDims ? cappedPixelRatio(factor, nativeDims.w, isDesktop) : factor;
                   const outputDims = nativeDims
-                    ? `${Math.round(nativeDims.w * factor)}x${Math.round(nativeDims.h * factor)}`
+                    ? `${Math.round(nativeDims.w * eff)}x${Math.round(nativeDims.h * eff)}`
                     : null;
                   return (
                     <ContextMenuItem
@@ -218,6 +222,9 @@ export function BannerContextMenu({
                     </ContextMenuItem>
                   );
                 })}
+                {isDesktop && (
+                  <div className="px-2 py-1.5 text-[10px] text-muted-foreground">{DESKTOP_EXPORT_CAP_NOTE}</div>
+                )}
               </ContextMenuSubContent>
             </ContextMenuSub>
 
@@ -243,6 +250,10 @@ function getNativeDimensions(banner: Banner): { w: number; h: number } | null {
     const category = formData.bannerCategory;
     const ratio = formData.bannerRatio;
     const nativeW = 600;
+
+    if (category !== 'Product Entry Point' && isDesktopBannerRatio(ratio)) {
+      return { w: 2000, h: desktopCanvasHeight(ratio) };
+    }
 
     if (category === 'Product Entry Point') {
       if (ratio === 'Mobile (2:1)' || ratio === 'mobile_2:1') return { w: 320, h: 160 };

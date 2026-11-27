@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Lock, Unlock, RotateCcw } from 'lucide-react';
 import { BANNER_SPECS } from '../../../config/banner-layouts';
 import { BannerFormData, ContentTranslation } from './types';
+import { migratePolaroidLayout, POLAROID_LAYOUT_VERSION } from './components/PolaroidCollage';
 import { FormStepConfig } from './FormStepConfig';
 import { FormStep2 } from './FormStep2';
 import { FormStep3 } from './FormStep3';
@@ -42,6 +43,7 @@ interface CreateBannerProps {
 }
 
 export const initialFormDataBase: BannerFormData = {
+  polaroidLayoutVersion: POLAROID_LAYOUT_VERSION, // new forms already use the current frame order
   // Step 1: Configuration
   bannerName: '',
   landscapeContentScale: NEW_LANDSCAPE_21_CONTENT_SCALE, // only read by the 2:1/3:1 layout
@@ -234,7 +236,7 @@ export function CreateBanner({
       return 1;
   });
   const [formData, setFormData] = useState<BannerFormData>(() => {
-      if (initialData) return initialData;
+      if (initialData) return migratePolaroidLayout(initialData);
       
       // Customize defaults based on Category
       const base = JSON.parse(JSON.stringify(initialFormDataBase)); // Deep clone to avoid mutation
@@ -326,7 +328,7 @@ export function CreateBanner({
 
   // Store initial state for change detection
   // We use a ref so it doesn't trigger re-renders, but we need it to be stable
-  const initialBannerState = useRef<string>(JSON.stringify(initialData || {
+  const initialBannerState = useRef<string>(JSON.stringify((initialData && migratePolaroidLayout(initialData)) || {
       ...initialFormDataBase,
       bannerCategory: initialCategory
   }));

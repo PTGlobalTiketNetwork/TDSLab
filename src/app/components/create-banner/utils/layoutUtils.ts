@@ -2,8 +2,8 @@ import { BANNER_SPECS } from '../../../../config/banner-layouts';
 import { BannerFormData, CurrencyType } from '../types';
 
 /**
- * Converts the rich-text storage tags (<sb>, <b>, <eb>, <r>, <i>, <c v="">) and newlines into HTML.
- * Works on the whole string at once so tags that span multiple lines stay intact.
+ * Converts the rich-text storage tags (<sb>, <b>, <eb>, <r>, <i>, <c v="">, <fs v="">) and newlines
+ * into HTML. Works on the whole string at once so tags that span multiple lines stay intact.
  */
 export const tagsToHtml = (
     text: string,
@@ -22,7 +22,9 @@ export const tagsToHtml = (
         .replace(/<i>/g, `<span style="${italicStyle}">`)
         .replace(/<\/i>/g, '</span>')
         .replace(/<c v="(.*?)">/g, '<span style="color: $1">')
-        .replace(/<\/c>/g, '</span>');
+        .replace(/<\/c>/g, '</span>')
+        .replace(/<fs v="(.*?)">/g, '<span style="font-size: $1px">')
+        .replace(/<\/fs>/g, '</span>');
 
 /** Text shown before the discount number. 'IDR' is the legacy value and renders as "Rp". */
 export const getCurrencyLabel = (type: CurrencyType | undefined, customCurrency?: string): string => {
@@ -139,6 +141,11 @@ export const analyzeUniformFormat = (text: string): { weight: WeightTag | null; 
 /** Strips weight (sb/b/eb/r) and italic (i) wrapper tags, keeping the raw text (and any `<c>` colour tags) intact. */
 export const stripWeightItalicTags = (text: string): string => text.replace(/<\/?(sb|b|eb|r|i)>/g, '');
 
+/** Strips `<fs v="...">` per-character font-size overrides, keeping the raw text intact. Used when a block-level
+ *  size (the Size slider) is meant to be the single source of truth — a leftover override would otherwise keep
+ *  rendering at its own size regardless of what the Size field shows. */
+export const stripFontSizeTags = (text: string): string => text.replace(/<fs v="[^"]*">/g, '').replace(/<\/fs>/g, '');
+
 /** Re-applies a uniform weight/italic format (as read by `analyzeUniformFormat`) to a plain-ish headline string. */
 export const applyUniformFormat = (text: string, format: { weight: WeightTag | null; italic: boolean }): string => {
     let out = stripWeightItalicTags(text);
@@ -166,6 +173,7 @@ export const prefixOptions = {
       { id: 'start_from', label: 'Start from', value: 'Start from' },
       { id: 'instant_cashback', label: 'Instant cashback', value: 'Instant\ncashback' },
       { id: 'instant_cashback_upto', label: 'Instant cashback up to', value: 'Instant\ncashback\nup to' },
+      { id: 'buy_x_get_y', label: 'Buy X get Y', value: 'Buy X get Y' },
       { id: 'custom', label: 'Custom', value: '' },
     ],
     id: [
@@ -175,9 +183,16 @@ export const prefixOptions = {
       { id: 'start_from', label: 'Mulai dari', value: 'Mulai dari' },
       { id: 'instant_cashback', label: 'Instant cashback', value: 'Instant\ncashback' },
       { id: 'instant_cashback_upto', label: 'Instant cashback hingga', value: 'Instant\ncashback\nhingga' },
+      { id: 'buy_x_get_y', label: 'Beli X Gratis X', value: 'Beli X Gratis X' },
       { id: 'custom', label: 'Custom', value: '' },
     ],
 };
+
+/** Nudge types that stand alone and imply there's no numeric discount amount/unit to show. */
+export const NUDGE_TYPES_WITHOUT_AMOUNT = ['buy_x_get_y'];
+
+/** Nudge types that are freely editable rich text (as opposed to a fixed preset label). */
+export const FREE_TEXT_PREFIX_TYPES = ['custom', 'buy_x_get_y'];
 
 export const loadDefaultPositions = (lang: 'en' | 'id', nudgeId: string, hasSecondDiscount: boolean = false) => {
     const specs = (BANNER_SPECS as any)['Square (1:1)'];

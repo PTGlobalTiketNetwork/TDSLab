@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { HexColorPicker } from 'react-colorful';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -14,46 +14,6 @@ interface ColorToken {
 
 export const colorTokens: ColorToken[] = [
   // Red
-  { name: 'r900', value: '#380909', family: 'Red' },
-  { name: 'r800', value: '#610F0F', family: 'Red' },
-  { name: 'r700', value: '#8C1616', family: 'Red' },
-  { name: 'r600', value: '#B81D1D', family: 'Red' },
-  { name: 'r500', value: '#E52424', family: 'Red' },
-  { name: 'r400', value: '#F15C59', family: 'Red' },
-  { name: 'r300', value: '#FC7474', family: 'Red' },
-  { name: 'r200', value: '#FC9999', family: 'Red' },
-  { name: 'r100', value: '#FFDFDF', family: 'Red' },
-  // Yellow
-  { name: 'y900', value: '#3D3500', family: 'Yellow' },
-  { name: 'y800', value: '#6C5E00', family: 'Yellow' },
-  { name: 'y700', value: '#AD9700', family: 'Yellow' },
-  { name: 'y600', value: '#E5C700', family: 'Yellow' },
-  { name: 'y500', value: '#FEDD00', family: 'Yellow' },
-  { name: 'y400', value: '#FEE645', family: 'Yellow' },
-  { name: 'y300', value: '#FEEC73', family: 'Yellow' },
-  { name: 'y200', value: '#FEF2A2', family: 'Yellow' },
-  { name: 'y100', value: '#FEF8D0', family: 'Yellow' },
-  // Blue
-  { name: 'b900', value: '#001833', family: 'Blue' },
-  { name: 'b800', value: '#002A58', family: 'Blue' },
-  { name: 'b700', value: '#003D81', family: 'Blue' },
-  { name: 'b600', value: '#004FA7', family: 'Blue' },
-  { name: 'b500', value: '#0064D2', family: 'Blue' },
-  { name: 'b400', value: '#007BFF', family: 'Blue' },
-  { name: 'b300', value: '#5BAAFF', family: 'Blue' },
-  { name: 'b200', value: '#A3CFFF', family: 'Blue' },
-  { name: 'b100', value: '#E0EFFF', family: 'Blue' },
-  // Green
-  { name: 'g900', value: '#022612', family: 'Green' },
-  { name: 'g800', value: '#054A24', family: 'Green' },
-  { name: 'g700', value: '#076A33', family: 'Green' },
-  { name: 'g600', value: '#088942', family: 'Green' },
-  { name: 'g500', value: '#0BAE54', family: 'Green' },
-  { name: 'g400', value: '#3CCC7D', family: 'Green' },
-  { name: 'g300', value: '#66CC94', family: 'Green' },
-  { name: 'g200', value: '#A8E5C4', family: 'Green' },
-  { name: 'g100', value: '#E2FBED', family: 'Green' },
-  // Neutral
   { name: 'n900', value: '#18191B', family: 'Neutral' },
   { name: 'n800', value: '#303135', family: 'Neutral' },
   { name: 'n700', value: '#4D4F56', family: 'Neutral' },
@@ -65,7 +25,49 @@ export const colorTokens: ColorToken[] = [
   { name: 'n100', value: '#F4F7FE', family: 'Neutral' },
   { name: 'n50', value: '#F8F9FD', family: 'Neutral' },
   { name: 'n0', value: '#FFFFFF', family: 'Neutral' },
-  // Turquoise
+  { name: 'n0-80', value: '#FFFFFFCC', family: 'Neutral' },
+  { name: 'black-80', value: '#000000CC', family: 'Neutral' },
+
+  { name: 'b900', value: '#001833', family: 'Blue' },
+  { name: 'b800', value: '#002A58', family: 'Blue' },
+  { name: 'b700', value: '#003D81', family: 'Blue' },
+  { name: 'b600', value: '#004FA7', family: 'Blue' },
+  { name: 'b500', value: '#0064D2', family: 'Blue' },
+  { name: 'b400', value: '#007BFF', family: 'Blue' },
+  { name: 'b300', value: '#5BAAFF', family: 'Blue' },
+  { name: 'b200', value: '#A3CFFF', family: 'Blue' },
+  { name: 'b100', value: '#E0EFFF', family: 'Blue' },
+
+  { name: 'y900', value: '#3D3500', family: 'Yellow' },
+  { name: 'y800', value: '#6C5E00', family: 'Yellow' },
+  { name: 'y700', value: '#AD9700', family: 'Yellow' },
+  { name: 'y600', value: '#E5C700', family: 'Yellow' },
+  { name: 'y500', value: '#FEDD00', family: 'Yellow' },
+  { name: 'y400', value: '#FEE645', family: 'Yellow' },
+  { name: 'y300', value: '#FEEC73', family: 'Yellow' },
+  { name: 'y200', value: '#FEF2A2', family: 'Yellow' },
+  { name: 'y100', value: '#FEF8D0', family: 'Yellow' },
+
+  { name: 'r900', value: '#380909', family: 'Red' },
+  { name: 'r800', value: '#610F0F', family: 'Red' },
+  { name: 'r700', value: '#8C1616', family: 'Red' },
+  { name: 'r600', value: '#B81D1D', family: 'Red' },
+  { name: 'r500', value: '#E52424', family: 'Red' },
+  { name: 'r400', value: '#F15C59', family: 'Red' },
+  { name: 'r300', value: '#FC7474', family: 'Red' },
+  { name: 'r200', value: '#FC9999', family: 'Red' },
+  { name: 'r100', value: '#FFDFDF', family: 'Red' },
+
+  { name: 'g900', value: '#022612', family: 'Green' },
+  { name: 'g800', value: '#054A24', family: 'Green' },
+  { name: 'g700', value: '#076A33', family: 'Green' },
+  { name: 'g600', value: '#088942', family: 'Green' },
+  { name: 'g500', value: '#0BAE54', family: 'Green' },
+  { name: 'g400', value: '#3CCC7D', family: 'Green' },
+  { name: 'g300', value: '#66CC94', family: 'Green' },
+  { name: 'g200', value: '#A8E5C4', family: 'Green' },
+  { name: 'g100', value: '#E2FBED', family: 'Green' },
+
   { name: 't900', value: '#092227', family: 'Turquoise' },
   { name: 't800', value: '#14353C', family: 'Turquoise' },
   { name: 't700', value: '#174F59', family: 'Turquoise' },
@@ -75,17 +77,17 @@ export const colorTokens: ColorToken[] = [
   { name: 't300', value: '#7CD4E4', family: 'Turquoise' },
   { name: 't200', value: '#9FDFED', family: 'Turquoise' },
   { name: 't100', value: '#E0F1F5', family: 'Turquoise' },
-  // Orange
-  { name: 'o900', value: '#4B3601', family: 'Orange' },
-  { name: 'o800', value: '#644802', family: 'Orange' },
-  { name: 'o700', value: '#A17402', family: 'Orange' },
-  { name: 'o600', value: '#C99103', family: 'Orange' },
-  { name: 'o500', value: '#F1AE04', family: 'Orange' },
-  { name: 'o400', value: '#FCBD1C', family: 'Orange' },
-  { name: 'o300', value: '#FDD05E', family: 'Orange' },
-  { name: 'o200', value: '#FDE19B', family: 'Orange' },
-  { name: 'o100', value: '#FEF3D7', family: 'Orange' },
-  // Purple
+
+  { name: 'o900', value: '#662E00', family: 'Orange' },
+  { name: 'o800', value: '#8F4000', family: 'Orange' },
+  { name: 'o700', value: '#B85300', family: 'Orange' },
+  { name: 'o600', value: '#E06500', family: 'Orange' },
+  { name: 'o500', value: '#FF7200', family: 'Orange' },
+  { name: 'o400', value: '#FF841F', family: 'Orange' },
+  { name: 'o300', value: '#FFA55C', family: 'Orange' },
+  { name: 'o200', value: '#FFC799', family: 'Orange' },
+  { name: 'o100', value: '#FFE9D6', family: 'Orange' },
+
   { name: 'p900', value: '#210671', family: 'Purple' },
   { name: 'p800', value: '#311093', family: 'Purple' },
   { name: 'p700', value: '#4C15CB', family: 'Purple' },
@@ -95,7 +97,7 @@ export const colorTokens: ColorToken[] = [
   { name: 'p300', value: '#C9B5F7', family: 'Purple' },
   { name: 'p200', value: '#E4DAFB', family: 'Purple' },
   { name: 'p100', value: '#F1EDFD', family: 'Purple' },
-  // Magenta
+
   { name: 'm900', value: '#330724', family: 'Magenta' },
   { name: 'm800', value: '#460C32', family: 'Magenta' },
   { name: 'm700', value: '#8C1865', family: 'Magenta' },
@@ -175,6 +177,7 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
   const currentColor = value || defaultValue;
   const [history, setHistory] = useState<string[]>([]);
   const openedWith = useRef(currentColor);
+  const activeSwatchRef = useRef<HTMLButtonElement>(null);
   // Record the colour on close when it changed to a custom (non-token) hex, so it can be picked again without remembering the code
   // Custom picks (wheel, hex input, eyedropper) are saved once the user pauses for a moment, not only when the popover closes
   const recordTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -227,6 +230,16 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
   const matchedToken = colorTokens.find(t => t.value.toLowerCase() === currentColor.toLowerCase());
   const displayValue = matchedToken ? matchedToken.name.toUpperCase() : currentColor;
 
+  // Scroll the currently selected swatch into view as soon as the popover opens, instead of
+  // always landing scrolled to the top (the colour can be many families down the list).
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'tokens') return;
+    const id = window.setTimeout(() => {
+      activeSwatchRef.current?.scrollIntoView({ block: 'center' });
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [isOpen, activeTab]);
+
   return (
     <div className="flex items-center gap-[8px]">
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
@@ -247,7 +260,7 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
           />
           )}
         </PopoverTrigger>
-        <PopoverContent className="w-[320px] p-0" align="start">
+        <PopoverContent className="w-[320px] p-0 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto" align="start" collisionPadding={8}>
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
             <div className="flex items-center justify-between border-b border-[#e9ebef] px-4">
               <TabsList className="h-12 w-full justify-start gap-4 bg-transparent p-0">
@@ -276,12 +289,12 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
                       <button
                         type="button"
                         key={c}
-                        className="relative w-6 h-6 rounded-full border border-black/10 hover:scale-110 transition-transform focus:outline-none focus:ring-2 focus:ring-[#007BFF] focus:ring-offset-1"
+                        className={`relative w-6 h-6 rounded-full border border-black/10 hover:scale-110 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-[#007BFF]/50 focus-visible:ring-offset-1 ${currentColor.toLowerCase() === c.toLowerCase() ? 'ring-2 ring-[#007BFF] ring-offset-2' : ''}`}
                         style={{ backgroundColor: c }}
                         onClick={() => onChange(c)}
                         title={c}
                       >
-                        {currentColor.toLowerCase() === c.toLowerCase() && <span className="absolute inset-0 m-auto w-1.5 h-1.5 bg-white rounded-full shadow-sm" />}
+                        {currentColor.toLowerCase() === c.toLowerCase() && <span className="absolute inset-0 m-auto w-2 h-2 bg-white rounded-full border-2 border-[#007BFF]" />}
                       </button>
                     ))}
                   </div>
@@ -303,25 +316,29 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
                     <div key={family}>
                       <h4 className="text-xs font-semibold text-muted-foreground mb-2">{family}</h4>
                       <div className="grid grid-cols-6 gap-2">
-                        {tokens.map((token) => (
+                        {tokens.map((token) => {
+                          const isActive = currentColor.toLowerCase() === token.value.toLowerCase();
+                          return (
                           <button
                             type="button"
                             key={token.name}
-                            className="group relative w-8 h-8 rounded-full border border-black/5 hover:scale-110 transition-transform focus:outline-none focus:ring-2 focus:ring-[#007BFF] focus:ring-offset-2"
-                            style={{ backgroundColor: token.value }}
+                            ref={isActive ? activeSwatchRef : undefined}
+                            className={`group relative w-8 h-8 rounded-full border border-black/5 hover:scale-110 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-[#007BFF]/50 focus-visible:ring-offset-2 ${isActive ? '!ring-2 !ring-[#007BFF] !ring-offset-2' : ''}`}
+                            style={{ background: `linear-gradient(${token.value}, ${token.value}), repeating-conic-gradient(#d8dce8 0% 25%, #fff 0% 50%) 50% / 8px 8px` }}
                             onClick={() => {
                               onChange(token.value);
                               // setIsOpen(false); // Optional: close on selection
                             }}
                             title={`${token.name} (${token.value})`}
                           >
-                            {currentColor.toLowerCase() === token.value.toLowerCase() && (
+                            {isActive && (
                               <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="w-2 h-2 bg-white rounded-full shadow-sm" />
+                                <div className="w-2.5 h-2.5 bg-white rounded-full border-2 border-[#007BFF]" />
                               </div>
                             )}
                           </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
@@ -390,12 +407,12 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
                       value={currentColor.replace('#', '')}
                       onChange={(e) => {
                         const val = e.target.value;
-                        if (/^[0-9A-Fa-f]{0,6}$/.test(val)) {
+                        if (/^[0-9A-Fa-f]{0,8}$/.test(val)) {
                           pickCustom(`#${val}`);
                         }
                       }}
                       className="pl-6 uppercase"
-                      maxLength={6}
+                      maxLength={8}
                     />
                   </div>
                 </div>

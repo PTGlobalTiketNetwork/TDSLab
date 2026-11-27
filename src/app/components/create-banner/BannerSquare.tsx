@@ -1,4 +1,5 @@
 import { unitBadgeAutoColor } from './components/PolaroidCollage';
+import { gradientStopsCss, DEFAULT_OVERLAY_GRADIENT_STOPS } from './components/GradientEditor';
 import { BannerFormData } from './types';
 import { DraggableItem } from './utils/DraggableItem';
 import type { DiffHighlights } from '../../../utils/diffUtils';
@@ -206,9 +207,10 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
           : '';
   const labelDiscountText = content.labelDiscountText || currentDefaults.labelDiscountText;
 
-  // Use explicit check for Discount Amount to show placeholder '50'
-  const discountAmountText = (content.discountAmount || '50');
-  const secondDiscountAmountText = (content.secondDiscountAmount || '50');
+  // Show the typed amount as-is; only fall back to the '50' placeholder when empty, and only if
+  // the currency isn't "None" (an empty amount with "None" currency means no nominal at all).
+  const discountAmountText = content.discountAmount || (content.discountType === 'Non-IDR' ? '' : '50');
+  const secondDiscountAmountText = content.secondDiscountAmount || (content.secondDiscountType === 'Non-IDR' ? '' : '50');
   const currencyLabel = getCurrencyLabel(content.discountType, content.customCurrency);
   const secondCurrencyLabel = getCurrencyLabel(content.secondDiscountType, content.secondCustomCurrency);
 
@@ -280,8 +282,15 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
   const opacity2 = (formData.overlay2Opacity ?? 100) / 100;
 
   // Overlay box covers the bottom 70% of the 600px canvas (420px); Start/Stop are % within that box.
+  const overlaySolid = formData.overlayMode === 'solid';
+  const solidOp = (formData.overlaySolidOpacity ?? 100) / 100;
+  const solidCov = formData.overlaySolidCoverage ?? 50;
+  const solidBg = (dir: string) => `linear-gradient(${dir}, rgba(${rgb},${solidOp}) 0%, rgba(${rgb},${solidOp}) ${solidCov}%, transparent ${solidCov}%)`;
+  // Solid + gradient fill: the gradient sits on its own Coverage-sized block so the hard edge survives
+  const solidGrad = overlaySolid && formData.overlaySolidFill === 'gradient';
+  const solidGradEl = (anchor: React.CSSProperties) => <div className="absolute" style={{ ...anchor, background: gradientStopsCss(formData.overlaySolidGradientStops ?? DEFAULT_OVERLAY_GRADIENT_STOPS, formData.overlaySolidGradientType, formData.overlaySolidGradientAngle ?? 90), opacity: solidOp }} />;
   const gradientStyle = {
-      background: `linear-gradient(to top, rgba(${rgb},${opacityStart}) 0%, rgba(${rgb},${opacityStart}) ${stopPos}%, rgba(${rgb},0) ${Math.max(stopPos + 1, stopEnd)}%)`,
+      background: solidGrad ? 'none' : overlaySolid ? solidBg('to top') : `linear-gradient(to top, rgba(${rgb},${opacityStart}) 0%, rgba(${rgb},${opacityStart}) ${stopPos}%, rgba(${rgb},0) ${Math.max(stopPos + 1, stopEnd)}%)`,
       transform: 'translateZ(0)', // Fix Safari stacking context
   };
   const gradientStyle2 = {
@@ -369,7 +378,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
             {line(isID ? 'hingga' : 'up to', 'normal', { color: 'white' })}
         </>);
     } else {
-        const isCustom = pt === 'custom';
+        const isCustom = pt === 'custom' || pt === 'buy_x_get_y';
         const customSize = (content.prefixFontSize || 20) * fontScale;
         contentNode = (
             <span
@@ -452,7 +461,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
     const labelWidth = (text?: string, type?: string) => {
       if (!text || content.showPrefix === false) return 0;
       const plain = text.replace(/<[^>]*>/g, '');
-      const size = (type === 'custom' ? (content.prefixFontSize || 20) : 18) * 2;
+      const size = ((type === 'custom' || type === 'buy_x_get_y') ? (content.prefixFontSize || 20) : 18) * 2;
       return plain.length * size * 0.55;
     };
     const estWidth = (Math.max(groupWidth(currencyLabel, discountAmountText, discountAmountText ? content.unit : undefined), labelWidth(content.mainBenefitPrefix, content.prefixType))
@@ -568,8 +577,8 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
         </div>
         
         {/* Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 h-[420px] pointer-events-none z-10" style={gradientStyle} />
-        {formData.overlay2Enabled && <div className="absolute bottom-0 left-0 right-0 h-[420px] pointer-events-none z-10" style={gradientStyle2} />}
+        <div className="absolute bottom-0 left-0 right-0 h-[420px] pointer-events-none z-10" style={gradientStyle}>{solidGrad && solidGradEl({ left: 0, right: 0, bottom: 0, height: `${solidCov}%` })}</div>
+        {formData.overlay2Enabled && !overlaySolid && <div className="absolute bottom-0 left-0 right-0 h-[420px] pointer-events-none z-10" style={gradientStyle2} />}
 
         {/* DLP Header mobile: iOS status bar + transparent top bar, built at 360 logical px and scaled up to fill the 600px canvas */}
         {formData.dlpRole === 'header-mobile' && formData.dlpNavbar !== false && (
@@ -640,14 +649,26 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                             {content.labelDiscountType === 'With icon' && (
                                 <div style={{ width: '32px', height: '32px', '--fill-0': content.labelDiscountIconColor || 'white' } as React.CSSProperties}><TdsIcOvalPlus /></div>
                             )}
-                            <div className={`font-bold ${textShadowClass} font-banner text-center`} style={{ fontSize: '28px', color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "")}</div>
+                            <div className={`font-bold ${textShadowClass} font-banner text-center`} style={{ fontSize: `${content.labelDiscountFontSize || 28}px`, color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "")}</div>
                         </div>
                     )}
 
                     {content.additionalLabel && formData.headlineType !== 'With Sub-Headline' && (
+                        content.additionalLabelType === 'Voucher' ? (
+                        <div className="inline-flex items-center gap-[8px] font-banner shadow-sm" style={{ borderRadius: '6px', padding: '6px 8px', marginTop: '16px', backgroundColor: content.additionalLabelBackgroundColor || '#FFFFFF', color: content.additionalLabelTextColor || '#007BFF' }}>
+                            <div className="font-normal leading-[1.15] text-left shrink-0" style={{ fontSize: `${(content.additionalLabelFontSize || 16) * 0.4}px` }}>
+                                <div>{lang === 'id' ? 'Kode' : 'Promo'}</div>
+                                <div>{lang === 'id' ? 'Promo:' : 'Code:'}</div>
+                            </div>
+                            <div className="font-bold uppercase tracking-tight leading-[0.8] whitespace-nowrap" style={{ fontSize: `${content.additionalLabelFontSize || 16}px` }}>
+                                {renderHtml(content.additionalLabelText, "") || 'VOUCHERCODE'}
+                            </div>
+                        </div>
+                        ) : (
                         <div className="font-bold tracking-wider font-banner shadow-sm" style={{ fontSize: '24px', borderRadius: '999px', padding: '8px 24px', marginTop: '16px', backgroundColor: content.additionalLabelBackgroundColor || '#FEDD00', color: content.additionalLabelTextColor || '#0064D2' }}>
                         {renderHtml(content.additionalLabelText, "") || 'LIMITED OFFER'}
                         </div>
+                        )
                     )}
                 </BoundingBox>
 
@@ -990,7 +1011,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
         {/* Partner logo */}
         {formData.showPartnerLogo && (
             <div className="absolute right-0 z-20 pointer-events-none" style={{ top: `${(formData.partnerLogoY ?? getDefaultPartnerLogoY(formData)) * SQUARE_PARTNER_LOGO_SCALE}px`, transform: 'translateZ(0)' }}>
-                <div className="flex items-center gap-[17px] px-[20px] py-[7px]" style={{ borderRadius: '33px 0 0 33px', background: formData.partnerLogoBgEnabled === false ? 'transparent' : (formData.partnerLogoBg ?? '#FFFFFF'), transform: `translateZ(0) scale(${formData.partnerLogoScale ?? getDefaultPartnerLogoScale(formData)})`, transformOrigin: 'top right' }}>
+                <div className="flex items-center gap-[17px] px-[20px] py-[7px]" style={{ borderRadius: '33px 0 0 33px', overflow: 'hidden', boxShadow: '0 4px 6px rgba(0,0,0,0.2)', background: formData.partnerLogoBgEnabled === false ? 'transparent' : (formData.partnerLogoBg ?? '#FFFFFF'), transform: `translateZ(0) scale(${formData.partnerLogoScale ?? getDefaultPartnerLogoScale(formData)})`, transformOrigin: 'top right' }}>
                     {formData.partnerLogos.slice(0, 3).map((slot, idx) => {
                         const isUrl = slot.logo?.startsWith('http') || slot.logo?.startsWith('figma:');
                         const imgSrc = isUrl ? slot.logo : (slot.logo ? `https://placehold.co/132x66/0064D2/FFFFFF/png?text=${slot.logo.substring(0, 3).toUpperCase()}` : exampleImage);
@@ -1028,9 +1049,26 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
         {!isDlpHeader && content.additionalLabel && (
             <DraggableItem id="additionalInfo" {...getPos('additionalInfo')} width={undefined} height={undefined} isUnlocked={isUnlocked} onMove={handleItemMove} containerSize={{w: 600, h: 600}} centered={true} isSelected={selectedId === 'additionalInfo'} onClick={() => setSelectedId('additionalInfo')}>
                     <HighlightWrapper active={highlights?.additionalLabelDiff} label="Label Changed">
-                    <div 
+                    {content.additionalLabelType === 'Voucher' ? (
+                    <div
+                        className="inline-flex items-center gap-[8px] font-banner shadow-sm whitespace-nowrap relative"
+                        style={{ borderRadius: '6px', padding: '6px 8px', backgroundColor: content.additionalLabelBackgroundColor || '#FFFFFF', color: content.additionalLabelTextColor || '#007BFF' }}
+                    >
+                        <div className="font-normal leading-[1.15] text-left shrink-0" style={{ fontSize: `${(content.additionalLabelFontSize || 16) * 0.4}px` }}>
+                            <div>{lang === 'id' ? 'Kode' : 'Promo'}</div>
+                            <div>{lang === 'id' ? 'Promo:' : 'Code:'}</div>
+                        </div>
+                        <div className="font-bold uppercase tracking-tight leading-[0.8]" style={{ fontSize: `${content.additionalLabelFontSize || 16}px` }}>
+                            {renderHtml(content.additionalLabelText, "") || 'VOUCHERCODE'}
+                        </div>
+                        {isUnlocked && selectedId === 'additionalInfo' && (
+                            <ResizeHandle onResizeStart={() => handleFontResizeStart(content.additionalLabelFontSize || 16)} onResize={(d) => handleFontResize(d, 'additionalLabelFontSize')} />
+                        )}
+                    </div>
+                    ) : (
+                    <div
                         className="font-bold px-[16px] py-[6px] rounded-[999px] tracking-wider font-banner shadow-sm whitespace-nowrap flex items-center justify-center relative"
-                        style={{ 
+                        style={{
                             fontSize: `${content.additionalLabelFontSize || 14}px`,
                             backgroundColor: content.additionalLabelBackgroundColor || '#FEDD00',
                             color: content.additionalLabelTextColor || '#0064D2'
@@ -1041,6 +1079,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                             <ResizeHandle onResizeStart={() => handleFontResizeStart(content.additionalLabelFontSize || 14)} onResize={(d) => handleFontResize(d, 'additionalLabelFontSize')} />
                         )}
                     </div>
+                    )}
                     </HighlightWrapper>
             </DraggableItem>
         )}

@@ -48,8 +48,8 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
   const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)' || formData.bannerRatio === 'Landscape (3:1)';
   const isSquareRatio = formData.bannerRatio === 'Square (1:1)';
   // 2:1, 3:4 and 1:1 all show EN and ID side by side (fit to the panel, "Preview full size" for the real size) — same behavior everywhere, not just in the DLP/compact views.
-  // 2:1/3:1: zoom in = EN and ID stacked (ID under EN) at the full panel width, zoom out = side by side
-  const canStack = isLandscape21 && !compact; // every 2:1/3:1 editor preview (Promo, DLP, TTD); the small collapsed/summary cards always stay side by side
+  // 2:1/3:1/3:4 and the 1:1 DLP Mobile Header: zoom in = EN and ID stacked (ID under EN) at the full panel width, zoom out = side by side
+  const canStack = (isLandscape21 || isPortraitRatio || (isSquareRatio && formData.dlpRole === 'header-mobile')) && !compact; // every 2:1/3:1/3:4 editor preview (Promo, DLP, TTD); the small collapsed/summary cards always stay side by side
   // 0 = side by side, 1 = stacked at 75% of the panel width (default), 2 = stacked at the full panel width
   const [zoomLevel, setZoomLevel] = useState<0 | 1 | 2>(1);
   const isStacked = canStack && zoomLevel > 0;

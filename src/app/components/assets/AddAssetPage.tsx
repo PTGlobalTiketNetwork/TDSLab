@@ -4,12 +4,13 @@ import { Loader2, Upload, X, Image as ImageIcon, AlertTriangle, Info, Crop, Chec
 import { CropAssetModal } from './CropAssetModal';
 import { AssetService } from '../../../services/assetService';
 import { supabase } from '../../../utils/supabase/client';
-import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { Asset } from '../../types/asset';
 import { Header } from '../Header';
 import { getUserDisplayName } from '../../utils/userDisplay';
 import { getAssetConstraints, normalizeCategoryName } from '../../utils/assetConstraints';
 import { SegmentedControl } from '../ui/SegmentedControl';
+import { TiketSnackbar } from '../ui/TiketSnackbar';
+import { toast } from 'sonner';
 
 interface AddAssetPageProps {
   category: string;
@@ -21,7 +22,7 @@ interface AddAssetPageProps {
   userName?: string;
 }
 
-type UploadState = 'idle' | 'selected' | 'uploading' | 'success';
+type UploadState = 'idle' | 'selected' | 'uploading';
 type UploadMode = 'single' | 'bulk';
 type BulkFileStatus = 'pending' | 'uploading' | 'success' | 'error';
 
@@ -51,6 +52,8 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState<UploadState>('idle');
+  const [dropHover, setDropHover] = useState(false); // shows the "press now to paste" hint while hovering the drop zone (single or bulk)
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   const [fileMetadata, setFileMetadata] = useState<{ size: string; dimension: string; ratio: string }>({
     size: 'Auto', dimension: 'Auto', ratio: 'Auto',
   });
@@ -221,15 +224,17 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
           file_size: fileMetadata.size, uploader_name: uploaderName,
         });
       }
-      setUploadState('success');
+      toast.custom((t) => <TiketSnackbar id={t} message={isEditMode ? 'Asset updated successfully' : 'File uploaded successfully'} variant="success" />, { duration: 3000 });
+      onSuccess();
     } catch {
       alert('Failed to upload asset. Please try again.');
       setUploadState('selected');
     }
   };
 
-  const handleReset = () => {
-    setAssetName(''); setSelectedFile(null); setPreviewUrl(null);
+  // Clears just the picked image (keeps the asset name typed so far) so the drop zone goes back to its empty state.
+  const clearAsset = () => {
+    setSelectedFile(null); setPreviewUrl(null);
     setUploadState('idle'); setDimensionError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -331,38 +336,6 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
     fullWidth ? 'ml-0' : (isSidebarCollapsed ? 'ml-[80px]' : 'ml-[268px]')
   }`;
 
-  // ─── Single success screen ───────────────────────────────────────────────────
-  if (uploadState === 'success') {
-    return (
-      <div className={`flex flex-col items-center pt-[140px] pb-[40px] px-6 min-h-screen bg-[#f8f9fd] transition-all duration-300 ${fullWidth ? 'ml-0' : (isSidebarCollapsed ? 'ml-[80px]' : 'ml-[268px]')}`}>
-        <div className="w-full max-w-[600px] mb-6 flex items-center text-[12px] text-[#71747d] font-medium">
-          <span className="cursor-pointer hover:text-[#007BFF]" onClick={handleCancel}>Logo Asset</span>
-          <span className="mx-2">&gt;</span>
-          <span className="cursor-pointer hover:text-[#007BFF]" onClick={handleCancel}>{category}</span>
-          <span className="mx-2">&gt;</span>
-          <span className="text-[#303135]">{isEditMode ? 'Edit Asset' : 'Add Asset'}</span>
-        </div>
-        <div className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] w-full max-w-[600px] p-[40px] flex flex-col items-center">
-          <div className="checkerboard mb-6 h-[80px] w-[200px] flex items-center justify-center">
-            <ImageWithFallback src={previewUrl || ''} alt="Uploaded Asset" className="max-w-full max-h-full object-contain" />
-          </div>
-          <h2 className="text-[24px] font-bold text-[#303135] mb-2">{isEditMode ? 'Asset Updated' : 'File Uploaded'}</h2>
-          <p className="text-[14px] text-[#71747d] mb-8">You can already use the asset.</p>
-          <div className="flex gap-3 w-full justify-center">
-            {!isEditMode && (
-              <button onClick={handleReset} className="px-6 py-2.5 rounded-[8px] bg-[#e7f2ff] text-[#007BFF] font-bold text-[14px] hover:bg-[#d0e4ff] transition-colors">
-                Add more
-              </button>
-            )}
-            <button onClick={onSuccess} className="px-6 py-2.5 rounded-[8px] bg-[#007BFF] text-white font-bold text-[14px] hover:bg-[#0064D2] transition-colors shadow-sm">
-              Back to List
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className={containerClass}>
       <Header title="Add Asset" fullWidth={true} showLogo={true} hideControls={true} userName={userName} onLogout={handleLogout} />
@@ -430,17 +403,28 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
                   onDrop={handleDrop}
                   onDragOver={(e) => e.preventDefault()}
                   onClick={() => fileInputRef.current?.click()}
+                  onMouseEnter={() => setDropHover(true)}
+                  onMouseLeave={() => setDropHover(false)}
                   className="w-full h-[180px] border border-dashed border-[#d8dce8] rounded-[8px] flex flex-col items-center justify-center cursor-pointer hover:bg-[#f8f9fd] transition-colors group"
                 >
                   <div className="w-10 h-10 mb-3 text-[#aeb2be] group-hover:text-[#007BFF] transition-colors">
                     <ImageIcon size={40} strokeWidth={1.5} />
                   </div>
                   <span className="text-[14px] font-bold text-[#303135] group-hover:text-[#007BFF] transition-colors">Browse file</span>
+                  <span className="text-[12px] text-[#71747d] mt-1 flex items-center gap-[6px]">
+                    {dropHover ? 'press now to paste your copied image' : 'or hover here and paste from your clipboard'}
+                    <kbd className="inline-flex items-center px-[6px] py-[1px] rounded-[4px] border border-[#d8dce8] bg-white text-[11px] font-semibold text-[#71747d] align-middle">{isMac ? '⌘V' : 'Ctrl+V'}</kbd>
+                  </span>
                 </div>
               ) : (
                 <div className="w-full h-[180px] border border-[#d8dce8] rounded-[8px] flex flex-col items-center justify-center bg-white relative">
+                  {previewUrl && (
+                    <button onClick={clearAsset} title="Clear asset" className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-[6px] border border-[#d8dce8] bg-white text-[#71747d] hover:text-[#d4183d] hover:border-[#d4183d] transition-colors">
+                      <X size={14} />
+                    </button>
+                  )}
                   <div className="checkerboard flex-1 flex items-center justify-center p-4 w-full h-full">
-                    {previewUrl && <img src={previewUrl} alt="Preview" className="max-w-[80%] max-h-[100px] object-contain" />}
+                    {previewUrl && <img src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain" />}
                   </div>
                   <div className="mb-4 flex items-center gap-4">
                     {previewUrl && (
@@ -460,7 +444,7 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
                       </button>
                     )}
                     <button onClick={() => fileInputRef.current?.click()} className="text-[14px] font-bold text-[#007BFF] hover:underline">
-                      {isEditMode ? 'Change Asset' : 'Edit Assets'}
+                      Change Asset
                     </button>
                   </div>
                 </div>
@@ -517,7 +501,7 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
         <>
           <div className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] w-full max-w-[600px] p-[24px]">
             <label className="block text-[14px] font-bold text-[#303135] mb-1">Upload assets</label>
-            <p className="text-[12px] text-[#71747d] mb-3">Select multiple files at once. Supported format: .png, .jpg or .webp. Max 5 MB each.</p>
+            <p className="text-[12px] text-[#71747d] mb-3">Select multiple files at once. Supported format: .png, .jpg or .webp. Max 5 MB each. You can also paste an image from your clipboard.</p>
 
             {constraints && (
               <div className="flex items-start gap-2.5 p-3 rounded-[8px] bg-[#E0EFFF] mb-4">
@@ -534,6 +518,8 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
               onDrop={handleBulkDrop}
               onDragOver={(e) => e.preventDefault()}
               onClick={() => bulkInputRef.current?.click()}
+              onMouseEnter={() => setDropHover(true)}
+              onMouseLeave={() => setDropHover(false)}
               className="w-full h-[140px] border border-dashed border-[#d8dce8] rounded-[8px] flex flex-col items-center justify-center cursor-pointer hover:bg-[#f8f9fd] transition-colors group mb-4"
             >
               <div className="w-9 h-9 mb-2 text-[#aeb2be] group-hover:text-[#007BFF] transition-colors">
@@ -541,6 +527,10 @@ export function AddAssetPage({ category: rawCategory, onBack, onSuccess, initial
               </div>
               <span className="text-[14px] font-bold text-[#303135] group-hover:text-[#007BFF] transition-colors">Browse files</span>
               <span className="text-[12px] text-[#aeb2be] mt-1">or drag and drop multiple files here</span>
+              <span className="text-[12px] text-[#71747d] mt-1 flex items-center gap-[6px]">
+                {dropHover ? 'press now to paste your copied image' : 'or hover here and paste from your clipboard'}
+                <kbd className="inline-flex items-center px-[6px] py-[1px] rounded-[4px] border border-[#d8dce8] bg-white text-[11px] font-semibold text-[#71747d] align-middle">{isMac ? '⌘V' : 'Ctrl+V'}</kbd>
+              </span>
             </div>
             <input
               type="file"
