@@ -187,7 +187,8 @@ export function Home({ session }: HomeProps) {
             'Homepage Promo Banner': 'homepage-promo-banner',
             'Hero Landing Page Header': 'hero-landing-page-header',
             'Product Entry Point': 'product-entry-point',
-            'DLP Assets': 'dlp-assets'
+            'DLP Assets': 'dlp-assets',
+            'TTD Promo Asset': 'ttd-promo-asset'
         };
         const slug = slugMap[category] || 'promo-banner';
         navigate(`/banners/${slug}/create?edit=${id}`);
@@ -203,7 +204,8 @@ export function Home({ session }: HomeProps) {
                     'Homepage Promo Banner': 'homepage-promo-banner',
                     'Hero Landing Page Header': 'hero-landing-page-header',
                     'Product Entry Point': 'product-entry-point',
-                    'DLP Assets': 'dlp-assets'
+                    'DLP Assets': 'dlp-assets',
+                    'TTD Promo Asset': 'ttd-promo-asset'
                 };
                 const slug = (item.category && slugMap[item.category]) ? slugMap[item.category] : 'promo-banner';
                 navigate(`/banners/${slug}?highlight=${item.realId}`);
