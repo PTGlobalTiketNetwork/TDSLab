@@ -190,7 +190,7 @@ export function Sidebar({
   const navigate = useNavigate();
   const isBannersActive = location.pathname.startsWith('/banners');
   const isLogoAssetsActive = location.pathname.startsWith('/assets');
-  const { isVisible } = useMenuVisibility();
+  const { isVisible, showNewBadge } = useMenuVisibility();
 
   const [isBannersExpanded, setIsBannersExpanded] = useState(false);
   const [isLogoAssetsExpanded, setIsLogoAssetsExpanded] = useState(false);
@@ -338,7 +338,7 @@ export function Sidebar({
         {/* Sub-menu - Categories */}
         {!isCollapsed && isBannersExpanded && (
           <>
-            {isVisible('Promo Banner') && (
+            {isVisible('Promo Banner', canAccessSettings) && (
               <SubMenuItem
                 label="Promo Banner"
                 isActive={activeItem === 'Promo Banner'}
@@ -346,7 +346,7 @@ export function Sidebar({
                 isEmpty={!bannerCounts['Promo Banner']}
               />
             )}
-            {isVisible('Product Entry Point') && (
+            {isVisible('Product Entry Point', canAccessSettings) && (
               <SubMenuItem
                 label="Product Entry Point"
                 isActive={activeItem === 'Product Entry Point'}
@@ -354,22 +354,22 @@ export function Sidebar({
                 isEmpty={!bannerCounts['Product Entry Point']}
               />
             )}
-            {isVisible('DLP Assets') && (
+            {isVisible('DLP Assets', canAccessSettings) && (
               <SubMenuItem
                 label="DLP Assets"
                 isActive={activeItem === 'DLP Assets'}
                 onClick={() => onSelectItem?.('DLP Assets')}
                 isEmpty={!bannerCounts['DLP Assets']}
-                badge={<span className="px-2 py-0.5 bg-[#FF3B30] text-white text-[10px] font-bold rounded">NEW</span>}
+                badge={showNewBadge('DLP Assets') ? <span className="px-2 py-0.5 bg-[#FF3B30] text-white text-[10px] font-bold rounded">NEW</span> : undefined}
               />
             )}
-            {isVisible('TTD Promo Asset') && (
+            {isVisible('TTD Promo Asset', canAccessSettings) && (
               <SubMenuItem
                 label="TTD Promo Asset"
                 isActive={activeItem === 'TTD Promo Asset'}
                 onClick={() => onSelectItem?.('TTD Promo Asset')}
                 isEmpty={!bannerCounts['TTD Promo Asset']}
-                badge={<span className="px-2 py-0.5 bg-[#FF3B30] text-white text-[10px] font-bold rounded">NEW</span>}
+                badge={showNewBadge('TTD Promo Asset') ? <span className="px-2 py-0.5 bg-[#FF3B30] text-white text-[10px] font-bold rounded">NEW</span> : undefined}
               />
             )}
           </>
