@@ -1,5 +1,6 @@
 import { useStickyBar, STICKY_SHADOW } from '@/hooks/useStickyBar';
 import { useEffect, useRef, useState } from 'react';
+import { useAutoSaveDraft, AutoSaveIndicator } from '@/hooks/useAutoSaveDraft';
 import { ArrowRight, ArrowLeftRight, Copy, Eye, EyeOff, Maximize2, AlertTriangle, Edit3, Trash2, Info, Save } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
 import { Header } from '../Header';
@@ -102,6 +103,10 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
   const projectName = vertical && nameSuffix.trim() ? `${namePrefix(vertical)}${nameSuffix.trim()}` : '';
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  // Draft record id: the edited record, or one reserved on the first (auto/manual) save of a new project
+  const draftIdRef = useRef<string | undefined>(editingId);
+  const draftExistsRef = useRef(!!editingId);
+  const [autoSavedNewId, setAutoSavedNewId] = useState<string | undefined>(undefined);
   const renderer = useRef<OffscreenBannerRendererHandle>(null);
   const [nameState, setNameState] = useState<{ status: 'idle' | 'checking' | 'valid' | 'invalid'; message?: string }>({ status: 'idle' });
   // Project names must be unique within DLP Assets only (other categories may reuse a name)
@@ -111,7 +116,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
     setNameState({ status: 'checking' });
     try {
       const list = await BannerService.listBanners();
-      const taken = list.some((b) => b.id !== editingId && b.category === 'DLP Assets' && b.name.trim().toLowerCase() === trimmed.toLowerCase());
+      const taken = list.some((b) => b.id !== draftIdRef.current && b.category === 'DLP Assets' && b.name.trim().toLowerCase() === trimmed.toLowerCase());
       if (taken) { setNameState({ status: 'invalid', message: 'Project name already exists in DLP Assets. Please choose another.' }); return false; }
       setNameState({ status: 'valid' });
       return true;
@@ -225,20 +230,31 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
   // Only real banner content counts for the exit-confirmation (same as To Do): picking options, the vertical
   // and the project name are just wizard setup, so leaving right after them goes straight back without a prompt.
   const stripFiles = (forms: Record<string, BannerFormData>) => JSON.stringify(Object.fromEntries(Object.entries(forms).map(([k, f]) => [k, { ...f, keyVisualFile: undefined }])));
-  const initialEpFormsRef = useRef(stripFiles(epForms));
-  const hasRealChanges = Object.values(epForms).some((f) => !!f.keyVisualFile) || stripFiles(epForms) !== initialEpFormsRef.current;
+  // State (not a ref) so an auto-save can move the baseline
+  const [epFormsBaseline, setEpFormsBaseline] = useState(() => stripFiles(epForms));
+  const hasRealChanges = Object.values(epForms).some((f) => !!f.keyVisualFile) || stripFiles(epForms) !== epFormsBaseline;
   const isLast = index >= keys.length - 1;
 
   // Saves the whole project as one DLP Assets record. Key visuals are uploaded first, the thumbnail is the first entry point banner.
-  const saveProject = async (status: 'draft' | 'published' = 'published') => {
-    (status === 'draft' ? setIsSavingDraft : setIsSaving)(true);
+  // silent = auto-save: no navigation, no toasts (errors are thrown to the auto-save hook)
+  const saveProject = async (status: 'draft' | 'published' = 'published', { silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) {
+      (status === 'draft' ? setIsSavingDraft : setIsSaving)(true);
+      await autoSave.waitForIdle();
+    }
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast.custom((t) => <TiketSnackbar id={t} message="You must be logged in to save" variant="error" />); return; }
+      if (!user) {
+        if (silent) throw new Error('Not logged in');
+        toast.custom((t) => <TiketSnackbar id={t} message="You must be logged in to save" variant="error" />); return;
+      }
       const { data: sessionData } = await supabase.auth.getSession();
       const userDisplay = getUserDisplayName(sessionData?.session?.user, userName || 'Unknown User');
 
-      const id = editingId || crypto.randomUUID();
+      // Reserve the record id before any await so auto-save / manual save / publish all target the same record
+      if (!draftIdRef.current) draftIdRef.current = crypto.randomUUID();
+      const id = draftIdRef.current;
+      const formsSnapshot = epForms;
       const epIds = (['ep-mobile-2x1', 'ep-mobile-3x4', 'ep-desktop'] as const).filter((e) => picked[e]);
       const editorIds = [...epIds, 'hdr-mobile' as const, 'hdr-desktop-4x1' as const];
 
@@ -293,15 +309,42 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
         product: vertical,
         metadata: { dimension: 'DLP set', fileSize: `${(thumb.size / 1024).toFixed(2)} KB` },
       };
-      if (editingId) await BannerService.updateBanner(editingId, data as any);
-      else await BannerService.saveBanner(data as any);
+      if (draftExistsRef.current) await BannerService.updateBanner(id, data as any);
+      else {
+        await BannerService.saveBanner(data as any);
+        draftExistsRef.current = true;
+        if (!editingId) setAutoSavedNewId(id);
+      }
+      if (silent) {
+        // Swap uploaded Files for their URLs (no re-upload next time) and move the unsaved-changes baseline to what was saved
+        const swap = (f: BannerFormData) => (f.keyVisualFile && uploaded.has(f.keyVisualFile) ? { ...f, keyVisualUrl: uploaded.get(f.keyVisualFile)!, keyVisualFile: undefined } : f);
+        if (uploaded.size) setEpForms((p) => Object.fromEntries(Object.entries(p).map(([k, f]) => [k, swap(f)])));
+        setEpFormsBaseline(stripFiles(Object.fromEntries(Object.entries(formsSnapshot).map(([k, f]) => [k, swap(f)]))));
+        return;
+      }
       onBack(`"${projectName.trim()}" ${status === 'draft' ? 'saved as draft' : 'saved'}`);
     } catch (err) {
+      if (silent) throw err;
       console.error('DLP save failed', err);
       toast.custom((t) => <TiketSnackbar id={t} message="Failed to save DLP Assets" variant="error" />);
     } finally {
-      (status === 'draft' ? setIsSavingDraft : setIsSaving)(false);
+      if (!silent) (status === 'draft' ? setIsSavingDraft : setIsSaving)(false);
     }
+  };
+
+  // Auto-save to Drafts: same requirements as the manual Save Draft (vertical + project name, name not taken)
+  const autoSave = useAutoSaveDraft({
+    enabled: !isSaving && !isSavingDraft && !!vertical && !!projectName.trim() && nameState.status !== 'invalid' && nameState.status !== 'checking',
+    isDirty: hasRealChanges,
+    changeKey: { epForms, picked, mobileRatio, vertical, nameSuffix },
+    save: () => saveProject('draft', { silent: true }),
+  });
+  // Discard: a new project that only exists as an auto-saved draft is deleted again
+  const discard = () => {
+    autoSave.stop();
+    const id = autoSavedNewId || (!editingId && draftExistsRef.current ? draftIdRef.current : undefined);
+    if (id) BannerService.deleteBanner(id).catch((err) => console.error('Failed to delete auto-saved draft:', err));
+    onBack();
   };
 
   // Summary step: "Download as ZIP" — same scale-factor picks as the single-banner download,
@@ -899,6 +942,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
             >
               {isSavingDraft ? 'Saving...' : 'Save Draft'}
             </button>
+            <AutoSaveIndicator status={autoSave.status} lastSavedAt={autoSave.lastSavedAt} />
           </div>
           <div className="flex items-center gap-4">
             {index > 0 && (
@@ -987,7 +1031,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
                </div>
                <button
                 type="button"
-                onClick={() => onBack()}
+                onClick={discard}
                 disabled={isSaving || isSavingDraft}
                 className="w-full h-[48px] px-[24px] text-[#d4183d] text-[16px] font-bold rounded-[8px] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: '#FFDFDF', borderColor: '#FFDFDF' }}

@@ -1,3 +1,6 @@
+/** One voucher decoration: x/y offsets in % of the banner, rotate offset in deg, scale in %. */
+export type VoucherDeco = { enabled?: boolean; color?: string; x?: number; y?: number; rotate?: number; scale?: number };
+
 export interface BannerFormData {
   // Step 1: Configuration
   bannerName: string;
@@ -107,6 +110,8 @@ export interface BannerFormData {
   polaroidCrops?: { x: number; y: number; scale: number; flipH?: boolean; flipV?: boolean }[]; // per source: focus point (%) + zoom (%, ≥100) inside its frame
   polaroidRotations?: number[]; // per frame: extra tilt (deg, -5…5) on top of the Figma angle
   polaroidGroup?: { scale: number; x: number; y: number }; // whole collage: scale (%) + offset (Figma frame px)
+  // Yellow voucher decorations peeking in from the top / bottom edge (Figma 115-3009). Offsets relative to the default spot.
+  polaroidVouchers?: { top?: VoucherDeco; bottom?: VoucherDeco };
   polaroidBg?: string; // solid background colour, default #007BFF (B400)
   polaroidBgMode?: 'solid' | 'gradient';
   // Optional image between the background colour and the polaroids, faded out towards the text

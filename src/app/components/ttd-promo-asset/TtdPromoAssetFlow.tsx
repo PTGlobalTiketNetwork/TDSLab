@@ -1,5 +1,6 @@
 import { useStickyBar, STICKY_SHADOW } from '@/hooks/useStickyBar';
 import { useEffect, useRef, useState } from 'react';
+import { useAutoSaveDraft, AutoSaveIndicator } from '@/hooks/useAutoSaveDraft';
 import { AlertTriangle, ArrowLeftRight, ArrowRight, Download, Edit3, Eraser, Image as ImageIcon, Info, Loader2, Maximize2, RotateCw, Save, Trash2 } from 'lucide-react';
 import { Header } from '../Header';
 import { supabase } from '../../../utils/supabase/client';
@@ -140,6 +141,10 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
   const projectName = nameSuffix.trim() ? `${NAME_PREFIX}${nameSuffix.trim()}` : '';
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  // Draft record id: the edited record, or one reserved on the first (auto/manual) save of a new project
+  const draftIdRef = useRef<string | undefined>(editingId);
+  const draftExistsRef = useRef(!!editingId);
+  const [autoSavedNewId, setAutoSavedNewId] = useState<string | undefined>(undefined);
   const renderer = useRef<OffscreenBannerRendererHandle>(null);
   const [nameState, setNameState] = useState<{ status: 'idle' | 'checking' | 'valid' | 'invalid'; message?: string }>({ status: 'idle' });
   // Project names must be unique within TTD Promo Asset only (other categories may reuse a name)
@@ -149,7 +154,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
     setNameState({ status: 'checking' });
     try {
       const list = await BannerService.listBanners();
-      const taken = list.some((b) => b.id !== editingId && b.category === 'TTD Promo Asset' && b.name.trim().toLowerCase() === trimmed.toLowerCase());
+      const taken = list.some((b) => b.id !== draftIdRef.current && b.category === 'TTD Promo Asset' && b.name.trim().toLowerCase() === trimmed.toLowerCase());
       if (taken) { setNameState({ status: 'invalid', message: 'Project name already exists in TTD Promo Asset. Please choose another.' }); return false; }
       setNameState({ status: 'valid' });
       return true;
@@ -224,6 +229,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         polaroidCrops: src.polaroidCrops,
         polaroidRotations: src.polaroidRotations,
         polaroidOverlay: src.polaroidOverlay,
+        polaroidVouchers: src.polaroidVouchers,
         ...overlayUpdates,
       })),
       keyVisualFile: src.keyVisualFile, // File object: shared, not cloned
@@ -298,12 +304,13 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
   // actual content to lose: a banner's fields differ from its fresh default (or saved baseline, when editing), an image
   // was uploaded this session, or a vertical icon was picked.
   const stripFile = (f: BannerFormData) => JSON.stringify({ ...f, keyVisualFile: undefined });
-  const initialItemFormsRef = useRef(JSON.stringify({ banner2x1: stripFile(itemForms.banner2x1), banner3x1: stripFile(itemForms.banner3x1), banner5x1: stripFile(itemForms.banner5x1) }));
-  const initialIconUrlRef = useRef(verticalIconUrl);
+  const itemFormsKey = (forms: Record<BannerItemId, BannerFormData>) => JSON.stringify({ banner2x1: stripFile(forms.banner2x1), banner3x1: stripFile(forms.banner3x1), banner5x1: stripFile(forms.banner5x1) });
+  // State (not refs) so an auto-save can move the baseline
+  const [baseline, setBaseline] = useState(() => ({ forms: itemFormsKey(itemForms), iconUrl: verticalIconUrl }));
   const hasUnsavedChanges =
     !!itemForms.banner2x1.keyVisualFile || !!itemForms.banner3x1.keyVisualFile || !!itemForms.banner5x1.keyVisualFile ||
-    JSON.stringify({ banner2x1: stripFile(itemForms.banner2x1), banner3x1: stripFile(itemForms.banner3x1), banner5x1: stripFile(itemForms.banner5x1) }) !== initialItemFormsRef.current ||
-    verticalIconUrl !== initialIconUrlRef.current;
+    itemFormsKey(itemForms) !== baseline.forms ||
+    verticalIconUrl !== baseline.iconUrl;
   // Stepper's back chevron: previous step while mid-flow, exit (with unsaved-changes confirm) only from the first step.
   // Summary step downloads — same as DLP Assets: one ZIP with every picked item, or one banner's EN + ID.
   const [zipScaleOpen, setZipScaleOpen] = useState(false);
@@ -342,15 +349,26 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
     else onBack();
   };
 
-  const saveProject = async (status: 'draft' | 'published' = 'published') => {
-    (status === 'draft' ? setIsSavingDraft : setIsSaving)(true);
+  // silent = auto-save: no navigation, no toasts (errors are thrown to the auto-save hook)
+  const saveProject = async (status: 'draft' | 'published' = 'published', { silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) {
+      (status === 'draft' ? setIsSavingDraft : setIsSaving)(true);
+      await autoSave.waitForIdle();
+    }
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast.custom((t) => <TiketSnackbar id={t} message="You must be logged in to save" variant="error" />); return; }
+      if (!user) {
+        if (silent) throw new Error('Not logged in');
+        toast.custom((t) => <TiketSnackbar id={t} message="You must be logged in to save" variant="error" />); return;
+      }
       const { data: sessionData } = await supabase.auth.getSession();
       const userDisplay = getUserDisplayName(sessionData?.session?.user, userName || 'Unknown User');
 
-      const id = editingId || crypto.randomUUID();
+      // Reserve the record id before any await so auto-save / manual save / publish all target the same record
+      if (!draftIdRef.current) draftIdRef.current = crypto.randomUUID();
+      const id = draftIdRef.current;
+      const formsSnapshot = itemForms;
+      const iconSnapshot = verticalIconUrl;
       const itemIds = (['banner2x1', 'banner3x1', 'banner5x1'] as const).filter((i) => picked[i]);
 
       // Upload key visual files once each; keep only URLs in the saved data
@@ -406,15 +424,43 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         image_url_id: up.url,
         metadata: { dimension: 'TTD Promo Asset set', fileSize: `${(thumb.size / 1024).toFixed(2)} KB` },
       };
-      if (editingId) await BannerService.updateBanner(editingId, data as any);
-      else await BannerService.saveBanner(data as any);
+      if (draftExistsRef.current) await BannerService.updateBanner(id, data as any);
+      else {
+        await BannerService.saveBanner(data as any);
+        draftExistsRef.current = true;
+        if (!editingId) setAutoSavedNewId(id);
+      }
+      if (silent) {
+        // Swap uploaded Files for their URLs (no re-upload next time) and move the unsaved-changes baseline to what was saved
+        const swap = (f: BannerFormData) => (f.keyVisualFile && uploaded.has(f.keyVisualFile) ? { ...f, keyVisualUrl: uploaded.get(f.keyVisualFile)!, keyVisualFile: undefined } : f);
+        const swapAll = (forms: Record<BannerItemId, BannerFormData>) => ({ banner2x1: swap(forms.banner2x1), banner3x1: swap(forms.banner3x1), banner5x1: swap(forms.banner5x1) });
+        if (uploaded.size) setItemForms((p) => swapAll(p));
+        setBaseline({ forms: itemFormsKey(swapAll(formsSnapshot)), iconUrl: iconSnapshot });
+        return;
+      }
       onBack(`"${projectName.trim()}" ${status === 'draft' ? 'saved as draft' : 'saved'}`);
     } catch (err) {
+      if (silent) throw err;
       console.error('TTD Promo Asset save failed', err);
       toast.custom((t) => <TiketSnackbar id={t} message="Failed to save TTD Promo Asset" variant="error" />);
     } finally {
-      (status === 'draft' ? setIsSavingDraft : setIsSaving)(false);
+      if (!silent) (status === 'draft' ? setIsSavingDraft : setIsSaving)(false);
     }
+  };
+
+  // Auto-save to Drafts: same requirements as the manual Save Draft (project name, name not taken)
+  const autoSave = useAutoSaveDraft({
+    enabled: !isSaving && !isSavingDraft && !!projectName.trim() && nameState.status !== 'invalid' && nameState.status !== 'checking',
+    isDirty: hasUnsavedChanges,
+    changeKey: { itemForms, picked, template, verticalIconUrl, verticalIconTheme, iconScale, iconOffsetX, iconOffsetY, nameSuffix },
+    save: () => saveProject('draft', { silent: true }),
+  });
+  // Discard: a new project that only exists as an auto-saved draft is deleted again
+  const discard = () => {
+    autoSave.stop();
+    const id = autoSavedNewId || (!editingId && draftExistsRef.current ? draftIdRef.current : undefined);
+    if (id) BannerService.deleteBanner(id).catch((err) => console.error('Failed to delete auto-saved draft:', err));
+    onBack();
   };
 
   const section = (title: string, hint: string, children: React.ReactNode, info?: React.ReactNode) => (
@@ -965,6 +1011,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
             >
               {isSavingDraft ? 'Saving...' : 'Save Draft'}
             </button>
+            <AutoSaveIndicator status={autoSave.status} lastSavedAt={autoSave.lastSavedAt} />
           </div>
           <div className="flex items-center gap-4">
             {index > 0 && (
@@ -1039,7 +1086,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
                <button
                 type="button"
                 disabled={isSaving || isSavingDraft}
-                onClick={() => onBack()}
+                onClick={discard}
                 className="w-full h-[48px] px-[24px] text-[#d4183d] text-[16px] font-bold rounded-[8px] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: '#FFDFDF', borderColor: '#FFDFDF' }}
               >

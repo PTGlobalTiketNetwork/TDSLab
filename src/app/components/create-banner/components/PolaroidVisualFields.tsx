@@ -9,7 +9,7 @@ import { Slider } from '../../ui/slider';
 import { ImageInputSelector } from '../../inputs/ImageInputSelector';
 import { BannerService } from '../../../../services/bannerService';
 import { LinearGradientEditor } from './LinearGradientEditor';
-import { DEFAULT_CROP, DEFAULT_GROUP, DEFAULT_OVERLAY, OVERLAY_MAX_OPACITY, GROUP_Y_LIMIT, MAX_TILT, cropStyle, cropToUi, uiToCrop, panCrop, frameAspect, groupGeometry, DEFAULT_POLAROID_BG, DEFAULT_POLAROID_GRADIENT, polaroidOrder } from './PolaroidCollage';
+import { DEFAULT_CROP, DEFAULT_GROUP, DEFAULT_OVERLAY, OVERLAY_MAX_OPACITY, GROUP_Y_LIMIT, MAX_TILT, cropStyle, cropToUi, uiToCrop, panCrop, frameAspect, groupGeometry, DEFAULT_POLAROID_BG, DEFAULT_POLAROID_GRADIENT, polaroidOrder, PHOTO_SCALE_MIN, PHOTO_SCALE_MAX, DEFAULT_VOUCHER_COLOR } from './PolaroidCollage';
 
 interface Props {
   formData: BannerFormData;
@@ -222,7 +222,7 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
             </div>
             <div className="flex-1 min-w-0 flex flex-col gap-[8px]">
               {flipButtons(c, (p) => setCrop(src, p))}
-              {slider('Scale', c.scale, '%', 100, 300, 100, (v) => setCrop(src, { scale: v }))}
+              {slider('Scale', c.scale, '%', PHOTO_SCALE_MIN, PHOTO_SCALE_MAX, 100, (v) => setCrop(src, { scale: v }))}
               {slider('Position X', cropToUi(c.x), '%', -150, 150, 0, (v) => setCrop(src, { x: uiToCrop(v) }))}
               {slider('Position Y', cropToUi(c.y), '%', -150, 150, 0, (v) => setCrop(src, { y: uiToCrop(v) }))}
               {slider('Rotation', formData.polaroidRotations?.[src] ?? 0, '°', -MAX_TILT, MAX_TILT, 0, (v) => {
@@ -246,6 +246,42 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
               } else void pickExtra(src, file, u);
             }}
           />
+        )}
+      </div>
+    );
+  };
+
+  type Voucher = NonNullable<NonNullable<BannerFormData['polaroidVouchers']>['top']>;
+  const setVoucher = (pos: 'top' | 'bottom', patch: Partial<Voucher>) =>
+    onChange({ polaroidVouchers: { ...formData.polaroidVouchers, [pos]: { ...formData.polaroidVouchers?.[pos], ...patch } } });
+  const voucherCard = (pos: 'top' | 'bottom') => {
+    const v = formData.polaroidVouchers?.[pos] ?? {};
+    return (
+      <div key={pos} className="flex flex-col gap-[12px] rounded-[10px] border border-[#e9ebef] p-[12px] bg-white">
+        <div className="flex items-center justify-between">
+          <span className="text-[13px] font-bold text-[#303135]">{pos === 'top' ? 'Top voucher' : 'Bottom voucher'}</span>
+          <Switch checked={!!v.enabled} onCheckedChange={(checked) => setVoucher(pos, { enabled: checked })} className="data-[state=checked]:bg-[#007BFF]" />
+        </div>
+        {v.enabled && (
+          <>
+            <div className="flex items-center gap-2 bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8]">
+              <ColorPicker
+                value={v.color || DEFAULT_VOUCHER_COLOR}
+                onChange={(c) => setVoucher(pos, { color: c })}
+                defaultValue={DEFAULT_VOUCHER_COLOR}
+                trigger={
+                  <button type="button" className="flex items-center gap-2 w-full text-left">
+                    <div className="w-[16px] h-[16px] rounded-full border border-[#d8dce8] shrink-0 shadow-sm" style={{ backgroundColor: v.color || DEFAULT_VOUCHER_COLOR }} />
+                    <span className="text-sm text-[#71747d] font-medium uppercase truncate">{v.color || DEFAULT_VOUCHER_COLOR}</span>
+                  </button>
+                }
+              />
+            </div>
+            {slider('Position X', v.x ?? 0, '%', -20, 20, 0, (x) => setVoucher(pos, { x }))}
+            {slider('Position Y', v.y ?? 0, '%', -20, 20, 0, (y) => setVoucher(pos, { y }))}
+            {slider('Rotation', v.rotate ?? 0, '°', -15, 15, 0, (rotate) => setVoucher(pos, { rotate }))}
+            {slider('Scale', v.scale ?? 100, '%', 80, 120, 100, (scale) => setVoucher(pos, { scale }))}
+          </>
         )}
       </div>
     );
@@ -297,6 +333,13 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
         <label className="text-[14px] font-bold text-[#303135]">Photos</label>
         <p className="text-[12px] text-[#71747d] -mt-[8px]">One image per polaroid. Drag a row to change which photo sits in front. Drag a photo in the preview (or its thumbnail here) to reposition the image inside its frame; scroll on the thumbnail to zoom.</p>
         {order.map((src, layer) => photoRow(src, layer))}
+      </div>
+
+      <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] w-full">
+        <label className="text-[14px] font-bold text-[#303135]">Voucher</label>
+        <p className="text-[12px] text-[#71747d] -mt-[8px]">Ticket shapes peeking in from the top and bottom edge.</p>
+        {voucherCard('top')}
+        {voucherCard('bottom')}
       </div>
 
       {/* Overlay image: sits between the background and the polaroids, fading out towards the text. Off by default. */}

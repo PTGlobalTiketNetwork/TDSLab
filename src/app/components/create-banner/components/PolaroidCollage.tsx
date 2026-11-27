@@ -15,16 +15,16 @@ const LAYOUTS: Record<'2:1' | '3:1' | '5:1', Record<'highlight-2' | 'highlight-3
   '2:1': {
     // frame order = photo number (1/2/3); photo 2 sits further back (top), photo 3 sits in front of it (bottom-right)
     'highlight-3': { w: 360, h: 180, frames: [sq(235.97, 100.76, 107.49, 6.88), sq(283.02, 42.53, 104.46, -27.32), wide(319.99, 135.6, 121.82, 88.03, -9.64, 3.95)] },
-    'highlight-2': { w: 360, h: 180, frames: [sq(256.17, 63.05, 123.03, 6.88), wide(301.56, 131.23, 145.5, 105.14, -9.64, 3.95)] },
+    'highlight-2': { w: 360, h: 180, frames: [sq(256.17, 63.05, 123.03, 8), wide(301.56, 131.23, 145.5, 105.14, -9.64, 3.95)] },
   },
   '3:1': {
     'highlight-3': { w: 360, h: 120, frames: [sq(232.47, 67.79, 94.33, 6.88), sq(273.75, 16.69, 91.66, -27.32), wide(306.2, 98.36, 106.9, 77.25, -9.64, 3.46)] },
-    'highlight-2': { w: 360, h: 120, frames: [sq(258.56, 34.19, 90.2, 6.88), wide(298.41, 89.82, 107.66, 77.8, -9.64, 3.46)] },
+    'highlight-2': { w: 360, h: 120, frames: [sq(258.56, 34.19, 90.2, 8), wide(298.41, 89.82, 107.66, 77.8, -9.64, 3.46)] },
   },
   '5:1': {
     // Positions tuned in Figma (node 107:1092)
     'highlight-3': { w: 1000, h: 200, frames: [sq(136.56, 107.02, 146.4, 9.67), sq(235, 30.71, 154.58, -33.61), wide(289.1, 158.79, 180.27, 130.27, -9.64, 5.84)] },
-    'highlight-2': { w: 1000, h: 200, frames: [sq(146.29, 65.91, 168.49, 6.88), wide(263.48, 139.22, 193.92, 140.13, -15.62, 5.26)] },
+    'highlight-2': { w: 1000, h: 200, frames: [sq(146.29, 65.91, 168.49, 8), wide(263.48, 139.22, 193.92, 140.13, -15.62, 5.26)] },
   },
 };
 
@@ -200,14 +200,18 @@ export const panCrop = (url: string | null | undefined, crop: Crop, frameW: numb
   // A flipped image moves the other way under the pointer
   if (crop.flipH) dx = -dx;
   if (crop.flipV) dy = -dy;
-  const nat = url ? naturalSize(url) : null;
   const s = crop.scale / 100;
   const boxW = frameW * s;
   const boxH = frameH * s;
+  // Below 100% the image box is smaller than the frame: 0–100 slides the whole box across the free space instead,
+  // so it moves with the pointer (not against it)
+  const shrunk = crop.scale < 100;
+  if (shrunk) { dx = -dx; dy = -dy; }
+  const nat = url && !shrunk ? naturalSize(url) : null;
   const cover = nat ? Math.max(boxW / nat.w, boxH / nat.h) : 1;
   // how far the image can travel per axis (px on screen); unknown size → assume only the zoom overflow
-  const travelX = Math.max(1, nat ? nat.w * cover - frameW : boxW - frameW);
-  const travelY = Math.max(1, nat ? nat.h * cover - frameH : boxH - frameH);
+  const travelX = Math.max(1, shrunk ? frameW - boxW : nat ? nat.w * cover - frameW : boxW - frameW);
+  const travelY = Math.max(1, shrunk ? frameH - boxH : nat ? nat.h * cover - frameH : boxH - frameH);
   // Work in on-screen pixels so the image follows the pointer 1:1 across the whole range (no jump at 0/100):
   // 0–100 maps onto the image's own travel, past that each unit is OVERSHOOT % of the frame.
   const toPx = (v: number, travel: number, frame: number) =>
@@ -218,7 +222,21 @@ export const panCrop = (url: string | null | undefined, crop: Crop, frameW: numb
     Math.round(clamp(fromPx(toPx(v, travel, frame) - d, travel, frame), CROP_MIN, CROP_MAX) * 10) / 10;
   return { x: step(crop.x, dx, travelX, frameW), y: step(crop.y, dy, travelY, frameH) };
 };
-export const MAX_TILT = 8; // deg each card can be rotated away from its Figma angle
+export const MAX_TILT = 8;
+/** Uploaded photo zoom range (%). Below 100 the photo no longer fills its frame and the frame's grey shows around it. */
+export const PHOTO_SCALE_MIN = 75;
+export const PHOTO_SCALE_MAX = 300;
+
+// Voucher decorations (Figma 115-3009): one shape, placed by its centre (% of banner), height in % of banner height
+export const VOUCHER_PATH = 'M49.0916 24.2206C38.6262 40.0118 32.0027 50.4385 14.157 53.3117C13.4872 53.4195 12.8006 53.2026 12.3061 52.7381L9.88069 50.46C9.075 49.7032 9.61053 48.3508 10.7159 48.3508C11.808 48.3508 12.3499 47.0259 11.5708 46.2606L7.49055 42.2525C7.07191 41.8413 6.50854 41.6109 5.92171 41.6109H2.68975C1.8979 41.6109 1.16496 41.1926 0.762204 40.5108L0.311731 39.7483C-0.395309 38.5514 0.15122 37.0078 1.43806 36.4821C24.767 26.9509 20.5045 17.3703 23.0285 1.76196C23.3112 0.0140691 25.4403 -0.594274 26.6736 0.676217L29.83 3.92804C30.1748 4.28325 30.3922 4.74271 30.448 5.23457L31.204 11.8869C31.2772 12.531 31.626 13.1117 32.1601 13.4789L39.7841 18.7204C40.7081 19.3558 41.9695 19.1439 42.6354 18.2415C43.4186 17.1801 44.9795 17.1068 45.8587 18.0901L48.8959 21.4869C49.5753 22.2468 49.6547 23.3709 49.0916 24.2206Z';
+const VOUCHER_VB = { w: 49.4654, h: 53.3389 };
+export const DEFAULT_VOUCHER_COLOR = '#FFD300';
+type VoucherSpot = { x: number; y: number; h: number; rot: number; flipY?: boolean };
+const VOUCHER_SPOTS: Record<'2:1' | '3:1' | '5:1', { top: VoucherSpot; bottom: VoucherSpot }> = {
+  '2:1': { top: { x: 46.8, y: -0.1, h: 21, rot: 167.89, flipY: true }, bottom: { x: 54.7, y: 94, h: 31, rot: 5.48 } },
+  '3:1': { top: { x: 48.1, y: -0.7, h: 31, rot: 167.89, flipY: true }, bottom: { x: 44.5, y: 95.8, h: 24, rot: 5.48 } },
+  '5:1': { top: { x: 43.2, y: -2.1, h: 27.5, rot: 167.89, flipY: true }, bottom: { x: 97.1, y: 86.9, h: 56, rot: 12.11 } },
+}; // deg each card can be rotated away from its Figma angle
 
 export function groupGeometry(formData: BannerFormData, scale: number) {
   const layout = LAYOUTS[ratioKey(formData.bannerRatio)][formData.ttdTemplate === 'highlight-3' ? 'highlight-3' : 'highlight-2'];
@@ -422,6 +440,32 @@ export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesO
           );
         })}
       </BoundingBox>
+      {/* Voucher decorations: above the photos, below the logo / text (the whole collage sits under those) */}
+      {!handlesOnly && (['top', 'bottom'] as const).map((pos) => {
+        const v = formData.polaroidVouchers?.[pos];
+        if (!v?.enabled) return null;
+        const spot = VOUCHER_SPOTS[ratioKey(formData.bannerRatio)][pos];
+        const hPx = ((spot.h * layout.h) / 100) * k * ((v.scale ?? 100) / 100);
+        const wPx = (hPx * VOUCHER_VB.w) / VOUCHER_VB.h;
+        return (
+          <svg
+            key={pos}
+            viewBox={`0 0 ${VOUCHER_VB.w} ${VOUCHER_VB.h}`}
+            width={wPx}
+            height={hPx}
+            className="absolute pointer-events-none"
+            style={{
+              left: `calc(${spot.x + (v.x ?? 0)}% - ${wPx / 2}px)`,
+              top: `calc(${spot.y + (v.y ?? 0)}% - ${hPx / 2}px)`,
+              transform: `rotate(${spot.rot + (v.rotate ?? 0)}deg)${spot.flipY ? ' scaleY(-1)' : ''}`,
+              transformOrigin: 'center',
+              overflow: 'visible',
+            }}
+          >
+            <path d={VOUCHER_PATH} fill={v.color || DEFAULT_VOUCHER_COLOR} />
+          </svg>
+        );
+      })}
     </div>
   );
 }
