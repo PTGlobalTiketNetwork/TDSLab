@@ -66,7 +66,7 @@ interface InspectorPanelProps {
 
 
 type TtdPreviewItem = 'banner2x1' | 'banner3x1' | 'banner5x1' | 'brandIcon';
-const TTD_PREVIEW_LABEL: Record<TtdPreviewItem, string> = { banner2x1: '2:1', banner3x1: '3:1', banner5x1: '5:1', brandIcon: 'Brand Icon' };
+const TTD_PREVIEW_LABEL: Record<TtdPreviewItem, string> = { banner2x1: '2:1', banner3x1: '3:1', banner5x1: '5:1', brandIcon: 'Icon' };
 const getTtdPreviewItems = (fd: BannerFormData | undefined): TtdPreviewItem[] => {
   const ttd = fd?.bannerCategory === 'TTD Promo Asset' ? fd.ttd : undefined;
   if (!ttd) return [];

@@ -9,6 +9,7 @@ import { BANNER_SPECS } from '../../../config/banner-layouts';
 import { tagsToHtml, getCurrencyLabel, getUnitLabel, getDefaultPortraitContentOffsetY, getDefaultLandscapeContentScale, getDefaultPartnerLogoY, getDefaultPartnerLogoScale, getDefaultCampaignLogoY } from './utils/layoutUtils';
 import { BoundingBox } from './components/BoundingBox';
 import { ImageBox } from './components/ImageBox';
+import { PolaroidCollage, isPolaroidTemplate, unitBadgeAutoColor } from './components/PolaroidCollage';
 
 interface BannerLegacyProps {
     formData: BannerFormData; 
@@ -56,6 +57,8 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
     contentOnly
 }, ref) => {
   const content = formData.content[lang];
+  // Text shadow on headline / benefit / labels: off unless the banner turns it on (applies to existing banners too)
+  const textShadowClass = formData.textShadow === true ? 'drop-shadow-md' : '';
   const isPromoBanner = formData.bannerCategory === 'Promo Banner';
   
   const isTwoHeadlines = formData.headlineType === '2 Headlines';
@@ -301,7 +304,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
             return (
                 <div className="flex items-start gap-[4px] h-auto self-stretch text-left">
                     <div className="flex flex-col items-start self-end translate-y-[2px] mt-[0px] mr-[0px] mb-[6px] ml-[0px]">{contentNode}</div>
-                    <span className="font-bold drop-shadow-md font-banner" style={{ color, fontSize: `${rpFs}px`, lineHeight: `${rpLh}px`, marginTop: `${Math.round(6 * fontScale)}px`, marginLeft: `${Math.round(6 * fontScale)}px` }}>{label}</span>
+                    <span className={`font-bold ${textShadowClass} font-banner`} style={{ color, fontSize: `${rpFs}px`, lineHeight: `${rpLh}px`, marginTop: `${Math.round(6 * fontScale)}px`, marginLeft: `${Math.round(6 * fontScale)}px` }}>{label}</span>
                 </div>
             );
         }
@@ -355,18 +358,18 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                         return (
                           <div className="relative flex items-end whitespace-nowrap">
                             {cur && (
-                              <span className="font-bold drop-shadow-md font-banner self-start" style={{ fontSize: `${30 * s}px`, lineHeight: 1, color: amountColor, marginRight: `${4 * s}px` }}>{cur}</span>
+                              <span className={`font-bold ${textShadowClass} font-banner self-start`} style={{ fontSize: `${30 * s}px`, lineHeight: 1, color: amountColor, marginRight: `${4 * s}px` }}>{cur}</span>
                             )}
-                            {amount && <span className="font-extrabold drop-shadow-md font-banner" style={{ fontSize: `${amountBase * s}px`, lineHeight: `${132 * s}px`, letterSpacing: `${-8 * s}px`, color: amountColor }}>
+                            {amount && <span className={`font-extrabold ${textShadowClass} font-banner`} style={{ fontSize: `${amountBase * s}px`, lineHeight: `${132 * s}px`, letterSpacing: `${-8 * s}px`, color: amountColor }}>
                               {amount}
                             </span>}
                             {unit && (
                               unitAsIcon ? (
                                 <div className="flex items-center justify-center rounded-full shrink-0 z-10" style={{ boxShadow: '0 4px 6px rgba(0,0,0,0.2)', width: `${badge}px`, height: `${badge}px`, marginBottom: `${10 * s}px`, marginLeft: `${-12 * s}px`, backgroundColor: unitBg }}>
-                                  <span className="font-bold font-banner leading-none" style={{ fontSize: `${28 * s}px`, color: unitColor || '#0064D2' }}>{getUnitLabel(unit)}</span>
+                                  <span className="font-bold font-banner leading-none" style={{ fontSize: `${28 * s}px`, color: unitColor || unitBadgeAutoColor(formData) }}>{getUnitLabel(unit)}</span>
                                 </div>
                               ) : (
-                                <span className="font-bold drop-shadow-md font-banner" style={{ fontSize: `${48 * s}px`, lineHeight: 1, marginLeft: `${4 * s}px`, marginBottom: `${16 * s}px`, color: unitColor || 'white' }}>{getUnitLabel(unit)}</span>
+                                <span className={`font-bold ${textShadowClass} font-banner`} style={{ fontSize: `${48 * s}px`, lineHeight: 1, marginLeft: `${4 * s}px`, marginBottom: `${16 * s}px`, color: unitColor || 'white' }}>{getUnitLabel(unit)}</span>
                               )
                             )}
                           </div>
@@ -424,7 +427,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                           <div className="flex justify-center" style={{ gridColumn: 1, gridRow: 1 }}>{renderTopLabel('first', s)}</div>
                           <div className="flex justify-center" style={{ gridColumn: 3, gridRow: 1 }}>{renderTopLabel('second', s)}</div>
                           <div className="flex justify-center" style={{ gridColumn: 1, gridRow: 2, marginTop: `${-valueTrim * s}px` }}>{renderValue('first', fit)}</div>
-                          <span className="font-bold drop-shadow-md font-banner self-center" style={{ gridColumn: 2, gridRow: 2, transform: `translateY(${-valueTrim / 2 * s}px)`, fontSize: `${96 * s}px`, lineHeight: 1, color: content.discountAmountColor || 'white' }}>+</span>
+                          <span className={`font-bold ${textShadowClass} font-banner self-center`} style={{ gridColumn: 2, gridRow: 2, transform: `translateY(${-valueTrim / 2 * s}px)`, fontSize: `${96 * s}px`, lineHeight: 1, color: content.discountAmountColor || 'white' }}>+</span>
                           <div className="flex justify-center" style={{ gridColumn: 3, gridRow: 2, marginTop: `${-valueTrim * s}px` }}>{renderValue('second', fit)}</div>
                         </div>
                       );
@@ -565,7 +568,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                   >
                     {/* Headline */}
                     <h3
-                      className={`drop-shadow-md font-banner font-bold leading-[1.1] text-center w-full ${isTwoHeadlines ? 'line-clamp-2 break-words' : ''}`}
+                      className={`${textShadowClass} font-banner font-bold leading-[1.1] text-center w-full ${isTwoHeadlines ? 'line-clamp-2 break-words' : ''}`}
                       style={{ fontSize: `${(content.headlineFontSize || defaultHeadlineSize) * 2 * cs}px`, color: content.headlineColor || '#FEDD00' }}
                     >
                       {renderHtml(headlineText, "")}
@@ -574,7 +577,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                     {/* Sub-headline / 2nd headline */}
                     {secondLineText && formData.headlineType !== '1 Headline' && (
                       <h3
-                        className={`drop-shadow-md font-banner font-bold text-center w-full ${isTwoHeadlines ? 'leading-[1.1] line-clamp-2 break-words' : ''}`}
+                        className={`${textShadowClass} font-banner font-bold text-center w-full ${isTwoHeadlines ? 'leading-[1.1] line-clamp-2 break-words' : ''}`}
                         style={{ fontSize: isTwoHeadlines ? `${(content.headlineFontSize || defaultHeadlineSize) * 2 * cs}px` : `${(content.subHeadlineFontSize || 18) * 2 * cs}px`, color: content.subHeadlineColor || 'white' }}
                       >
                         {renderHtml(secondLineText, "")}
@@ -590,7 +593,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                         {content.labelDiscountType === 'With icon' && (
                           <div style={{ width: `${32 * cs}px`, height: `${32 * cs}px`, '--fill-0': content.labelDiscountIconColor || 'white' } as React.CSSProperties}><TdsIcOvalPlus /></div>
                         )}
-                        <div className="font-bold drop-shadow-md font-banner text-center" style={{ fontSize: `${28 * cs}px`, color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "")}</div>
+                        <div className={`font-bold ${textShadowClass} font-banner text-center`} style={{ fontSize: `${28 * cs}px`, color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "")}</div>
                       </div>
                     )}
 
@@ -664,12 +667,12 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                      <HighlightWrapper active={highlights?.headlineDiff} label="Headline Changed">
                        <>
                          {headlineText && (
-                             <h3 className={`drop-shadow-md font-banner font-bold leading-[1.1] mb-[0px] text-left ${formData.headlineType !== '1 Headline' ? 'mt-[4px]' : 'mt-[-4px]'} ${isTwoHeadlines ? 'line-clamp-2 w-full break-words' : ''}`} style={{ fontSize: `${content.headlineFontSize || defaultHeadlineSize}px`, color: content.headlineColor || '#FEDD00' }}>
+                             <h3 className={`${textShadowClass} font-banner font-bold leading-[1.1] mb-[0px] text-left ${formData.headlineType !== '1 Headline' ? 'mt-[4px]' : 'mt-[-4px]'} ${isTwoHeadlines ? 'line-clamp-2 w-full break-words' : ''}`} style={{ fontSize: `${content.headlineFontSize || defaultHeadlineSize}px`, color: content.headlineColor || '#FEDD00' }}>
                                  {renderHtml(headlineText, "")}
                              </h3>
                          )}
                          {secondLineText && formData.headlineType !== '1 Headline' && (
-                            <h3 className={`drop-shadow-md font-banner font-bold text-left ${isTwoHeadlines ? 'leading-[1.1] -mt-[4px] line-clamp-2 w-full break-words' : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[2px]' : '-mt-[4px]')}`} style={{ fontSize: isTwoHeadlines ? `${content.headlineFontSize || defaultHeadlineSize}px` : `${content.subHeadlineFontSize || 18}px`, color: content.subHeadlineColor || 'white' }}>
+                            <h3 className={`${textShadowClass} font-banner font-bold text-left ${isTwoHeadlines ? 'leading-[1.1] -mt-[4px] line-clamp-2 w-full break-words' : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[2px]' : '-mt-[4px]')}`} style={{ fontSize: isTwoHeadlines ? `${content.headlineFontSize || defaultHeadlineSize}px` : `${content.subHeadlineFontSize || 18}px`, color: content.subHeadlineColor || 'white' }}>
                                 {renderHtml(secondLineText, "")}
                             </h3>
                          )}
@@ -684,32 +687,32 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                          {formData.discountEnabled !== false && (
                          <div className="relative flex items-end">
                              {currencyLabel && !(content.prefixType === 'custom' && (content.mainBenefitPrefix || '').split('\n').length >= 4 && content.showPrefix !== false) && (
-                                <span className={`text-[15px] font-bold drop-shadow-md font-banner self-start mr-[2px] ml-[4px] ${formData.headlineType === '1 Headline' ? (content.hasSecondDiscount ? 'mt-[-4px]' : 'mt-[-10px]') : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[0px]' : 'mt-[14px]')}`} style={{ color: content.discountAmountColor || 'white' }}>{currencyLabel}</span>
+                                <span className={`text-[15px] font-bold ${textShadowClass} font-banner self-start mr-[2px] ml-[4px] ${formData.headlineType === '1 Headline' ? (content.hasSecondDiscount ? 'mt-[-4px]' : 'mt-[-10px]') : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[0px]' : 'mt-[14px]')}`} style={{ color: content.discountAmountColor || 'white' }}>{currencyLabel}</span>
                              )}
-                             {discountAmountText && <span className={`text-[80px] font-extrabold tracking-[-4px] drop-shadow-md font-banner leading-[66px] ml-[4px] mt-[0px]`} style={{ color: content.discountAmountColor || 'white' }}>{discountAmountText}</span>}
+                             {discountAmountText && <span className={`text-[80px] font-extrabold tracking-[-4px] ${textShadowClass} font-banner leading-[66px] ml-[4px] mt-[0px]`} style={{ color: content.discountAmountColor || 'white' }}>{discountAmountText}</span>}
                              {discountAmountText && content.unit && (
                                  content.unitDisplayType === 'icon' ? (
-                                     <div className={`flex items-center justify-center rounded-full shadow-lg shrink-0 z-10 mt-[0px] mr-[0px] ml-[0px] ${content.unit === 'mio' ? (content.hasSecondDiscount ? 'w-[30px] h-[30px] mb-[9px] translate-x-[-4px]' : 'w-[30px] h-[30px] mb-[9px] ' + (formData.headlineType === '1 Headline' || formData.headlineType === 'With Sub-Headline' ? 'translate-x-[-2px]' : 'translate-x-[4px]')) : 'w-[24px] h-[24px] mb-[9px]'}`} style={{ backgroundColor: content.unitIconColor || '#FEE645', position: 'relative', bottom: '0px', left: '-6px', right: 'auto' }}>
-                                         <span className="text-[15px] font-bold font-banner leading-none translate-y-[1px]" style={{ color: content.unitColor || '#0064D2' }}>{getUnitLabel(content.unit)}</span>
+                                     <div className={`flex items-center justify-center rounded-full shadow-lg shrink-0 z-10 mt-[0px] mr-[0px] ml-[0px] ${content.unit === 'mio' ? (content.hasSecondDiscount ? 'w-[30px] h-[30px] mb-[9px] translate-x-[-4px]' : 'w-[30px] h-[30px] mb-[9px] ' + (formData.headlineType === '1 Headline' || formData.headlineType === 'With Sub-Headline' ? 'translate-x-[-2px]' : 'translate-x-[4px]')) : 'w-[24px] h-[24px] mb-[9px]'}`} style={{ backgroundColor: content.unitIconColor || '#FEE645', marginLeft: '-6px' }}>
+                                         <span className="text-[15px] font-bold font-banner leading-none translate-y-[1px]" style={{ color: content.unitColor || unitBadgeAutoColor(formData) }}>{getUnitLabel(content.unit)}</span>
                                      </div>
                                  ) : (
-                                     <span className={`text-[24px] font-bold drop-shadow-md font-banner ml-[2px] mb-[4px]`} style={{ color: content.unitColor || 'white' }}>{getUnitLabel(content.unit)}</span>
+                                     <span className={`text-[24px] font-bold ${textShadowClass} font-banner ml-[2px] mb-[4px]`} style={{ color: content.unitColor || 'white' }}>{getUnitLabel(content.unit)}</span>
                                  )
                              )}
                              {content.hasSecondDiscount && (
                                  <>
-                                     <span className={`text-[48px] font-bold drop-shadow-md font-banner mb-[8px] mr-[3px] ${content.unitDisplayType === 'icon' ? 'ml-[1px]' : 'ml-[4px]'}`} style={{ color: content.discountAmountColor || 'white' }}>+</span>
+                                     <span className={`text-[48px] font-bold ${textShadowClass} font-banner mb-[8px] mr-[3px] ${content.unitDisplayType === 'icon' ? 'ml-[1px]' : 'ml-[4px]'}`} style={{ color: content.discountAmountColor || 'white' }}>+</span>
                                      {secondCurrencyLabel && (
-                                         <span className={`text-[15px] font-bold drop-shadow-md font-banner self-start mr-[2px] ml-[4px] ${formData.headlineType === '1 Headline' ? 'mt-[4px]' : 'mt-[10px]'}`} style={{ color: content.secondDiscountAmountColor || content.discountAmountColor || 'white' }}>{secondCurrencyLabel}</span>
+                                         <span className={`text-[15px] font-bold ${textShadowClass} font-banner self-start mr-[2px] ml-[4px] ${formData.headlineType === '1 Headline' ? 'mt-[4px]' : 'mt-[10px]'}`} style={{ color: content.secondDiscountAmountColor || content.discountAmountColor || 'white' }}>{secondCurrencyLabel}</span>
                                      )}
-                                     {secondDiscountAmountText && <span className="text-[80px] font-extrabold tracking-[-4px] drop-shadow-md font-banner leading-[66px]" style={{ color: content.secondDiscountAmountColor || content.discountAmountColor || 'white' }}>{secondDiscountAmountText}</span>}
+                                     {secondDiscountAmountText && <span className={`text-[80px] font-extrabold tracking-[-4px] ${textShadowClass} font-banner leading-[66px]`} style={{ color: content.secondDiscountAmountColor || content.discountAmountColor || 'white' }}>{secondDiscountAmountText}</span>}
                                      {secondDiscountAmountText && content.secondDiscountUnit && (
                                          content.secondUnitDisplayType === 'icon' ? (
                                               <div className={`flex items-center justify-center rounded-full shadow-lg shrink-0 z-10 mt-[0px] mr-[8px] ml-[0px] ${content.secondDiscountUnit === 'mio' ? 'w-[30px] h-[30px] mb-[9px] translate-x-[0px]' : 'w-[24px] h-[24px] mb-[9px]'}`} style={{ backgroundColor: content.secondUnitIconColor || 'white', marginBottom: '8px', position: 'relative', top: '-2px', left: '-8px' }}>
-                                                  <span className="text-[15px] font-bold font-banner leading-none translate-y-[1px]" style={{ color: content.secondUnitColor || '#0064D2' }}>{getUnitLabel(content.secondDiscountUnit)}</span>
+                                                  <span className="text-[15px] font-bold font-banner leading-none translate-y-[1px]" style={{ color: content.secondUnitColor || content.unitColor || unitBadgeAutoColor(formData) }}>{getUnitLabel(content.secondDiscountUnit)}</span>
                                               </div>
                                          ) : (
-                                              <span className="text-[24px] font-bold drop-shadow-md font-banner ml-[2px] mb-[2px]" style={{ color: content.secondUnitColor || content.unitColor || 'white' }}>{getUnitLabel(content.secondDiscountUnit)}</span>
+                                              <span className={`text-[24px] font-bold ${textShadowClass} font-banner ml-[2px] mb-[2px]`} style={{ color: content.secondUnitColor || content.unitColor || 'white' }}>{getUnitLabel(content.secondDiscountUnit)}</span>
                                          )
                                      )}
                                  </>
@@ -727,7 +730,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                              {content.labelDiscountType === 'With icon' && (
                                  <div className="w-[16px] h-[16px]" style={{ '--fill-0': content.labelDiscountIconColor || 'white' } as React.CSSProperties}><TdsIcOvalPlus /></div>
                              )}
-                             <div className="text-[14px] font-bold drop-shadow-md font-banner" style={{ color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "", { transform: 'translateY(0)' })}</div>
+                             <div className={`text-[14px] font-bold ${textShadowClass} font-banner`} style={{ color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "", { transform: 'translateY(0)' })}</div>
                           </div>
                       )}
                      </HighlightWrapper>
@@ -813,6 +816,10 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
             }}
             onMouseDown={onMouseDown}
         >
+         {/* TTD Highlight templates: background colour + polaroid photos instead of the full-bleed key visual and overlay */}
+         {isPolaroidTemplate(formData) ? (
+         <div className="absolute inset-0 z-0"><PolaroidCollage formData={formData} keyVisualUrl={previewUrl} /></div>
+         ) : (<>
          {/* Background Image with Progressive Blur-Up */}
          <div className="absolute inset-0 z-0">
              {thumbnailUrl && !isImageLoaded && (
@@ -869,19 +876,26 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
          
          <div className="absolute inset-0 pointer-events-none z-10" style={gradientStyle} />
          {formData.overlay2Enabled && <div className="absolute inset-0 pointer-events-none z-10" style={gradientStyle2} />}
+         </>)}
 
          <div className="absolute left-0 top-0 h-full w-[55%] z-20 pointer-events-none" style={{ transform: 'translateZ(0)' }}>
-             <div className="h-full w-full px-[20px] py-[15px] flex flex-col justify-center items-start">
+             {/* 3:1 (TTD) gets 12px more room on the left than the 2:1 */}
+             <div className={`h-full w-full ${formData.bannerRatio === 'Landscape (3:1)' ? 'pl-[32px]' : 'pl-[20px]'} pr-[20px] py-[15px] flex flex-col justify-center items-start`}>
                  {landscapeContent}
              </div>
              {content.termsAndCondition && (
-                 <div className="absolute bottom-[15px] left-[20px] max-w-[calc(100%-40px)] z-30">
+                 <div className={`absolute ${formData.bannerRatio === 'Landscape (3:1)' ? 'bottom-[11px] left-[32px] max-w-[calc(100%-52px)]' : 'bottom-[15px] left-[20px] max-w-[calc(100%-40px)]'} z-30`}>
                      <HighlightWrapper active={highlights?.tncDiff} label="Terms & Conditions Changed">
                          <div className="text-[6px] leading-[1.4] font-banner" style={{ color: content.termsColor || 'rgba(255,255,255,0.8)' }}>{renderHtml(termsText, "")}</div>
                      </HighlightWrapper>
                  </div>
              )}
          </div>
+
+         {/* Invisible copy of the polaroids above the content block: dragging a photo pans it inside its frame, even where it sits under the text */}
+         {isPolaroidTemplate(formData) && isDraggable && onFormChange && (
+            <div className="absolute inset-0 z-[25] pointer-events-none"><PolaroidCollage formData={formData} keyVisualUrl={previewUrl} onFormChange={onFormChange} handlesOnly /></div>
+         )}
 
          {formData.showPartnerLogo && (
             <div className="absolute right-0 z-20 pointer-events-none" style={{ top: `${formData.partnerLogoY ?? 16}px`, transform: 'translateZ(0)' }}>

@@ -90,6 +90,19 @@ export function ImageInputSelector({
   
   // Upload Mode State
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Paste without clicking first (a click opens the file browser): while the pointer is over the drop zone, ⌘V / Ctrl+V lands here.
+  // Only the hovered zone takes it, so several empty pickers on one page never fight over the same paste.
+  const [dropHover, setDropHover] = useState(false);
+  const validateRef = useRef<(f: File) => void>(() => {});
+  useEffect(() => {
+    if (!dropHover) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const file = Array.from(e.clipboardData?.items || []).find((item) => item.type.startsWith('image/'))?.getAsFile();
+      if (file) { e.preventDefault(); validateRef.current(file); }
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [dropHover]);
 
   // -- Upload Handlers (Standard) --
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,6 +116,7 @@ export function ImageInputSelector({
     if (file) validateAndSelect(file);
   };
 
+  validateRef.current = (f: File) => { void validateAndSelect(f); };
   const validateAndSelect = async (file: File) => {
     if (file.size > maxSizeMB * 1024 * 1024) {
       toast.custom((t) => <TiketSnackbar id={t} message={`File size must be less than ${maxSizeMB}MB`} variant="error" />);
@@ -168,19 +182,17 @@ export function ImageInputSelector({
          <div
            onDrop={handleDrop}
            onDragOver={(e) => e.preventDefault()}
-           onPaste={(e) => {
-             const file = Array.from(e.clipboardData?.items || [])
-               .find((item) => item.type.startsWith('image/'))
-               ?.getAsFile();
-             if (file) validateAndSelect(file);
-           }}
+           onMouseEnter={() => setDropHover(true)}
+           onMouseLeave={() => setDropHover(false)}
            tabIndex={0}
-           className="p-[24px] flex gap-[16px] items-center animate-in fade-in duration-300 focus:outline-none focus:ring-2 focus:ring-[#007BFF] focus:ring-offset-2 rounded-[8px]"
+           // Drop zone look (dashed B400 outline on B100) so it reads as "drop, paste or click to browse"; the whole box opens the file browser
+           onClick={(e) => { if (!(e.target as HTMLElement).closest('button')) fileInputRef.current?.click(); }}
+           className="mt-[16px] p-[24px] flex gap-[16px] items-center animate-in fade-in duration-300 focus:outline-none focus:ring-2 focus:ring-[#007BFF] focus:ring-offset-2 rounded-[12px] border-2 border-dashed border-[#007BFF] bg-[#E0EFFF]/50 cursor-pointer hover:bg-[#E0EFFF] transition-colors"
          >
-              <div className="w-[80px] h-[80px] bg-[#f8f9fd] rounded-[8px] flex items-center justify-center text-[#d8dce8] shrink-0 border border-[#eff1f6]">
+              <div className="w-[80px] h-[80px] bg-white rounded-[8px] flex items-center justify-center text-[#99CAFF] shrink-0">
                   <div className="relative">
                       <ImageIcon className="w-[32px] h-[32px]" />
-                      <div className="absolute -bottom-1 -right-1 bg-[#d8dce8] rounded-full p-[2px]">
+                      <div className="absolute -bottom-1 -right-1 bg-[#99CAFF] rounded-full p-[2px]">
                           <Plus className="w-[10px] h-[10px] text-white" />
                       </div>
                   </div>
@@ -188,7 +200,11 @@ export function ImageInputSelector({
 
               <div className="flex flex-col gap-[4px] flex-1">
                   <p className="text-[16px] text-[#303135] font-medium">Max file size {maxSizeMB} MB</p>
-                  <p className="text-[14px] text-[#71747d] leading-[20px]">Recommended file type PNG, JPG, WebP — or paste an image from your clipboard</p>
+                  <p className="text-[14px] text-[#71747d] leading-[20px]">
+                    Recommended file type PNG, JPG, WebP — or{' '}
+                    <span className="font-bold text-[#007BFF]">{dropHover ? 'press now to paste your copied image' : 'hover here and paste an image from your clipboard'}</span>{' '}
+                    <kbd className="inline-flex items-center px-[6px] py-[1px] rounded-[4px] border border-[#99CAFF] bg-white text-[12px] font-semibold text-[#007BFF] align-middle">{typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘V' : 'Ctrl+V'}</kbd>
+                  </p>
                   
                   <div className="mt-[4px]">
                       <input 

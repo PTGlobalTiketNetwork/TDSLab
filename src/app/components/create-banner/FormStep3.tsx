@@ -15,6 +15,8 @@ import { Asset } from '../../types/asset';
 import { ImageInputSelector } from '../inputs/ImageInputSelector';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ColorPicker } from './ColorPicker';
+import { PolaroidVisualFields } from './components/PolaroidVisualFields';
+import { isPolaroidTemplate } from './components/PolaroidCollage';
 import { AIGenerator } from '../inputs/AIGenerator';
 import { GradientEditor } from './components/GradientEditor';
 import { StyledInput } from './components/FormElements';
@@ -297,6 +299,8 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
   // Desktop 5:1 key visual (+ overlay): stand alone = inline, bundled with 2:1 = in the Desktop tab
   const desktopRatioLabel = formData.bannerRatio === 'Desktop (4:1)' ? '4:1' : '5:1';
   const isDesktopStandalone = formData.bannerCategory === 'Promo Banner' && (formData.bannerRatio === 'Desktop (5:1)' || formData.bannerRatio === 'Desktop (4:1)');
+  // TTD Highlight templates: background + polaroid photos replace the key visual and overlay cards
+  const polaroid = isPolaroidTemplate(formData);
   const hasDesktopVersion = formData.bannerCategory === 'Promo Banner' && formData.bannerRatio === 'Landscape (2:1)' && !!formData.provideDesktopBanner;
   const desktopCampaignControls = (
       <div className="flex flex-col gap-[12px]">
@@ -381,7 +385,7 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
   const flatDesktop = isDesktopStandalone;
   const desktopCard = (
         <div className="flex flex-col gap-[20px]">
-            <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px]">
+            {!polaroid && <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px]">
             {flatDesktop && <span className="text-[14px] font-bold text-[#303135]">Key Visual</span>}
             {/* Same image as the Mobile tab (a single key visual for both) */}
             {previewUrl && (
@@ -423,7 +427,7 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
                     </div>
                 );
             })}
-            </div>
+            </div>}
             {hasDesktopVersion && (
                 <>
                     {/* Campaign logo for the 5:1 — own toggle/position/scale, asset can be overridden (e.g. a light version so it doesn't sink into the background) */}
@@ -571,7 +575,7 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
             )}
 
             {/* The whole overlay (color + Overlay 1 / 2) is one card, same style as the Campaign logo card */}
-            <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px]">
+            {!polaroid && <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px]">
                 <span className="text-[14px] font-bold text-[#303135]">Overlay</span>
                 {renderOverlayEditor({
                     id: 'd',
@@ -590,7 +594,7 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
                     toggleSynced: () => onChange({ desktopOverlay2Synced: !formData.desktopOverlay2Synced, ...(!formData.desktopOverlay2Synced ? { desktopGradientStop2: formData.desktopGradientStop ?? 45, desktopGradientEnd2: formData.desktopGradientEnd ?? 80 } : {}) }),
                     reset: () => onChange({ desktopOverlayColor: '#000000', desktopOverlayOpacity: 100, desktopGradientStop: 45, desktopGradientEnd: 80, desktopOverlay2Enabled: false, desktopOverlay2Synced: false, desktopOverlay2Opacity: 100, desktopGradientStop2: 80, desktopGradientEnd2: 100 }),
                 })}
-            </div>
+            </div>}
         </div>
   );
 
@@ -746,7 +750,8 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
       )}
       
       {/* 1. Background Settings — Desktop (5:1/4:1) standalone always syncs its image from the Mobile tab instead (see desktopCard's "Same as Mobile" block) */}
-      {!isDesktopStandalone && <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] w-full">
+      {polaroid && <PolaroidVisualFields formData={formData} onChange={onChange} />}
+      {!isDesktopStandalone && !polaroid && <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] w-full">
         <label className="text-[14px] font-bold text-[#303135]">
            Background Settings
         </label>
@@ -978,7 +983,7 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
       </div>}
 
       {/* 2. Gradient Overlay — Color, then per layer: Opacity · Start · Stop */}
-      {isPromoBanner && !isDesktopStandalone && (() => {
+      {isPromoBanner && !isDesktopStandalone && !polaroid && (() => {
           const defStart = isLandscape21 ? 20 : 10; // 2:1 default overlay: start 20, stop 70
           const defEnd = isLandscape21 ? 70 : 100;
           return (

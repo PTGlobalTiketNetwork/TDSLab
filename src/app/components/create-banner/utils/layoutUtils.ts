@@ -65,6 +65,10 @@ export const getDefaultPortraitContentOffsetY = (
 };
 
 /** Landscape content block scale default: 105% for Banner 3:1 (TTD Promo Asset — this ratio is exclusive to it), else 100%. */
+/** Content scale stamped on every new 2:1 banner (Promo Banner, DLP, TTD). Not used as the render fallback,
+ *  so 2:1 banners saved before this default (no landscapeContentScale) keep rendering at 100%. */
+export const NEW_LANDSCAPE_21_CONTENT_SCALE = 125;
+
 export const getDefaultLandscapeContentScale = (
     formData: Pick<BannerFormData, 'bannerRatio'>,
 ): number => (formData.bannerRatio === 'Landscape (3:1)' ? 105 : 100);

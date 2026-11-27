@@ -11,6 +11,7 @@ import { LivePreview } from './LivePreview';
 import { SuccessScreen } from './SuccessScreen';
 import { BannerService } from '../../../services/bannerService';
 import { SETTINGS_VERSION } from './settingsVersion';
+import { NEW_LANDSCAPE_21_CONTENT_SCALE } from './utils/layoutUtils';
 import { toast } from 'sonner';
 import { TiketSnackbar } from '../ui/TiketSnackbar';
 import { Header } from '../Header';
@@ -43,6 +44,7 @@ interface CreateBannerProps {
 export const initialFormDataBase: BannerFormData = {
   // Step 1: Configuration
   bannerName: '',
+  landscapeContentScale: NEW_LANDSCAPE_21_CONTENT_SCALE, // only read by the 2:1/3:1 layout
   bannerCategory: 'Promo Banner',
   
   // Promo Banner Specific

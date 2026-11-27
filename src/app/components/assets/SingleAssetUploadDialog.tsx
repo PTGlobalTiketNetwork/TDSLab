@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, ChangeEvent } from 'react';
-import { Loader2, Image as ImageIcon, AlertTriangle, Info } from 'lucide-react';
+import { Loader2, Image as ImageIcon, AlertTriangle, Info, Eraser, Undo2 } from 'lucide-react';
+import { removeWhiteBackground } from '../../utils/removeWhiteBackground';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../ui/dialog';
 import { AssetService } from '../../../services/assetService';
 import { supabase } from '../../../utils/supabase/client';
@@ -43,6 +44,9 @@ export function SingleAssetUploadDialog({ open, onOpenChange, category: rawCateg
   const [fileMetadata, setFileMetadata] = useState({ size: 'Auto', dimension: 'Auto', ratio: 'Auto' });
   const [dimensionError, setDimensionError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  // Erase background: the file before erasing is kept so it can be undone (cleared whenever a new file is picked)
+  const [beforeErase, setBeforeErase] = useState<{ file: File; url: string } | null>(null);
+  const [isErasing, setIsErasing] = useState(false);
   // Upload progress shown under the file: creeps toward 90% while the request runs (storage upload gives no byte progress), jumps on each finished step, green at 100%, red on failure
   const [progress, setProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
@@ -55,6 +59,7 @@ export function SingleAssetUploadDialog({ open, onOpenChange, category: rawCateg
     setNameError(null);
     setSelectedFile(null);
     setPreviewUrl(null);
+    setBeforeErase(null);
     setFileMetadata({ size: 'Auto', dimension: 'Auto', ratio: 'Auto' });
     setDimensionError(null);
     setIsUploading(false);
@@ -100,9 +105,33 @@ export function SingleAssetUploadDialog({ open, onOpenChange, category: rawCateg
     };
     img.src = url;
     setSelectedFile(file);
+    setBeforeErase(null);
     setPreviewUrl(url);
     setAssetName(prev => prev || file.name.split('.').slice(0, -1).join('.'));
   }, [constraints]);
+
+  // Client-side: turns near-white pixels transparent (flat white logo backgrounds), same tool as the Brand Icon's
+  const eraseBackground = async () => {
+    if (!selectedFile || !previewUrl) return;
+    setIsErasing(true);
+    try {
+      const blob = await removeWhiteBackground(previewUrl);
+      const name = selectedFile.name.replace(/\.[^.]+$/, '') + '.png';
+      setBeforeErase({ file: selectedFile, url: previewUrl });
+      setSelectedFile(new File([blob], name, { type: 'image/png' }));
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch {
+      alert('Could not erase the background of this image.');
+    } finally {
+      setIsErasing(false);
+    }
+  };
+  const undoErase = () => {
+    if (!beforeErase) return;
+    setSelectedFile(beforeErase.file);
+    setPreviewUrl(beforeErase.url);
+    setBeforeErase(null);
+  };
 
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -216,13 +245,24 @@ export function SingleAssetUploadDialog({ open, onOpenChange, category: rawCateg
             </div>
           ) : (
             <div className="w-full h-[160px] border border-[#d8dce8] rounded-[8px] flex flex-col items-center justify-center bg-white">
-              <div className="flex-1 flex items-center justify-center p-4 w-full h-full">
+              {/* Checkerboard so an erased (transparent) background is visible */}
+              <div className="flex-1 flex items-center justify-center p-4 w-full h-full rounded-t-[8px]" style={beforeErase ? { backgroundImage: 'conic-gradient(#f0f1f4 25%, #fff 0 50%, #f0f1f4 0 75%, #fff 0)', backgroundSize: '16px 16px' } : undefined}>
                 <img src={previewUrl} alt="Preview" className="max-w-[80%] max-h-[90px] object-contain" />
               </div>
               <div className="mb-4 flex items-center gap-4">
                 <button type="button" onClick={() => fileInputRef.current?.click()} className="text-[14px] font-bold text-[#007BFF] hover:underline">
-                  Edit Assets
+                  Change asset
                 </button>
+                {beforeErase ? (
+                  <button type="button" onClick={undoErase} className="flex items-center gap-[4px] text-[14px] font-bold text-[#007BFF] hover:underline">
+                    <Undo2 size={14} /> Undo erase
+                  </button>
+                ) : (
+                  <button type="button" onClick={eraseBackground} disabled={isErasing} className="flex items-center gap-[4px] text-[14px] font-bold text-[#007BFF] hover:underline disabled:opacity-50 disabled:no-underline">
+                    {isErasing ? <Loader2 size={14} className="animate-spin" /> : <Eraser size={14} />}
+                    {isErasing ? 'Erasing…' : 'Erase background'}
+                  </button>
+                )}
               </div>
             </div>
           )}

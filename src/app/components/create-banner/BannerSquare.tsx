@@ -1,3 +1,4 @@
+import { unitBadgeAutoColor } from './components/PolaroidCollage';
 import { BannerFormData } from './types';
 import { DraggableItem } from './utils/DraggableItem';
 import type { DiffHighlights } from '../../../utils/diffUtils';
@@ -107,6 +108,8 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
     isShimmering
   } = props;
   const content = formData.content[lang];
+  // Text shadow on headline / benefit / labels: off unless the banner turns it on (applies to existing banners too)
+  const textShadowClass = formData.textShadow === true ? 'drop-shadow-md' : '';
   
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -405,18 +408,18 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
       return (
         <div className="relative flex items-end whitespace-nowrap">
           {cur && (
-            <span className="font-bold drop-shadow-md font-banner self-start" style={{ fontSize: `${30 * s}px`, lineHeight: 1, color: amountColor, marginRight: `${4 * s}px` }}>{cur}</span>
+            <span className={`font-bold ${textShadowClass} font-banner self-start`} style={{ fontSize: `${30 * s}px`, lineHeight: 1, color: amountColor, marginRight: `${4 * s}px` }}>{cur}</span>
           )}
-          {amount && <span className="font-extrabold drop-shadow-md font-banner" style={{ fontSize: `${amountBase * s}px`, lineHeight: `${132 * s}px`, letterSpacing: `${-8 * s}px`, color: amountColor }}>
+          {amount && <span className={`font-extrabold ${textShadowClass} font-banner`} style={{ fontSize: `${amountBase * s}px`, lineHeight: `${132 * s}px`, letterSpacing: `${-8 * s}px`, color: amountColor }}>
             {amount}
           </span>}
           {unit && (
             unitAsIcon ? (
               <div className="flex items-center justify-center rounded-full shrink-0 z-10" style={{ boxShadow: '0 4px 6px rgba(0,0,0,0.2)', width: `${badge}px`, height: `${badge}px`, marginBottom: `${10 * s}px`, marginLeft: `${-12 * s}px`, backgroundColor: unitBg }}>
-                <span className="font-bold font-banner leading-none" style={{ fontSize: `${28 * s}px`, color: unitColor || '#0064D2' }}>{getUnitLabel(unit)}</span>
+                <span className="font-bold font-banner leading-none" style={{ fontSize: `${28 * s}px`, color: unitColor || unitBadgeAutoColor(formData) }}>{getUnitLabel(unit)}</span>
               </div>
             ) : (
-              <span className="font-bold drop-shadow-md font-banner" style={{ fontSize: `${48 * s}px`, lineHeight: 1, marginLeft: `${4 * s}px`, marginBottom: `${16 * s}px`, color: unitColor || 'white' }}>{getUnitLabel(unit)}</span>
+              <span className={`font-bold ${textShadowClass} font-banner`} style={{ fontSize: `${48 * s}px`, lineHeight: 1, marginLeft: `${4 * s}px`, marginBottom: `${16 * s}px`, color: unitColor || 'white' }}>{getUnitLabel(unit)}</span>
             )
           )}
         </div>
@@ -467,7 +470,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
         <div className="flex justify-center" style={{ gridColumn: 1, gridRow: 1 }}>{renderTopLabel('first', s)}</div>
         <div className="flex justify-center" style={{ gridColumn: 3, gridRow: 1 }}>{renderTopLabel('second', s)}</div>
         <div className="flex justify-center" style={{ gridColumn: 1, gridRow: 2, marginTop: `${-valueTrim * s}px` }}>{renderValue('first', fit)}</div>
-        <span className="font-bold drop-shadow-md font-banner self-center" style={{ gridColumn: 2, gridRow: 2, transform: `translateY(${-valueTrim / 2 * s}px)`, fontSize: `${96 * s}px`, lineHeight: 1, color: content.discountAmountColor || 'white' }}>+</span>
+        <span className={`font-bold ${textShadowClass} font-banner self-center`} style={{ gridColumn: 2, gridRow: 2, transform: `translateY(${-valueTrim / 2 * s}px)`, fontSize: `${96 * s}px`, lineHeight: 1, color: content.discountAmountColor || 'white' }}>+</span>
         <div className="flex justify-center" style={{ gridColumn: 3, gridRow: 2, marginTop: `${-valueTrim * s}px` }}>{renderValue('second', fit)}</div>
       </div>
     );
@@ -615,7 +618,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                     selfScale={SQUARE_PARTNER_LOGO_SCALE * (formData.squareContentScale ?? 100) / 100}
                 >
                     <h3
-                        className={`drop-shadow-md font-banner font-bold leading-[1.1] text-center w-full ${isTwoHeadlines ? 'line-clamp-2 break-words' : ''}`}
+                        className={`${textShadowClass} font-banner font-bold leading-[1.1] text-center w-full ${isTwoHeadlines ? 'line-clamp-2 break-words' : ''}`}
                         style={{ fontSize: `${(content.headlineFontSize || defaultHeadlineSize) * 2}px`, color: content.headlineColor || '#FEDD00' }}
                     >
                         {renderHtml(headlineText, "")}
@@ -623,7 +626,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
 
                     {secondHeadlineText && formData.headlineType !== '1 Headline' && (
                         <h3
-                            className={`drop-shadow-md font-banner font-bold text-center w-full ${isTwoHeadlines ? 'leading-[1.1] line-clamp-2 break-words' : ''}`}
+                            className={`${textShadowClass} font-banner font-bold text-center w-full ${isTwoHeadlines ? 'leading-[1.1] line-clamp-2 break-words' : ''}`}
                             style={{ fontSize: isTwoHeadlines ? `${(content.headlineFontSize || defaultHeadlineSize) * 2}px` : `${(content.subHeadlineFontSize || 18) * 2}px`, color: content.subHeadlineColor || 'white' }}
                         >
                             {renderHtml(secondHeadlineText, "")}
@@ -637,7 +640,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                             {content.labelDiscountType === 'With icon' && (
                                 <div style={{ width: '32px', height: '32px', '--fill-0': content.labelDiscountIconColor || 'white' } as React.CSSProperties}><TdsIcOvalPlus /></div>
                             )}
-                            <div className="font-bold drop-shadow-md font-banner text-center" style={{ fontSize: '28px', color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "")}</div>
+                            <div className={`font-bold ${textShadowClass} font-banner text-center`} style={{ fontSize: '28px', color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "")}</div>
                         </div>
                     )}
 
@@ -661,12 +664,12 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
         <DraggableItem id="headline" {...getPos('headline')} width={undefined} height={undefined} isUnlocked={isUnlocked} onMove={handleItemMove} containerSize={{w: 600, h: 600}} centered={true} isSelected={selectedId === 'headline'} onClick={() => setSelectedId('headline')}>
                 <HighlightWrapper active={highlights?.headlineDiff} label="Headline Changed">
                 <div style={{ textAlign: 'center', position: 'relative', whiteSpace: isTwoHeadlines ? 'normal' : 'nowrap' }}>
-                <h3 className={`font-banner font-bold leading-[1.1] drop-shadow-md ${isTwoHeadlines ? 'line-clamp-2 break-words' : ''}`}
+                <h3 className={`font-banner font-bold leading-[1.1] ${textShadowClass} ${isTwoHeadlines ? 'line-clamp-2 break-words' : ''}`}
                     style={{ fontSize: `${content.headlineFontSize || 36}px`, color: content.headlineColor || '#FEDD00' }}>
                     {renderHtml(headlineText, "")}
                 </h3>
                 {secondHeadlineText && (
-                <h3 className={`font-banner font-bold drop-shadow-md ${isTwoHeadlines ? 'leading-[1.1] mt-[2px] line-clamp-2 break-words' : 'leading-[1.2] mt-[6px]'}`}
+                <h3 className={`font-banner font-bold ${textShadowClass} ${isTwoHeadlines ? 'leading-[1.1] mt-[2px] line-clamp-2 break-words' : 'leading-[1.2] mt-[6px]'}`}
                     style={{
                         fontSize: isTwoHeadlines ? `${content.headlineFontSize || 36}px` : `${content.subHeadlineFontSize || 18}px`,
                         color: isTwoHeadlines ? (content.headlineColor || '#FEDD00') : (content.subHeadlineColor || '#FFFFFF')
@@ -687,7 +690,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
         <DraggableItem id="discountAmount" {...getPos('discountAmount')} width={undefined} height={undefined} isUnlocked={isUnlocked} onMove={handleItemMove} containerSize={{w: 600, h: 600}} centered={true} isSelected={selectedId === 'discountAmount'} onClick={() => setSelectedId('discountAmount')}>
                 <HighlightWrapper active={highlights?.amount1Diff} label="Amount Changed">
                 <div style={{ textAlign: 'center', position: 'relative' }}>
-                <span className="font-banner font-extrabold tracking-[-10px] drop-shadow-md leading-[0.8]" 
+                <span className={`font-banner font-extrabold tracking-[-10px] ${textShadowClass} leading-[0.8]`} 
                         style={{ fontSize: `${content.discountAmountFontSize || 180}px`, color: content.discountAmountColor || '#FFFFFF' }}>
                         {discountAmountText}
                 </span>
@@ -853,7 +856,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
             <DraggableItem key="currencySymbol" id="currencySymbol" {...getPos('currencySymbol')} width={undefined} height={undefined} isUnlocked={isUnlocked} onMove={handleItemMove} containerSize={{w: 600, h: 600}} isSelected={selectedId === 'currencySymbol'} onClick={() => setSelectedId('currencySymbol')}>
                     <HighlightWrapper active={highlights?.currency1Diff} label="Currency Changed">
                     <div style={{ position: 'relative' }}>
-                    <span className="font-banner font-bold leading-none drop-shadow-md" 
+                    <span className={`font-banner font-bold leading-none ${textShadowClass}`} 
                             style={{ 
                                 fontSize: `${content.currencyFontSize || 36}px`,
                                 color: content.discountAmountColor || '#FFFFFF' 
@@ -881,7 +884,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                     <span className="font-bold leading-none translate-y-[1px]" 
                             style={{ 
                                 fontSize: `${((getPos('unitIcon').width || 64) / 64) * ((content.unit === 'K' || content.unit === '%') ? 34 : (content.unit === 'Rb' ? 28 : 24))}px`,
-                                color: content.unitColor || '#0064D2' 
+                                color: content.unitColor || unitBadgeAutoColor(formData) 
                             }}>
                             {getUnitLabel(content.unit)}
                     </span>
@@ -899,7 +902,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                 {/* Plus Symbol */}
                 <DraggableItem key="plusSymbol" id="plusSymbol" {...getPos('plusSymbol')} width={undefined} height={undefined} isUnlocked={isUnlocked} onMove={handleItemMove} containerSize={{w: 600, h: 600}} centered={true} isSelected={selectedId === 'plusSymbol'} onClick={() => setSelectedId('plusSymbol')}>
                         <div style={{ position: 'relative' }}>
-                        <span className="font-banner font-bold leading-none drop-shadow-md" 
+                        <span className={`font-banner font-bold leading-none ${textShadowClass}`} 
                                 style={{ 
                                     fontSize: `${content.plusFontSize || 60}px`,
                                     color: content.discountAmountColor || '#FFFFFF' 
@@ -917,7 +920,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                     <DraggableItem key="secondCurrencySymbol" id="secondCurrencySymbol" {...getPos('secondCurrencySymbol')} width={undefined} height={undefined} isUnlocked={isUnlocked} onMove={handleItemMove} containerSize={{w: 600, h: 600}} isSelected={selectedId === 'secondCurrencySymbol'} onClick={() => setSelectedId('secondCurrencySymbol')}>
                             <HighlightWrapper active={highlights?.currency2Diff} label="2nd Currency Changed">
                             <div style={{ position: 'relative' }}>
-                            <span className="font-banner font-bold leading-none drop-shadow-md" 
+                            <span className={`font-banner font-bold leading-none ${textShadowClass}`} 
                                     style={{ 
                                         fontSize: `${content.currencyFontSize || 36}px`,
                                         color: content.secondDiscountAmountColor || '#FFFFFF' 
@@ -936,7 +939,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                 <DraggableItem key="secondDiscountAmount" id="secondDiscountAmount" {...getPos('secondDiscountAmount')} width={undefined} height={undefined} isUnlocked={isUnlocked} onMove={handleItemMove} containerSize={{w: 600, h: 600}} centered={true} isSelected={selectedId === 'secondDiscountAmount'} onClick={() => setSelectedId('secondDiscountAmount')}>
                         <HighlightWrapper active={highlights?.amount2Diff} label="2nd Amount Changed">
                         <div style={{ textAlign: 'center', position: 'relative' }}>
-                        <span className="font-banner font-extrabold tracking-[-10px] drop-shadow-md leading-[0.8]" 
+                        <span className={`font-banner font-extrabold tracking-[-10px] ${textShadowClass} leading-[0.8]`} 
                                 style={{ fontSize: `${content.discountAmountFontSize || 180}px`, color: content.secondDiscountAmountColor || '#FFFFFF' }}>
                                 {secondDiscountAmountText}
                         </span>
@@ -960,7 +963,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                             <span className="font-bold leading-none translate-y-[1px]" 
                                     style={{ 
                                         fontSize: `${((getPos('secondUnitIcon').width || 64) / 64) * ((content.secondDiscountUnit === 'K' || content.secondDiscountUnit === '%') ? 34 : (content.secondDiscountUnit === 'Rb' ? 28 : 24))}px`,
-                                        color: content.secondUnitColor || '#0064D2' 
+                                        color: content.secondUnitColor || content.unitColor || unitBadgeAutoColor(formData) 
                                     }}>
                                     {getUnitLabel(content.secondDiscountUnit)}
                             </span>
