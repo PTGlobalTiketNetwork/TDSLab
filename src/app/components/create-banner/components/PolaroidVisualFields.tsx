@@ -9,7 +9,7 @@ import { Slider } from '../../ui/slider';
 import { ImageInputSelector } from '../../inputs/ImageInputSelector';
 import { BannerService } from '../../../../services/bannerService';
 import { LinearGradientEditor } from './LinearGradientEditor';
-import { DEFAULT_CROP, DEFAULT_GROUP, DEFAULT_OVERLAY, OVERLAY_MAX_OPACITY, GROUP_Y_LIMIT, MAX_TILT, cropStyle, cropToUi, uiToCrop, panCrop, frameAspect, groupGeometry, DEFAULT_POLAROID_BG, DEFAULT_POLAROID_GRADIENT, polaroidOrder, PHOTO_SCALE_MIN, PHOTO_SCALE_MAX, DEFAULT_VOUCHER_COLOR } from './PolaroidCollage';
+import { DEFAULT_CROP, DEFAULT_GROUP, DEFAULT_OVERLAY, OVERLAY_MAX_OPACITY, GROUP_Y_LIMIT, MAX_TILT, CropImg, cropToUi, uiToCrop, panCrop, frameAspect, groupGeometry, DEFAULT_POLAROID_BG, DEFAULT_POLAROID_GRADIENT, polaroidOrder, PHOTO_SCALE_MIN, PHOTO_SCALE_MAX, DEFAULT_VOUCHER_COLOR } from './PolaroidCollage';
 
 interface Props {
   formData: BannerFormData;
@@ -264,23 +264,21 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
         </div>
         {v.enabled && (
           <>
-            <div className="flex items-center gap-2 bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8]">
-              <ColorPicker
-                value={v.color || DEFAULT_VOUCHER_COLOR}
-                onChange={(c) => setVoucher(pos, { color: c })}
-                defaultValue={DEFAULT_VOUCHER_COLOR}
-                trigger={
-                  <button type="button" className="flex items-center gap-2 w-full text-left">
-                    <div className="w-[16px] h-[16px] rounded-full border border-[#d8dce8] shrink-0 shadow-sm" style={{ backgroundColor: v.color || DEFAULT_VOUCHER_COLOR }} />
-                    <span className="text-sm text-[#71747d] font-medium uppercase truncate">{v.color || DEFAULT_VOUCHER_COLOR}</span>
-                  </button>
-                }
-              />
-            </div>
-            {slider('Position X', v.x ?? 0, '%', -20, 20, 0, (x) => setVoucher(pos, { x }))}
-            {slider('Position Y', v.y ?? 0, '%', -20, 20, 0, (y) => setVoucher(pos, { y }))}
+            <ColorPicker
+              value={v.color || DEFAULT_VOUCHER_COLOR}
+              onChange={(c) => setVoucher(pos, { color: c })}
+              defaultValue={DEFAULT_VOUCHER_COLOR}
+              trigger={
+                <button type="button" className="flex items-center gap-2 w-full text-left bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8] hover:border-[#b9bfcc]">
+                  <div className="w-[16px] h-[16px] rounded-full border border-[#d8dce8] shrink-0 shadow-sm" style={{ backgroundColor: v.color || DEFAULT_VOUCHER_COLOR }} />
+                  <span className="text-sm text-[#71747d] font-medium uppercase truncate">{v.color || DEFAULT_VOUCHER_COLOR}</span>
+                </button>
+              }
+            />
+            {slider('Position X', v.x ?? 0, '%', -5, 5, 0, (x) => setVoucher(pos, { x }))}
+            {slider('Position Y', v.y ?? 0, '%', -5, 5, 0, (y) => setVoucher(pos, { y }))}
             {slider('Rotation', v.rotate ?? 0, '°', -15, 15, 0, (rotate) => setVoucher(pos, { rotate }))}
-            {slider('Scale', v.scale ?? 100, '%', 80, 120, 100, (scale) => setVoucher(pos, { scale }))}
+            {slider('Scale', v.scale ?? 100, '%', 90, 110, 100, (scale) => setVoucher(pos, { scale }))}
           </>
         )}
       </div>
@@ -335,13 +333,6 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
         {order.map((src, layer) => photoRow(src, layer))}
       </div>
 
-      <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] w-full">
-        <label className="text-[14px] font-bold text-[#303135]">Voucher</label>
-        <p className="text-[12px] text-[#71747d] -mt-[8px]">Ticket shapes peeking in from the top and bottom edge.</p>
-        {voucherCard('top')}
-        {voucherCard('bottom')}
-      </div>
-
       {/* Overlay image: sits between the background and the polaroids, fading out towards the text. Off by default. */}
       <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] w-full">
         <div className="flex items-center justify-between">
@@ -377,7 +368,7 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
                 onPointerDown={panOverlayThumb}
                 title="Drag to move the overlay image"
               >
-                <img src={overlay.url} alt="Overlay" className="pointer-events-none select-none" style={cropStyle(overlay)} draggable={false} />
+                <CropImg src={overlay.url} alt="Overlay" className="pointer-events-none select-none" crop={overlay} draggable={false} />
                 <button type="button" onClick={() => setOverlay({ url: undefined })} className="absolute top-[6px] right-[6px] bg-white/90 p-[4px] rounded-full shadow-sm hover:text-red-600 transition-colors" title="Remove image">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -393,11 +384,18 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
             {slider('Fade start', overlay.fadeStart, '%', 0, 100, DEFAULT_OVERLAY.fadeStart, (v) => setOverlay({ fadeStart: v, fadeEnd: Math.max(v + 1, overlay.fadeEnd) }))}
             {slider('Fade end', overlay.fadeEnd, '%', 1, 100, DEFAULT_OVERLAY.fadeEnd, (v) => setOverlay({ fadeEnd: v, fadeStart: Math.min(v - 1, overlay.fadeStart) }))}
             {flipButtons(overlay, setOverlay)}
-            {slider('Scale', overlay.scale, '%', 100, 300, 100, (v) => setOverlay({ scale: v }))}
+            {slider('Scale', overlay.scale, '%', PHOTO_SCALE_MIN, PHOTO_SCALE_MAX, 100, (v) => setOverlay({ scale: v }))}
             {slider('Position X', cropToUi(overlay.x), '%', -150, 150, 0, (v) => setOverlay({ x: uiToCrop(v) }))}
             {slider('Position Y', cropToUi(overlay.y), '%', -150, 150, 0, (v) => setOverlay({ y: uiToCrop(v) }))}
           </>
         )}
+      </div>
+
+      <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] w-full">
+        <label className="text-[14px] font-bold text-[#303135]">Voucher</label>
+        <p className="text-[12px] text-[#71747d] -mt-[8px]">Ticket shapes peeking in from the top and bottom edge.</p>
+        {voucherCard('top')}
+        {voucherCard('bottom')}
       </div>
       <Dialog open={!!previewUrl} onOpenChange={(o) => { if (!o) setPreviewUrl(null); }}>
         <DialogContent className="max-w-[90vw] w-auto p-[16px]">

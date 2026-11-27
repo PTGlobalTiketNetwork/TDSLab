@@ -162,26 +162,48 @@ const OVERSHOOT = 2; // % of the frame per stored unit past 0/100 (25 units → 
 export const cropToUi = (v: number) => Math.round((v - 50) * 2);
 export const uiToCrop = (v: number) => 50 + v / 2;
 type Crop = { x: number; y: number; scale: number; flipH?: boolean; flipV?: boolean };
-export const cropStyle = (c: Crop): React.CSSProperties => {
+/** `rel` = image aspect ÷ frame aspect, once known. Below 100% the image keeps its own shape (cover size × scale)
+ *  so a rectangular asset is no longer cut to the frame's shape; unknown shape falls back to fitting it whole. */
+export const cropStyle = (c: Crop, rel?: number | null): React.CSSProperties => {
   const px = clamp(c.x, 0, 100);
   const py = clamp(c.y, 0, 100);
-  const left = ((100 - c.scale) * px) / 100 - (c.x - px) * OVERSHOOT;
-  const top = ((100 - c.scale) * py) / 100 - (c.y - py) * OVERSHOOT;
+  const shrunk = c.scale < 100;
+  const w = shrunk && rel ? c.scale * Math.max(1, rel) : c.scale;
+  const h = shrunk && rel ? c.scale * Math.max(1, 1 / rel) : c.scale;
+  const left = ((100 - w) * px) / 100 - (c.x - px) * OVERSHOOT;
+  const top = ((100 - h) * py) / 100 - (c.y - py) * OVERSHOOT;
   return {
     position: 'absolute',
-    width: `${c.scale}%`,
-    height: `${c.scale}%`,
+    width: `${w}%`,
+    height: `${h}%`,
     left: `${left}%`,
     top: `${top}%`,
     // Flip mirrors what the frame shows (around the frame's centre, not the image's), so the crop stays put
     ...(c.flipH || c.flipV ? {
       transform: `scale(${c.flipH ? -1 : 1}, ${c.flipV ? -1 : 1})`,
-      transformOrigin: `${((50 - left) / c.scale) * 100}% ${((50 - top) / c.scale) * 100}%`,
+      transformOrigin: `${((50 - left) / w) * 100}% ${((50 - top) / h) * 100}%`,
     } : {}),
     maxWidth: 'none',
-    objectFit: 'cover',
+    objectFit: shrunk && !rel ? 'contain' : 'cover',
     objectPosition: `${px}% ${py}%`,
   };
+};
+
+/** An <img> placed by `cropStyle` that learns its own shape vs. its frame on load. */
+export const CropImg = ({ crop, ...props }: { crop: Crop } & React.ImgHTMLAttributes<HTMLImageElement>) => {
+  const [rel, setRel] = useState<number | null>(null);
+  return (
+    <img
+      {...props}
+      style={cropStyle(crop, rel)}
+      onLoad={(e) => {
+        const img = e.currentTarget;
+        const box = img.parentElement;
+        if (img.naturalWidth && img.naturalHeight && box?.clientWidth && box.clientHeight)
+          setRel((img.naturalWidth / img.naturalHeight) / (box.clientWidth / box.clientHeight));
+      }}
+    />
+  );
 };
 
 // Natural image sizes, so a drag can move the image exactly with the pointer
@@ -206,12 +228,17 @@ export const panCrop = (url: string | null | undefined, crop: Crop, frameW: numb
   // Below 100% the image box is smaller than the frame: 0–100 slides the whole box across the free space instead,
   // so it moves with the pointer (not against it)
   const shrunk = crop.scale < 100;
-  if (shrunk) { dx = -dx; dy = -dy; }
-  const nat = url && !shrunk ? naturalSize(url) : null;
+  const nat = url ? naturalSize(url) : null;
   const cover = nat ? Math.max(boxW / nat.w, boxH / nat.h) : 1;
-  // how far the image can travel per axis (px on screen); unknown size → assume only the zoom overflow
-  const travelX = Math.max(1, shrunk ? frameW - boxW : nat ? nat.w * cover - frameW : boxW - frameW);
-  const travelY = Math.max(1, shrunk ? frameH - boxH : nat ? nat.h * cover - frameH : boxH - frameH);
+  // Image size on screen: below 100% it keeps its own shape (see cropStyle), so it may still overflow one axis
+  const imgW = nat ? nat.w * cover : boxW;
+  const imgH = nat ? nat.h * cover : boxH;
+  // An image smaller than the frame slides across the free space instead, so flip to keep it under the pointer
+  if (shrunk && imgW < frameW) dx = -dx;
+  if (shrunk && imgH < frameH) dy = -dy;
+  // how far the image can travel per axis (px on screen)
+  const travelX = Math.max(1, Math.abs(imgW - frameW));
+  const travelY = Math.max(1, Math.abs(imgH - frameH));
   // Work in on-screen pixels so the image follows the pointer 1:1 across the whole range (no jump at 0/100):
   // 0–100 maps onto the image's own travel, past that each unit is OVERSHOOT % of the frame.
   const toPx = (v: number, travel: number, frame: number) =>
@@ -224,7 +251,7 @@ export const panCrop = (url: string | null | undefined, crop: Crop, frameW: numb
 };
 export const MAX_TILT = 8;
 /** Uploaded photo zoom range (%). Below 100 the photo no longer fills its frame and the frame's grey shows around it. */
-export const PHOTO_SCALE_MIN = 75;
+export const PHOTO_SCALE_MIN = 50;
 export const PHOTO_SCALE_MAX = 300;
 
 // Voucher decorations (Figma 115-3009): one shape, placed by its centre (% of banner), height in % of banner height
@@ -338,7 +365,7 @@ export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesO
         const mask = `linear-gradient(${towardsText}, #000 ${o.fadeStart}%, transparent ${Math.max(o.fadeStart + 1, o.fadeEnd)}%)`;
         return (
           <div className="absolute inset-0 overflow-hidden" style={{ opacity: Math.min(o.opacity, OVERLAY_MAX_OPACITY) / 100, WebkitMaskImage: mask, maskImage: mask }}>
-            <img src={src} alt="" crossOrigin="anonymous" draggable={false} className="block select-none pointer-events-none" style={cropStyle(o)} />
+            <CropImg src={src} alt="" crossOrigin="anonymous" draggable={false} className="block select-none pointer-events-none" crop={o} />
           </div>
         );
       })()}
@@ -416,13 +443,13 @@ export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesO
               }}
             >
               {srcs[i] && !handlesOnly && (
-                <img
+                <CropImg
                   src={srcs[i]!}
                   alt={`Photo ${i + 1}`}
                   crossOrigin="anonymous"
                   draggable={false}
                   className="block select-none pointer-events-none"
-                  style={cropStyle(crop)}
+                  crop={crop}
                 />
               )}
               {/* Helps tell the stacked/overlapping photos apart */}

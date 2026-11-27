@@ -284,18 +284,16 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
         {cfg.mode === 'fade' && (
           <div className="flex flex-col gap-2">
             <label className="text-[14px] font-bold text-[#303135]">Color</label>
-          <div className="flex items-center gap-2 bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8]">
             <ColorPicker
               value={cfg.color}
               onChange={cfg.setColor}
               trigger={
-                <button type="button" className="flex items-center gap-2 w-full text-left">
+                <button type="button" className="flex items-center gap-2 w-full text-left bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8] hover:border-[#b9bfcc] transition-colors">
                   <div className="relative w-[16px] h-[16px] rounded-full overflow-hidden border border-[#d8dce8] shrink-0 shadow-sm cursor-pointer hover:scale-110 transition-transform" style={{ backgroundColor: cfg.color }} />
                   <span className="text-sm text-[#71747d] font-medium uppercase truncate">{cfg.color}</span>
                 </button>
               }
             />
-          </div>
           </div>
         )}
         {cfg.mode === 'solid' ? (
@@ -312,18 +310,16 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
               {cfg.fill === 'gradient'
                 ? <GradientEditor stops={cfg.gradStops} onChange={cfg.setGradStops} type={cfg.gradType} onTypeChange={cfg.setGradType} angle={cfg.gradAngle} onAngleChange={cfg.setGradAngle} />
                 : (
-          <div className="flex items-center gap-2 bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8]">
             <ColorPicker
               value={cfg.color}
               onChange={cfg.setColor}
               trigger={
-                <button type="button" className="flex items-center gap-2 w-full text-left">
+                <button type="button" className="flex items-center gap-2 w-full text-left bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8] hover:border-[#b9bfcc] transition-colors">
                   <div className="relative w-[16px] h-[16px] rounded-full overflow-hidden border border-[#d8dce8] shrink-0 shadow-sm cursor-pointer hover:scale-110 transition-transform" style={{ backgroundColor: cfg.color }} />
                   <span className="text-sm text-[#71747d] font-medium uppercase truncate">{cfg.color}</span>
                 </button>
               }
             />
-          </div>
                 )}
               {row('Coverage', cfg.coverage, 0, cfg.setCoverage)}
               {row('Opacity', cfg.solidOpacity, 0, cfg.setSolidOpacity)}
@@ -905,12 +901,11 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
                     <TabsContent value="color" className="mt-0 flex flex-col gap-4">
                         <div className="flex flex-col gap-2">
                             <Label>Solid Color</Label>
-                            <div className="flex items-center gap-4 bg-[#F8F9FD] p-4 rounded-lg border border-[#d8dce8]">
                                 <ColorPicker
                                     value={formData.backgroundColor || '#007BFF'}
                                     onChange={(color) => onChange({ backgroundColor: color })}
                                     trigger={
-                                        <button type="button" className="flex items-center gap-4 w-full text-left">
+                                        <button type="button" className="flex items-center gap-4 w-full text-left bg-[#F8F9FD] p-4 rounded-lg border border-[#d8dce8] hover:border-[#b9bfcc] transition-colors">
                                             <div className="relative w-[16px] h-[16px] rounded-full overflow-hidden border border-[#d8dce8] shrink-0 shadow-sm cursor-pointer hover:scale-110 transition-transform" style={{ backgroundColor: formData.backgroundColor || '#007BFF' }} />
                                             <span className="text-sm text-[#71747d] font-medium uppercase">
                                                 {formData.backgroundColor || '#007BFF'}
@@ -918,7 +913,6 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
                                         </button>
                                     }
                                 />
-                            </div>
                         </div>
                     </TabsContent>
 

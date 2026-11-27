@@ -162,7 +162,8 @@ interface ColorPickerProps {
   defaultValue?: string;
   /** 'chip': same size as a preset swatch (28px) with a caption underneath, for use inside a row of preset chips.
    *  `chipActive` marks it as the selected one (ring + shows the current colour; otherwise a neutral rainbow). */
-  variant?: 'dot' | 'chip';
+  variant?: 'dot' | 'chip' | 'bar';
+  /** 'bar': full-width bordered row (dot + hex); the whole row opens the picker. */
   chipLabel?: string;
   chipActive?: boolean;
   /** Custom trigger element (e.g. a gradient stop handle) instead of the dot/chip; hides the hex caption. */
@@ -241,7 +242,7 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
   }, [isOpen, activeTab]);
 
   return (
-    <div className="flex items-center gap-[8px]">
+    <div className={variant === 'bar' && !trigger ? 'flex flex-1 min-w-0 items-center' : 'flex items-center gap-[8px]'}>
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           {trigger ? trigger : variant === 'chip' ? (
@@ -252,12 +253,16 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
               />
               <span className={`text-[11px] leading-none ${chipActive ? 'font-bold text-[#303135]' : 'text-[#71747d]'}`}>{chipLabel}</span>
             </button>
+          ) : variant === 'bar' ? (
+            <button type="button" title="Pick color" className="flex items-center gap-2 w-full min-w-0 text-left bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8] hover:border-[#b9bfcc] transition-colors">
+              <span className="block w-[16px] h-[16px] rounded-full border border-[#d8dce8] shrink-0 shadow-sm" style={{ backgroundColor: currentColor }} />
+              <span className="text-[12px] text-[#9EA0A5] font-mono uppercase truncate">{displayValue}</span>
+            </button>
           ) : (
-          <div 
-            className="relative w-[16px] h-[16px] rounded-full overflow-hidden border border-[#d8dce8] shrink-0 shadow-sm cursor-pointer hover:scale-110 transition-transform" 
-            title="Pick color"
-            style={{ backgroundColor: currentColor }}
-          />
+            <button type="button" title="Pick color" className="group flex items-center gap-[8px] cursor-pointer">
+              <span className="block relative w-[16px] h-[16px] rounded-full overflow-hidden border border-[#d8dce8] shrink-0 shadow-sm group-hover:scale-110 transition-transform" style={{ backgroundColor: currentColor }} />
+              <span className="text-[12px] text-[#9EA0A5] font-mono uppercase">{displayValue}</span>
+            </button>
           )}
         </PopoverTrigger>
         <PopoverContent className="w-[320px] p-0 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto" align="start" collisionPadding={8}>
@@ -421,11 +426,6 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant
           </Tabs>
         </PopoverContent>
       </Popover>
-      {variant === 'dot' && !trigger && (
-      <span className="text-[12px] text-[#9EA0A5] font-mono uppercase">
-        {displayValue}
-      </span>
-      )}
     </div>
   );
 }
