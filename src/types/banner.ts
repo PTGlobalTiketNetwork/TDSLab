@@ -27,7 +27,8 @@ export type BannerCategory =
   | "Homepage Promo Banner"
   | "Hero Landing Page Header"
   | "Product Entry Point"
-  | "DLP Assets";
+  | "DLP Assets"
+  | "TTD Promo Asset";
 
 export interface Banner {
   id: string;

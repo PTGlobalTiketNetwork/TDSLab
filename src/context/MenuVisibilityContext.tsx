@@ -6,6 +6,7 @@ export const MANAGED_MENU_ITEMS = [
   'Promo Banner',
   'Product Entry Point',
   'DLP Assets',
+  'TTD Promo Asset',
   'Auto Translate',
 ] as const;
 
@@ -16,6 +17,7 @@ const DEFAULT_VISIBILITY: VisibilityMap = {
   'Promo Banner': true,
   'Product Entry Point': true,
   'DLP Assets': true,
+  'TTD Promo Asset': true,
   'Auto Translate': true,
 };
 

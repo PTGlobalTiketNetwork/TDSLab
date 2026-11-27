@@ -197,6 +197,7 @@ export function CreateBanner({
     'hero-landing-page-header': 'Hero Landing Page Header',
     'product-entry-point': 'Product Entry Point',
     'dlp-assets': 'DLP Assets',
+    'ttd-promo-asset': 'TTD Promo Asset',
   };
 
   // Determine Category: 

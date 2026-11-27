@@ -7,7 +7,7 @@ export interface BannerFormData {
     entryPoints: Partial<Record<'ep-mobile-2x1' | 'ep-mobile-3x4' | 'ep-desktop', BannerFormData>>;
   };
   settingsVersion?: number; // see settingsVersion.ts — missing = pre-rework banner
-  bannerCategory: 'Promo Banner' | 'Homepage Promo Banner' | 'Hero Landing Page Header' | 'Product Entry Point' | 'DLP Assets';
+  bannerCategory: 'Promo Banner' | 'Homepage Promo Banner' | 'Hero Landing Page Header' | 'Product Entry Point' | 'DLP Assets' | 'TTD Promo Asset';
   
   // Promo Banner Specific (Step 1)
   verticalCategory: 'General' | 'Accom' | 'Hotel' | 'Transport' | 'Flight' | 'NFT' | 'ToDos' | 'Event' | ''; // 'Transport' only for banners saved before the split

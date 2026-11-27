@@ -183,6 +183,7 @@ function AppContent() {
             'hero-landing-page-header': 'Hero Landing Page Header',
             'product-entry-point': 'Product Entry Point',
             'dlp-assets': 'DLP Assets',
+            'ttd-promo-asset': 'TTD Promo Asset',
             'drafts': 'Drafts'
           };
           return map[slug] || 'Promo Banner';
@@ -241,6 +242,7 @@ function AppContent() {
         'Hero Landing Page Header': 'hero-landing-page-header',
         'Product Entry Point': 'product-entry-point',
         'DLP Assets': 'dlp-assets',
+        'TTD Promo Asset': 'ttd-promo-asset',
         'Drafts': 'drafts'
       };
       
