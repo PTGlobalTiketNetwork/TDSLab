@@ -6,6 +6,7 @@ import { BannerFormData } from '../components/create-banner/types';
 import { toast } from 'sonner';
 import { TiketSnackbar } from '../components/ui/TiketSnackbar';
 import { DlpAssetsFlow } from '../components/dlp-assets/DlpAssetsFlow';
+import { TtdPromoAssetFlow } from '../components/ttd-promo-asset/TtdPromoAssetFlow';
 
 interface CreateBannerPageProps {
   userName: string;
@@ -97,6 +98,10 @@ export function CreateBannerPage({ userName, userId, userAvatar }: CreateBannerP
         <div className="w-8 h-8 border-4 border-[#0064D2] border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
+  }
+
+  if (category === 'ttd-promo-asset') {
+    return <TtdPromoAssetFlow userName={userName} userId={userId} userAvatar={userAvatar} onBack={handleBack} initialData={initialData} editingId={editId || undefined} initialSeconds={initialSeconds} />;
   }
 
   if (category === 'dlp-assets') {

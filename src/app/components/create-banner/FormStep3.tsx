@@ -99,6 +99,8 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
   const isProductEntryPoint = formData.bannerCategory === 'Product Entry Point';
   const isWhatsAppRatio = formData.bannerRatio === 'Mobile (2:1 WhatsApp)';
   const isSquare = formData.bannerRatio === 'Square (1:1)';
+  // Landscape (3:1) is a TTD Promo Asset ratio that clones the 2:1 layout onto a wider canvas — treated identically everywhere 2:1 is.
+  const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)' || formData.bannerRatio === 'Landscape (3:1)';
   // Portrait 3:4 logo defaults (2:1 and others keep 16px / 100%): campaign x/y 20px @160%, partner top 20px @160%
   const isPortraitRatio = formData.bannerRatio === 'Portrait (3:4)';
   const cScale = isPortraitRatio ? 1.6 : 1;
@@ -946,8 +948,8 @@ export function FormStep3({ formData, onChange, deviceTab = 'mobile', onDeviceTa
 
       {/* 2. Gradient Overlay — Color, then per layer: Opacity · Start · Stop */}
       {isPromoBanner && !isDesktopStandalone && (() => {
-          const defStart = formData.bannerRatio === 'Landscape (2:1)' ? 20 : 10; // 2:1 default overlay: start 20, stop 70
-          const defEnd = formData.bannerRatio === 'Landscape (2:1)' ? 70 : 100;
+          const defStart = isLandscape21 ? 20 : 10; // 2:1 default overlay: start 20, stop 70
+          const defEnd = isLandscape21 ? 70 : 100;
           return (
           <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] w-full">
              <label className="text-[14px] font-bold text-[#303135]">Gradient Overlay</label>

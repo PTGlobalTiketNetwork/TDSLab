@@ -98,6 +98,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
   // --- Promo Banner Logic ---
   const ratioClasses = {
     'Landscape (2:1)': 'aspect-[2/1]',
+    'Landscape (3:1)': 'aspect-[3/1]', // TTD Promo Asset: 2:1 layout cloned onto a wider canvas
     'Landscape (16:9)': 'aspect-[16/9]',
     'Square (1:1)': 'aspect-[1/1]',
     'Portrait (3:4)': 'aspect-[3/4]',
@@ -165,8 +166,9 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
   const overlayColor = formData.overlayColor || '#000000';
   const rgb = hexToRgb(overlayColor);
   const opacityStart = (formData.gradientOpacity ?? 100) / 100;
-  const stopPos = formData.overlayGradientStop ?? (formData.bannerRatio === 'Landscape (2:1)' ? 20 : 10); // Start of the fade
-  const stopEnd = formData.overlayGradientEnd ?? (formData.bannerRatio === 'Landscape (2:1)' ? 70 : 100); // Where it has faded out
+  const isLandscape21ForOverlay = formData.bannerRatio === 'Landscape (2:1)' || formData.bannerRatio === 'Landscape (3:1)';
+  const stopPos = formData.overlayGradientStop ?? (isLandscape21ForOverlay ? 20 : 10); // Start of the fade
+  const stopEnd = formData.overlayGradientEnd ?? (isLandscape21ForOverlay ? 70 : 100); // Where it has faded out
 
   const gradientStyle = {
       background: `linear-gradient(90deg, rgba(${rgb},${opacityStart}) 0%, rgba(${rgb},${opacityStart}) ${stopPos}%, rgba(${rgb},0) ${Math.max(stopPos + 1, stopEnd)}%)`,
@@ -213,7 +215,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
     );
   };
 
-  const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)';
+  const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)' || formData.bannerRatio === 'Landscape (3:1)';
   // Landscape logo defaults (original): 16px, 100%
   const lgPos = 16;
   const lgScale = 1;

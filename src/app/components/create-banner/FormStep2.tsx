@@ -34,7 +34,7 @@ interface FormStep2Props {
 }
 
 export function FormStep2({ formData, onChange, activeTab, onTabChange, isTranslating: propIsTranslating, setIsTranslating: propSetIsTranslating, deviceTab = 'mobile', onDeviceTabChange, embedded = false }: FormStep2Props) {
-  const { isWhitelisted } = useAccess();
+  const { isWhitelisted, isAdmin } = useAccess();
   const { isVisible: isMenuVisible } = useMenuVisibility();
 
   // Sticky-bar shadow rule (see useStickyBar): shadow only when stuck AND bottom-most of the stack
@@ -344,13 +344,15 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
   // DLP Mobile Header 1:1 draws the 3:4 content block, so it gets the 3:4 controls (nudge position, unit icon, benefit scale)
   const isDlpSquare = isSquare && formData.dlpRole === 'header-mobile';
   const isPortrait = formData.bannerRatio === 'Portrait (3:4)';
+  // Landscape (3:1) is a TTD Promo Asset ratio that clones the 2:1 layout onto a wider canvas — treated identically everywhere 2:1 is.
+  const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)' || formData.bannerRatio === 'Landscape (3:1)';
   // Portrait 3:4 and Landscape 2:1 share the Discount 1/2 cards, per-discount nudge, benefit scale and content position
   // DLP Header desktop: the 5:1 layout on a 4:1 canvas, no CTA
   const isDesktop41 = formData.bannerRatio === 'Desktop (4:1)';
   const desktopRatioLabel = isDesktop41 ? '4:1' : '5:1';
   const isDesktop51 = formData.bannerCategory === 'Promo Banner' && (formData.bannerRatio === 'Desktop (5:1)' || formData.bannerRatio === 'Desktop (4:1)');
   const hasDesktopVersion = formData.bannerRatio === 'Landscape (2:1)' && !!formData.provideDesktopBanner;
-  const usesBenefitCards = isPortrait || isDlpSquare || formData.bannerRatio === 'Landscape (2:1)' || isDesktop51;
+  const usesBenefitCards = isPortrait || isDlpSquare || isLandscape21 || isDesktop51;
   // Scale / position sliders exist for 3:4 and 2:1 only (Desktop 5:1 has its own in the Desktop 5:1 card)
   const usesScaleSliders = usesBenefitCards && !isDesktop51 && !isDlpSquare; // DLP 1:1 has its own square scale/position sliders
   // Desktop 5:1 content scale default: 140% with one discount, 125% with two
@@ -772,7 +774,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
 
         <div className="flex items-center gap-[8px]">
         {/* Auto Translate Button — whitelisted users only, and can be hidden in Menu Management */}
-        {isWhitelisted && isMenuVisible('Auto Translate') && (
+        {isWhitelisted && isMenuVisible('Auto Translate', isAdmin) && (
           <button
               type="button"
               onClick={handleAutoTranslate}
@@ -827,7 +829,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
       */}
       
       {/* Content Layout box — groups the scale / position sliders and the vertical-centre toggle */}
-      {(isDesktop51 || isPortrait || formData.bannerRatio === 'Landscape (2:1)' || usesScaleSliders || (isSquare && formData.dlpRole === 'header-mobile')) && (
+      {(isDesktop51 || isPortrait || isLandscape21 || usesScaleSliders || (isSquare && formData.dlpRole === 'header-mobile')) && (
       <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px]">
       <span className="text-[14px] font-bold text-[#303135]">Content Layout</span>
       {/* Desktop 5:1 (stand alone): scale + position at the top, same as 2:1 and 3:4 */}
@@ -912,7 +914,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
       )}
 
       {/* Landscape 2:1 overall content scale */}
-      {formData.bannerRatio === 'Landscape (2:1)' && (
+      {isLandscape21 && (
         <div className="flex flex-col gap-[8px]">
           <div className="flex items-center justify-between">
             <label className="text-[14px] font-bold text-[#303135]">Content Scale</label>
@@ -1623,7 +1625,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
               {isDesktop51 && desktopSettingsCard}
 
               {/* CTA Button (optional) for 3:4 and 2:1 — form-level so it applies to both EN and ID */}
-              {(isPortrait || formData.bannerRatio === 'Landscape (2:1)') && formData.dlpRole !== 'header-mobile' && ( /* DLP Mobile Header (3:4 / 1:1) has no CTA */
+              {(isPortrait || isLandscape21) && formData.dlpRole !== 'header-mobile' && ( /* DLP Mobile Header (3:4 / 1:1) has no CTA */
                 <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px]">
                   <div className="flex items-center justify-between">
                     <label className="text-[14px] font-bold text-[#303135]">CTA Button (optional)</label>
@@ -1652,7 +1654,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                       </div>
 
                       {/* Button size — 2:1 mobile only, scale down */}
-                      {formData.bannerRatio === 'Landscape (2:1)' && (
+                      {isLandscape21 && (
                         <div className="flex flex-col gap-[8px]">
                           <div className="flex items-center justify-between">
                             <label className="text-[14px] font-bold text-[#303135]">Button Size</label>
@@ -1687,10 +1689,10 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                             <div className="flex items-center justify-between">
                               <span className="text-[14px] font-bold text-[#303135]">Width</span>
                               <div className="flex items-center gap-[8px]">
-                                <span className="text-[13px] font-semibold text-[#007BFF]">{formData.portraitCtaFixedWidth ?? (formData.bannerRatio === 'Landscape (2:1)' ? 360 : 480)}px</span>
+                                <span className="text-[13px] font-semibold text-[#007BFF]">{formData.portraitCtaFixedWidth ?? (isLandscape21 ? 360 : 480)}px</span>
                                 <button
                                   type="button"
-                                  onClick={() => onChange({ portraitCtaFixedWidth: formData.bannerRatio === 'Landscape (2:1)' ? 360 : 480 })}
+                                  onClick={() => onChange({ portraitCtaFixedWidth: isLandscape21 ? 360 : 480 })}
                                   className="text-[#71747d] hover:text-[#303135] transition-colors"
                                   title="Reset to default"
                                 >
@@ -1703,7 +1705,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                               min={200}
                               max={480}
                               step={10}
-                              value={formData.portraitCtaFixedWidth ?? (formData.bannerRatio === 'Landscape (2:1)' ? 360 : 480)}
+                              value={formData.portraitCtaFixedWidth ?? (isLandscape21 ? 360 : 480)}
                               onChange={(e) => onChange({ portraitCtaFixedWidth: Number(e.target.value) })}
                               className="w-full accent-[#007BFF]"
                             />

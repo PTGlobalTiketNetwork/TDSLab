@@ -6,13 +6,21 @@ export interface BannerFormData {
     header: { mobile: boolean; mobileRatio: '1:1' | '3:4'; desktop: boolean; desktopForm?: BannerFormData; mobileForm?: BannerFormData }; // desktopForm = Desktop 4:1 editor
     entryPoints: Partial<Record<'ep-mobile-2x1' | 'ep-mobile-3x4' | 'ep-desktop', BannerFormData>>;
   };
+  // TTD Promo Asset project (category 'TTD Promo Asset'): one bundled project with 4 mandatory items —
+  // Banner 2:1, Banner 3:1, Banner 5:1 (each a full BannerFormData, bannerCategory internally 'Promo Banner' so it reuses that rendering/editing), plus a square Vertical Icon image.
+  ttd?: {
+    banner2x1: { variant: 'Carousel' | 'Single'; form: BannerFormData };
+    banner3x1: { variant: 'Global Search' | 'Single'; form: BannerFormData };
+    banner5x1: { form: BannerFormData };
+    verticalIconUrl?: string;
+  };
   settingsVersion?: number; // see settingsVersion.ts — missing = pre-rework banner
   bannerCategory: 'Promo Banner' | 'Homepage Promo Banner' | 'Hero Landing Page Header' | 'Product Entry Point' | 'DLP Assets' | 'TTD Promo Asset';
   
   // Promo Banner Specific (Step 1)
   verticalCategory: 'General' | 'Accom' | 'Hotel' | 'Transport' | 'Flight' | 'NFT' | 'ToDos' | 'Event' | ''; // 'Transport' only for banners saved before the split
   bannerStyle: 'Style 3 (Flagship/big campaign)' | 'Style 2 (Thematic/tactical campaign)' | 'Style 1 (Regular promo campaign)';
-  bannerRatio: 'Landscape (2:1)' | 'Landscape (16:9)' | 'Square (1:1)' | 'Portrait (3:4)' | 'Mobile (5:2)' | 'Mobile (4:1)' | 'Mobile (2:1 WhatsApp)' | 'Desktop (5:1)' | 'Desktop (4:1)' | 'Desktop (8:1)'; // 4:1 = DLP Header desktop (same layout as 5:1)
+  bannerRatio: 'Landscape (2:1)' | 'Landscape (3:1)' | 'Landscape (16:9)' | 'Square (1:1)' | 'Portrait (3:4)' | 'Mobile (5:2)' | 'Mobile (4:1)' | 'Mobile (2:1 WhatsApp)' | 'Desktop (5:1)' | 'Desktop (4:1)' | 'Desktop (8:1)'; // 4:1 = DLP Header desktop (same layout as 5:1); 3:1 = TTD Promo Asset (2:1 layout cloned onto a wider canvas)
 
   // Product Entry Point Specific
   platform?: 'Mobile' | 'Desktop';
