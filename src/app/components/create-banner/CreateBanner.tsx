@@ -1029,7 +1029,7 @@ export function CreateBanner({
     // --sticky-base = height of the fixed Header when it is rendered here; --sticky-top (set on the card) = base + the sticky breadcrumb.
     <div
       className={`min-h-screen bg-[#f8f9fd] flex flex-col relative w-full overflow-x-clip ${embedded ? 'pt-[64px]' : ''}`}
-      style={{ '--sticky-base': embedded ? '0px' : '64px' } as React.CSSProperties}
+      style={{ '--sticky-base': embedded ? '0px' : '80px' } as React.CSSProperties}
     >
       <FontStyles />
       {/* Top Menu / Header */}
@@ -1050,7 +1050,7 @@ export function CreateBanner({
 
       {/* Conflict Alert */}
       {remoteVersion && (
-        <div className={`fixed z-30 bg-blue-50 border-b border-blue-100 px-6 py-3 flex items-center justify-center shadow-sm w-full gap-4 transition-all duration-300 ${embedded ? 'top-[0px]' : 'top-[64px]'}`}>
+        <div className={`fixed z-30 bg-blue-50 border-b border-blue-100 px-6 py-3 flex items-center justify-center shadow-sm w-full gap-4 transition-all duration-300 ${embedded ? 'top-[0px]' : 'top-[80px]'}`}>
             <div className="flex items-center gap-2 text-blue-800">
                 <Info size={18} />
                 <span className="font-medium text-sm">{remoteVersion.userName} has just saved a new version of this banner.</span>
@@ -1072,7 +1072,7 @@ export function CreateBanner({
       )}
 
       {/* Main Content Area */}
-      <div className={`${embedded ? '' : 'mt-[88px]'} w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]`}>
+      <div className={`${embedded ? '' : 'mt-[104px]'} w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]`}>
         
         {/* Breadcrumbs & Steps */}
         <div className="flex flex-col gap-[8px] items-start">
@@ -1095,7 +1095,7 @@ export function CreateBanner({
         {/* Scrolled state only: compact bar under the header with the banner name + steps */}
         <div
           ref={stepBarRef}
-          className={`fixed ${embedded ? 'top-[0px]' : 'top-[64px]'} left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[64px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+          className={`fixed ${embedded ? 'top-[0px]' : 'top-[80px]'} left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[64px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
         >
           <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-end pb-[16px] gap-[8px]">
             <span className="text-[16px] font-semibold leading-[20px] text-[#303135] truncate">{formData.bannerName?.trim() || 'Untitled banner'}</span>

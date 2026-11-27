@@ -258,6 +258,14 @@ export const PHOTO_SCALE_MAX = 300;
 export const VOUCHER_PATH = 'M49.0916 24.2206C38.6262 40.0118 32.0027 50.4385 14.157 53.3117C13.4872 53.4195 12.8006 53.2026 12.3061 52.7381L9.88069 50.46C9.075 49.7032 9.61053 48.3508 10.7159 48.3508C11.808 48.3508 12.3499 47.0259 11.5708 46.2606L7.49055 42.2525C7.07191 41.8413 6.50854 41.6109 5.92171 41.6109H2.68975C1.8979 41.6109 1.16496 41.1926 0.762204 40.5108L0.311731 39.7483C-0.395309 38.5514 0.15122 37.0078 1.43806 36.4821C24.767 26.9509 20.5045 17.3703 23.0285 1.76196C23.3112 0.0140691 25.4403 -0.594274 26.6736 0.676217L29.83 3.92804C30.1748 4.28325 30.3922 4.74271 30.448 5.23457L31.204 11.8869C31.2772 12.531 31.626 13.1117 32.1601 13.4789L39.7841 18.7204C40.7081 19.3558 41.9695 19.1439 42.6354 18.2415C43.4186 17.1801 44.9795 17.1068 45.8587 18.0901L48.8959 21.4869C49.5753 22.2468 49.6547 23.3709 49.0916 24.2206Z';
 const VOUCHER_VB = { w: 49.4654, h: 53.3389 };
 export const DEFAULT_VOUCHER_COLOR = '#FFD300';
+type VoucherAdjust = { scale: number; x: number; y: number; rotate: number };
+/** Slider starting values per ratio (what "reset" returns to), tuned on top of the Figma spots. */
+const VOUCHER_DEFAULTS: Record<'2:1' | '3:1' | '5:1', { top: VoucherAdjust; bottom: VoucherAdjust }> = {
+  '2:1': { top: { scale: 100, x: 5, y: 1, rotate: 4 }, bottom: { scale: 75, x: 3, y: 5, rotate: 6 } },
+  '3:1': { top: { scale: 75, x: 0, y: 0, rotate: 0 }, bottom: { scale: 100, x: 5, y: 0, rotate: 0 } },
+  '5:1': { top: { scale: 104, x: 2, y: 4, rotate: 4 }, bottom: { scale: 105, x: -1, y: 1, rotate: 3 } },
+};
+export const voucherDefaults = (formData: Pick<BannerFormData, 'bannerRatio'>, pos: 'top' | 'bottom') => VOUCHER_DEFAULTS[ratioKey(formData.bannerRatio)][pos];
 type VoucherSpot = { x: number; y: number; h: number; rot: number; flipY?: boolean };
 const VOUCHER_SPOTS: Record<'2:1' | '3:1' | '5:1', { top: VoucherSpot; bottom: VoucherSpot }> = {
   '2:1': { top: { x: 46.8, y: -0.1, h: 21, rot: 167.89, flipY: true }, bottom: { x: 54.7, y: 94, h: 31, rot: 5.48 } },
@@ -472,7 +480,8 @@ export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesO
         const v = formData.polaroidVouchers?.[pos];
         if (!v?.enabled) return null;
         const spot = VOUCHER_SPOTS[ratioKey(formData.bannerRatio)][pos];
-        const hPx = ((spot.h * layout.h) / 100) * k * ((v.scale ?? 100) / 100);
+        const d = voucherDefaults(formData, pos);
+        const hPx = ((spot.h * layout.h) / 100) * k * ((v.scale ?? d.scale) / 100);
         const wPx = (hPx * VOUCHER_VB.w) / VOUCHER_VB.h;
         return (
           <svg
@@ -482,9 +491,9 @@ export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesO
             height={hPx}
             className="absolute pointer-events-none"
             style={{
-              left: `calc(${spot.x + (v.x ?? 0)}% - ${wPx / 2}px)`,
-              top: `calc(${spot.y + (v.y ?? 0)}% - ${hPx / 2}px)`,
-              transform: `rotate(${spot.rot + (v.rotate ?? 0)}deg)${spot.flipY ? ' scaleY(-1)' : ''}`,
+              left: `calc(${spot.x + (v.x ?? d.x)}% - ${wPx / 2}px)`,
+              top: `calc(${spot.y + (v.y ?? d.y)}% - ${hPx / 2}px)`,
+              transform: `rotate(${spot.rot + (v.rotate ?? d.rotate)}deg)${spot.flipY ? ' scaleY(-1)' : ''}`,
               transformOrigin: 'center',
               overflow: 'visible',
             }}

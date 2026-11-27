@@ -791,7 +791,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
   };
 
   return (
-    <div className="min-h-screen bg-[#f8f9fd] flex flex-col relative w-full overflow-x-clip" style={{ '--sticky-base': '64px' } as React.CSSProperties}>
+    <div className="min-h-screen bg-[#f8f9fd] flex flex-col relative w-full overflow-x-clip" style={{ '--sticky-base': '80px' } as React.CSSProperties}>
       <OffscreenBannerRenderer ref={renderer} />
       {/* Copy content (pull): an entry point can only copy from a header; a header can copy from the other header */}
       <Dialog open={!!copyDialog} onOpenChange={(o) => { if (!o) setCopyDialog(null); }}>
@@ -903,9 +903,9 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
         </DialogContent>
       </Dialog>
       <Header compact flat={scrolled} fullWidth showLogo hideSearch userName={userName} userId={userId} userAvatar={userAvatar} onLogout={() => supabase.auth.signOut()} />
-      <div className="mt-[88px] w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]">
+      <div className="mt-[104px] w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]">
         <div ref={stepBarRef}
-          className={`fixed top-[64px] left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[64px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+          className={`fixed top-[80px] left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[64px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
         >
           <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-end pb-[16px] gap-[8px]">
             <span className="text-[16px] font-semibold leading-[20px] text-[#303135] truncate">{projectName.trim() || 'DLP Assets'}</span>

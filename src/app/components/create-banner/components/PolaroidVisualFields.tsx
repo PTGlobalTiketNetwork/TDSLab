@@ -9,7 +9,7 @@ import { Slider } from '../../ui/slider';
 import { ImageInputSelector } from '../../inputs/ImageInputSelector';
 import { BannerService } from '../../../../services/bannerService';
 import { LinearGradientEditor } from './LinearGradientEditor';
-import { DEFAULT_CROP, DEFAULT_GROUP, DEFAULT_OVERLAY, OVERLAY_MAX_OPACITY, GROUP_Y_LIMIT, MAX_TILT, CropImg, cropToUi, uiToCrop, panCrop, frameAspect, groupGeometry, DEFAULT_POLAROID_BG, DEFAULT_POLAROID_GRADIENT, polaroidOrder, PHOTO_SCALE_MIN, PHOTO_SCALE_MAX, DEFAULT_VOUCHER_COLOR } from './PolaroidCollage';
+import { DEFAULT_CROP, DEFAULT_GROUP, DEFAULT_OVERLAY, OVERLAY_MAX_OPACITY, GROUP_Y_LIMIT, MAX_TILT, CropImg, cropToUi, uiToCrop, panCrop, frameAspect, groupGeometry, DEFAULT_POLAROID_BG, DEFAULT_POLAROID_GRADIENT, polaroidOrder, PHOTO_SCALE_MIN, PHOTO_SCALE_MAX, DEFAULT_VOUCHER_COLOR, voucherDefaults } from './PolaroidCollage';
 
 interface Props {
   formData: BannerFormData;
@@ -256,6 +256,7 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
     onChange({ polaroidVouchers: { ...formData.polaroidVouchers, [pos]: { ...formData.polaroidVouchers?.[pos], ...patch } } });
   const voucherCard = (pos: 'top' | 'bottom') => {
     const v = formData.polaroidVouchers?.[pos] ?? {};
+    const d = voucherDefaults(formData, pos);
     return (
       <div key={pos} className="flex flex-col gap-[12px] rounded-[10px] border border-[#e9ebef] p-[12px] bg-white">
         <div className="flex items-center justify-between">
@@ -264,10 +265,10 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
         </div>
         {v.enabled && (
           <>
-            {slider('Scale', v.scale ?? 100, '%', 75, 120, 100, (scale) => setVoucher(pos, { scale }))}
-            {slider('Position X', v.x ?? 0, '%', -5, 5, 0, (x) => setVoucher(pos, { x }))}
-            {slider('Position Y', v.y ?? 0, '%', -5, 5, 0, (y) => setVoucher(pos, { y }))}
-            {slider('Rotation', v.rotate ?? 0, '°', -15, 15, 0, (rotate) => setVoucher(pos, { rotate }))}
+            {slider('Scale', v.scale ?? d.scale, '%', 75, 120, d.scale, (scale) => setVoucher(pos, { scale }))}
+            {slider('Position X', v.x ?? d.x, '%', -5, 5, d.x, (x) => setVoucher(pos, { x }))}
+            {slider('Position Y', v.y ?? d.y, '%', -5, 5, d.y, (y) => setVoucher(pos, { y }))}
+            {slider('Rotation', v.rotate ?? d.rotate, '°', -15, 15, d.rotate, (rotate) => setVoucher(pos, { rotate }))}
           </>
         )}
       </div>
@@ -413,7 +414,7 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
               const { x, y, rotate, scale, ...rest } = formData.polaroidVouchers?.[k] ?? {};
               return [k, rest];
             })) })}
-            disabled={(['top', 'bottom'] as const).every((k) => { const v = formData.polaroidVouchers?.[k]; return !v?.x && !v?.y && !v?.rotate && (v?.scale ?? 100) === 100; })}
+            disabled={(['top', 'bottom'] as const).every((k) => { const v = formData.polaroidVouchers?.[k]; const d = voucherDefaults(formData, k); return (v?.x ?? d.x) === d.x && (v?.y ?? d.y) === d.y && (v?.rotate ?? d.rotate) === d.rotate && (v?.scale ?? d.scale) === d.scale; })}
             className="flex items-center gap-[4px] text-[13px] font-semibold text-[#007BFF] hover:underline disabled:text-[#9EA0A5] disabled:no-underline"
           >
             <RotateCw size={12} /> Reset slider to default
