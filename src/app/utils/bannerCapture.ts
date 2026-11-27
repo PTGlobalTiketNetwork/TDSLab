@@ -262,11 +262,11 @@ export function buildTtdZipManifest(ttd: NonNullable<BannerFormData['ttd']>): Dl
 }
 
 // Bottom → top colours of the Brand Icon circle (same as the editor's `linear-gradient(to top, …)`).
-const TTD_ICON_GRADIENT: Record<'default' | 'brand-days-otw', [string, string]> = {
+export const TTD_ICON_GRADIENT: Record<'default' | 'brand-days-otw', [string, string]> = {
   default: ['#ECF8FF', '#CEEAFF'],
   'brand-days-otw': ['#FEF8D0', '#FEF2A2'],
 };
-const TTD_ICON_EDITOR_SIZE = 140; // px — offsets are stored against the editor's 140px circle
+export const TTD_ICON_EDITOR_SIZE = 140; // px — offsets are stored against the editor's 140px circle
 export const TTD_ICON_EXPORT_SIZE = 144; // px at 1x; 2x = 288, 3x = 432
 
 /** Draws the TTD Brand Icon (gradient circle + positioned logo) to a transparent square PNG. */
