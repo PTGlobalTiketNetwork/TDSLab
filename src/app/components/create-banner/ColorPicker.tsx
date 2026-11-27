@@ -125,9 +125,9 @@ export function oneShadeDarker(hex: string): string {
 
 // Last 10 custom colours picked in any ColorPicker, newest first (per browser).
 const HISTORY_KEY = 'tdslab:color-history';
-const HISTORY_MAX = 10;
+const HISTORY_MAX = 8;
 const readHistory = (): string[] => {
-  try { const v = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); return Array.isArray(v) ? v.filter((c) => typeof c === 'string') : []; } catch { return []; }
+  try { const v = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); return Array.isArray(v) ? v.filter((c) => typeof c === 'string').slice(0, HISTORY_MAX) : []; } catch { return []; }
 };
 const pushHistory = (color: string) => {
   const c = color.toUpperCase();
