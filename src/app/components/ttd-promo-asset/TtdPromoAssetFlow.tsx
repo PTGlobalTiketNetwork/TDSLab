@@ -229,11 +229,13 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         polaroidCrops: src.polaroidCrops,
         polaroidRotations: src.polaroidRotations,
         polaroidOverlay: src.polaroidOverlay,
-        // Only the voucher colour travels: each size keeps its own on/off, position, rotation and scale
+        // Voucher on/off + colour travel; each size keeps its own position, rotation and scale
         ...(() => {
-          const color = src.polaroidVouchers?.top?.color || src.polaroidVouchers?.bottom?.color;
+          const sv = src.polaroidVouchers;
+          const color = sv?.top?.color || sv?.bottom?.color;
           const dst = itemForm(to).polaroidVouchers;
-          return color ? { polaroidVouchers: { ...dst, top: { ...dst?.top, color }, bottom: { ...dst?.bottom, color } } } : {};
+          const pick = (k: 'top' | 'bottom') => ({ ...dst?.[k], enabled: !!sv?.[k]?.enabled, ...(color ? { color } : {}) });
+          return { polaroidVouchers: { ...dst, top: pick('top'), bottom: pick('bottom') } };
         })(),
         ...overlayUpdates,
       })),
