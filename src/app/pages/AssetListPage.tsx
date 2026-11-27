@@ -28,7 +28,6 @@ export const AssetListPage = () => {
 
   const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [assetToMove, setAssetToMove] = useState<Asset | null>(null);
-  const [assetsToMove, setAssetsToMove] = useState<Asset[]>([]);
   const [isMoving, setIsMoving] = useState(false);
 
   useEffect(() => {
@@ -123,14 +122,7 @@ export const AssetListPage = () => {
   };
 
   const handleMove = (asset: Asset) => {
-    setAssetsToMove([]);
     setAssetToMove(asset);
-    setMoveModalOpen(true);
-  };
-
-  const handleBulkMove = (bulkAssets: Asset[]) => {
-    setAssetToMove(null);
-    setAssetsToMove(bulkAssets);
     setMoveModalOpen(true);
   };
 
@@ -152,37 +144,6 @@ export const AssetListPage = () => {
     } catch (error) {
       console.error('Failed to move asset:', error);
       toast.custom((t) => <TiketSnackbar id={t} message="Failed to move asset" variant="error" />);
-    } finally {
-      setIsMoving(false);
-    }
-  };
-
-  const handleBulkMoveConfirm = async (bulkAssets: Asset[], targetCategory: string) => {
-    try {
-      setIsMoving(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      const results = await Promise.allSettled(
-        bulkAssets.map((a) => AssetService.updateAsset({
-          id: a.id,
-          category: targetCategory,
-          last_edited_by_id: session?.user?.id,
-          last_edited_by_name: session?.user ? getUserDisplayName(session.user, 'Unknown') : undefined,
-        })),
-      );
-      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
-      const failed = results.length - succeeded;
-      const movedIds = new Set(bulkAssets.filter((_, i) => results[i].status === 'fulfilled').map((a) => a.id));
-      setAssets(prev => prev.map(a => movedIds.has(a.id) ? { ...a, category: targetCategory } : a));
-      const msg = failed > 0
-        ? `Moved ${succeeded} of ${bulkAssets.length} assets to ${targetCategory}. ${failed} failed.`
-        : `${succeeded} asset${succeeded === 1 ? '' : 's'} moved to ${targetCategory}`;
-      toast.custom((t) => <TiketSnackbar id={t} message={msg} variant={failed > 0 ? 'error' : 'default'} />);
-      setMoveModalOpen(false);
-      setAssetsToMove([]);
-      clearMultiSelect();
-    } catch (error) {
-      console.error('Failed to move assets:', error);
-      toast.custom((t) => <TiketSnackbar id={t} message="Failed to move assets" variant="error" />);
     } finally {
       setIsMoving(false);
     }
@@ -307,7 +268,6 @@ export const AssetListPage = () => {
          onDelete={handleDelete}
          onMove={handleMove}
          onDownload={handleDownload}
-         onBulkMove={handleBulkMove}
          onBulkDownload={handleBulkDownload}
          onBulkDelete={handleBulkDelete}
          onClearSelection={clearMultiSelect}
@@ -324,10 +284,8 @@ export const AssetListPage = () => {
       <MoveAssetModal
         isOpen={moveModalOpen}
         asset={assetToMove}
-        assets={assetsToMove}
         onConfirm={handleMoveConfirm}
-        onConfirmBulk={handleBulkMoveConfirm}
-        onCancel={() => { setMoveModalOpen(false); setAssetToMove(null); setAssetsToMove([]); }}
+        onCancel={() => setMoveModalOpen(false)}
         isLoading={isMoving}
       />
     </>

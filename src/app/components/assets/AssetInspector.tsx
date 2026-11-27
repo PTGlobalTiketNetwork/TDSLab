@@ -14,7 +14,6 @@ interface AssetInspectorProps {
   onDelete: (asset: Asset) => void;
   onMove?: (asset: Asset) => void;
   onDownload?: (asset: Asset) => void;
-  onBulkMove?: (assets: Asset[]) => void;
   onBulkDownload?: (assets: Asset[]) => void;
   onBulkDelete?: (assets: Asset[]) => void;
   onClearSelection?: () => void;
@@ -27,7 +26,6 @@ export function AssetInspector({
   onDelete,
   onMove,
   onDownload,
-  onBulkMove,
   onBulkDownload,
   onBulkDelete,
   onClearSelection,
@@ -77,14 +75,6 @@ export function AssetInspector({
 
           <div className="space-y-2">
             <p className="text-[12px] font-medium text-[#71747d] mb-2">Bulk Actions</p>
-
-            <button
-              onClick={() => onBulkMove?.(selectedAssets)}
-              className="w-full h-[40px] px-4 flex items-center gap-3 rounded-[8px] text-[14px] font-medium text-[#303135] bg-[#f0f1f5] hover:bg-[#e4e5ea] transition-colors"
-            >
-              <FolderInput className="size-4" />
-              Move {count} {noun}
-            </button>
 
             <button
               onClick={() => onBulkDownload?.(selectedAssets)}
