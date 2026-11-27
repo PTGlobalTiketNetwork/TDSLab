@@ -33,6 +33,9 @@ function getInspectorPreviewUrl(banner: Banner): string | null {
   return withPreviewCacheBust(rawUrl, cacheBuster);
 }
 
+// Locked name prefixes: "<Vertical> - " (Promo Banner, DLP Assets) and "To Do - " (TTD Promo Asset).
+const RENAME_PREFIX_RE = /^(General|Accom|Hotel|Flight|Transport|NFT|ToDos|Event|To Do) - /;
+
 interface BannerListPageProps {
   session: Session | null;
   searchQuery: string;
@@ -527,19 +530,37 @@ export function BannerListPage({
   };
 
   // Rename from the context menu — updates the stored name (and form_data.bannerName) without opening the editor.
-  const [renameTarget, setRenameTarget] = useState<{ banner: Banner; name: string } | null>(null);
+  // The fixed "<Vertical> - " / "To Do - " prefix stays locked; only the part after it is editable.
+  const [renameTarget, setRenameTarget] = useState<{ banner: Banner; prefix: string; suffix: string; error?: string } | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
+  const openRename = (banner: Banner) => {
+    const name = banner.name || '';
+    const m = name.match(RENAME_PREFIX_RE);
+    setRenameTarget({ banner, prefix: m ? m[0] : '', suffix: m ? name.slice(m[0].length) : name });
+  };
   const handleRename = async () => {
     if (!renameTarget) return;
-    const name = renameTarget.name.trim();
-    if (!name || name === renameTarget.banner.name) { setRenameTarget(null); return; }
+    const { banner, prefix } = renameTarget;
+    const suffix = renameTarget.suffix.trim();
+    if (!suffix) return;
+    const name = `${prefix}${suffix}`;
+    if (name === banner.name) { setRenameTarget(null); return; }
     setIsRenaming(true);
     try {
-      const { banner } = renameTarget;
-      await BannerService.updateBanner(banner.id, {
+      // Same uniqueness rules as the editors: DLP / TTD projects within their own category, everything else across all banners.
+      const category = getBannerCategory(banner);
+      const perCategory = category === 'DLP Assets' || category === 'TTD Promo Asset';
+      const all = await BannerService.listBanners();
+      const taken = all.some((b) => b.id !== banner.id && (!perCategory || getBannerCategory(b) === category) && (b.name || '').trim().toLowerCase() === name.toLowerCase());
+      if (taken) {
+        setRenameTarget((t) => (t ? { ...t, error: perCategory ? `Name already exists in ${category}. Please choose another.` : 'Banner name already exists. Please choose another.' } : t));
+        return;
+      }
+      await BannerService.patchBanner(banner.id, {
         name,
         ...(banner.form_data ? { form_data: { ...banner.form_data, bannerName: name } } : {}),
-      } as any);
+        ...(session?.user ? { last_edited_by_id: session.user.id, last_edited_by_name: getUserDisplayName(session.user, 'Unknown') } : {}),
+      });
       setRenameTarget(null);
       await loadBanners();
       onDataChange?.();
@@ -786,7 +807,7 @@ export function BannerListPage({
     if (published.length === 0) return;
     try {
       await Promise.allSettled(
-        published.map(b => BannerService.updateBanner(b.id, { status: 'draft' })),
+        published.map(b => BannerService.patchBanner(b.id, { status: 'draft' })),
       );
       toast.custom((id) => <TiketSnackbar id={id} message={`${published.length} banner(s) moved to Drafts`} />);
       clearMultiSelect();
@@ -803,7 +824,7 @@ export function BannerListPage({
     if (drafts.length === 0) return;
     try {
       await Promise.allSettled(
-        drafts.map(b => BannerService.updateBanner(b.id, { status: 'published' })),
+        drafts.map(b => BannerService.patchBanner(b.id, { status: 'published' })),
       );
       toast.custom((id) => <TiketSnackbar id={id} message={`${drafts.length} draft(s) published`} />);
       clearMultiSelect();
@@ -871,7 +892,7 @@ export function BannerListPage({
           availableRatios={availableRatios}
           availableVerticals={availableVerticals}
           onEditBanner={(banner) => handleEdit(banner)}
-          onRenameBanner={(banner) => setRenameTarget({ banner, name: banner.name || '' })}
+          onRenameBanner={openRename}
           onResizeBanner={handleResize}
           onDuplicateBanner={handleDuplicate}
           onDownloadBanner={handleDownload}
@@ -896,18 +917,24 @@ export function BannerListPage({
             <AlertDialogHeader>
               <AlertDialogTitle>Rename</AlertDialogTitle>
             </AlertDialogHeader>
-            <input
-              autoFocus
-              value={renameTarget?.name ?? ''}
-              onChange={(e) => setRenameTarget((t) => (t ? { ...t, name: e.target.value } : t))}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleRename(); } }}
-              onFocus={(e) => e.currentTarget.select()}
-              className="w-full h-[44px] px-[12px] rounded-[8px] border border-[#d8dce8] text-[14px] text-[#303135] focus:outline-none focus:border-[#007BFF]"
-            />
+            <div className="flex flex-col gap-[6px]">
+              <div className={`flex items-center w-full h-[44px] rounded-[8px] border bg-white ${renameTarget?.error ? 'border-[#d4183d]' : 'border-[#d8dce8] focus-within:border-[#007BFF]'}`}>
+                {renameTarget?.prefix && <span className="pl-[12px] text-[14px] font-medium text-[#71747d] whitespace-nowrap select-none">{renameTarget.prefix}</span>}
+                <input
+                  autoFocus
+                  value={renameTarget?.suffix ?? ''}
+                  onChange={(e) => setRenameTarget((t) => (t ? { ...t, suffix: e.target.value, error: undefined } : t))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleRename(); } }}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className={`flex-1 min-w-0 h-full pr-[12px] ${renameTarget?.prefix ? 'pl-[4px]' : 'pl-[12px]'} bg-transparent outline-none text-[14px] font-medium text-[#303135]`}
+                />
+              </div>
+              {renameTarget?.error && <span className="text-[12px] text-[#d4183d]">{renameTarget.error}</span>}
+            </div>
             <AlertDialogFooter>
               <AlertDialogCancel disabled={isRenaming}>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                disabled={isRenaming || !renameTarget?.name.trim()}
+                disabled={isRenaming || !renameTarget?.suffix.trim() || !!renameTarget?.error}
                 onClick={(e) => { e.preventDefault(); void handleRename(); }}
               >
                 {isRenaming ? 'Saving...' : 'Rename'}

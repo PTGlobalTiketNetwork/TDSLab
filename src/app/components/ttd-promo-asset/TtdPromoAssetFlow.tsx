@@ -395,7 +395,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
   );
 
   // Mini visual ratio thumbnail (mock banner with gradient bg + content bars) — same look as DLP's own info popovers.
-  const ratioThumb = (ratio: string, name: string, w: number, h: number, contentShare: number, side: 'bottom' | 'left' | 'right' = 'bottom') => {
+  const ratioThumb = (ratio: string, name: string, w: number, h: number, contentShare: number, side: 'bottom' | 'left' | 'right' | 'icon' = 'bottom') => {
     const scale = 120 / Math.max(w, h * 1.2);
     const icon = (cls: string) => <svg className={`absolute text-white/80 ${cls}`} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" /></svg>;
     const bars = (
@@ -406,6 +406,14 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
     );
     return (
       <div key={ratio} className="flex flex-col items-center gap-[8px]">
+        {side === 'icon' ? (
+          // Brand Icon: the circle background with the logo slot (grey square) in the middle
+          <div className="flex items-center justify-center" style={{ width: Math.round(w * scale), height: Math.round(h * scale) }}>
+            <div className="w-[80px] h-[80px] rounded-full flex items-center justify-center" style={{ backgroundImage: ICON_THEME_GRADIENT.default }}>
+              <span className="w-[44px] h-[44px] rounded-[6px] bg-[#c0c3cf]" />
+            </div>
+          </div>
+        ) : (
         <div
           className="relative overflow-hidden rounded-[6px] border border-[#d8dce8] bg-gradient-to-br from-[#cfe4ff] to-[#9cc8ff]"
           style={{ width: Math.round(w * scale), height: Math.round(h * scale) }}
@@ -425,6 +433,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
             </>
           )}
         </div>
+        )}
         <span className="text-[12px] font-bold text-[#303135] leading-[16px]">{ratio}</span>
         <span className="text-[11px] text-[#71747d] leading-[14px] -mt-[8px]">{name}</span>
       </div>
@@ -591,8 +600,8 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
               <div className="flex items-end gap-[16px]">
                 {ratioThumb('2:1', 'Single/Carousel', 2, 1, 0.55, 'left')}
                 {ratioThumb('3:1', 'Single/Global Search', 3, 1, 0.5, 'left')}
-                {ratioThumb('5:1', 'Single - Desktop', 5, 1, 0.45, 'left')}
-                {ratioThumb('1:1', 'Brand Icon', 1, 1, 0.34)}
+                {ratioThumb('5:1', 'Single - Desktop', 5, 1, 0.45, 'right')}
+                {ratioThumb('1:1', 'Brand Icon', 1, 1, 0, 'icon')}
               </div>
             ), 'w-auto'))}
           </div>

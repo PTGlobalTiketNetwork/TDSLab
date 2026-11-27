@@ -197,6 +197,20 @@ export const BannerService = {
       return response.json();
   },
 
+  /**
+   * Changes a few fields of a saved banner. The PUT route replaces the whole record (and requires
+   * created_by), so the current raw record is fetched and merged instead of sending a partial body.
+   */
+  async patchBanner(id: string, changes: Record<string, any>): Promise<any> {
+    const response = await fetchWithRetry(`${SERVER_URL}/banners/${id}`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${publicAnonKey}` },
+    });
+    if (!response.ok) throw new Error(`Banner not found (${response.status})`);
+    const current = await response.json();
+    return this.updateBanner(id, { ...current, ...changes, version: undefined });
+  },
+
   async updateBanner(id: string, banner: Partial<CreateBannerDTO>): Promise<any> {
     // Fetch current to increment version
     let currentVersion = 0;

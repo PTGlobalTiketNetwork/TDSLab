@@ -496,7 +496,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
               <div className="flex items-end gap-[16px]">
                 {ratioThumb('2:1', 'Landscape', 2, 1, 0.55, 'left')}
                 {ratioThumb('3:4', 'Portrait', 3, 4, 0.42)}
-                {ratioThumb('5:1', 'Desktop', 5, 1, 0.5, 'left')}
+                {ratioThumb('5:1', 'Desktop', 5, 1, 0.5, 'right')}
               </div>
             ), 'w-auto'))}
           </div>
