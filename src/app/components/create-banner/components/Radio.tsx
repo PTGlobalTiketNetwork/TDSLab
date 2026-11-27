@@ -1,10 +1,19 @@
-import React from 'react';
+import React, { createContext, useContext } from 'react';
+
+// Native radios with the same `name` form one group across the whole document. When several editors are on one page
+// (DLP: one per entry point), wrap each in <RadioScope> so their groups don't uncheck each other.
+const RadioScopeContext = createContext('');
+export function RadioScope({ children }: { children: React.ReactNode }) {
+  const id = React.useId();
+  return <RadioScopeContext.Provider value={id}>{children}</RadioScopeContext.Provider>;
+}
 
 interface RadioProps extends React.InputHTMLAttributes<HTMLInputElement> {
   children: React.ReactNode;
 }
 
-export function Radio({ children, className, ...props }: RadioProps) {
+export function Radio({ children, className, name, ...props }: RadioProps) {
+  const scope = useContext(RadioScopeContext);
   return (
     <label className={`flex items-center gap-[8px] cursor-pointer group ${className || ''}`}>
       <div className="relative w-[24px] h-[24px] shrink-0">
@@ -12,6 +21,7 @@ export function Radio({ children, className, ...props }: RadioProps) {
           type="radio"
           className="peer appearance-none w-full h-full absolute inset-0 cursor-pointer z-10"
           {...props}
+          name={name && scope ? `${scope}-${name}` : name}
         />
         {/* Active State Icon */}
         <div className="hidden peer-checked:block pointer-events-none w-full h-full">

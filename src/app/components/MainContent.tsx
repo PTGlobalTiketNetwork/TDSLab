@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Banner, ViewMode } from '../../types/banner';
 import { BannerCard } from './BannerCard';
 import { BannerRow } from './BannerRow';
 import { BannerContextMenu } from './BannerContextMenu';
 import { FilterBar } from './FilterBar';
 import { EmptyState } from './EmptyState';
-import { CustomPagination } from './ui/CustomPagination';
+import { ListToolbar, ListPaginationBottom, listPageClass, LIST_GRID_CLASS, LIST_STACK_CLASS, useListPageSize, LIST_SKELETON_GRID_COUNT, LIST_SKELETON_ROW_COUNT } from './ui/ListToolbar';
 import { PresenceUser } from '../../hooks/usePresence';
 
 import { Skeleton } from './ui/skeleton';
@@ -14,10 +14,10 @@ interface MainContentProps {
   banners: Banner[];
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
-  verticalFilter: string;
-  onVerticalFilterChange: (filter: string) => void;
-  ratioFilter: string;
-  onRatioFilterChange: (filter: string) => void;
+  verticalFilter: string[];
+  onVerticalFilterChange: (filter: string[]) => void;
+  ratioFilter: string[];
+  onRatioFilterChange: (filter: string[]) => void;
   sortBy: string;
   onSortChange: (sort: string) => void;
   selectedBannerId: string | null;
@@ -42,6 +42,9 @@ interface MainContentProps {
   onBulkMoveToDrafts?: (banners: Banner[]) => void;
   onBulkPublish?: (banners: Banner[]) => void;
   onClearSelection?: () => void;
+  /** Rendered inside the sticky toolbar above the filter row (e.g. Drafts category tabs) */
+  headerSlot?: React.ReactNode;
+  showCategoryBadge?: boolean;
 }
 
 export function MainContent({
@@ -76,9 +79,11 @@ export function MainContent({
   onBulkMoveToDrafts,
   onBulkPublish,
   onClearSelection,
+  headerSlot,
+  showCategoryBadge = false,
 }: MainContentProps) {
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useListPageSize();
   const lastHighlightedIdRef = useRef<string | null>(null);
   const highlightTimersRef = useRef<number[]>([]);
 
@@ -133,7 +138,6 @@ export function MainContent({
   }, [highlightId, banners]);
 
   const totalItems = banners.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
   
   const currentBanners = banners.slice(
     (currentPage - 1) * itemsPerPage,
@@ -156,10 +160,20 @@ export function MainContent({
   };
 
   return (
-    <div className="mr-[432px] px-[24px] py-[24px] min-h-full bg-[#f8f9fd] max-w-full transition-all duration-300">
-      <FilterBar
+    <div className={`${listPageClass(!!selectedBannerId || (selectedBannerIds?.size ?? 0) > 0)} max-w-full`}
+      onClick={(e) => {
+        // Click on empty background (not a card, button, input or menu) unselects
+        if ((e.target as HTMLElement).closest('button, input, a, select, textarea, [role="menu"], [role="menuitem"], [role="dialog"]')) return;
+        onClearSelection?.();
+      }}
+    >
+      <ListToolbar
+        top={headerSlot}
         viewMode={viewMode}
         onViewModeChange={onViewModeChange}
+        pagination={isLoading ? null : { currentPage, totalItems, itemsPerPage, onPageChange: setCurrentPage, onItemsPerPageChange: setItemsPerPage }}
+      >
+      <FilterBar
         verticalFilter={verticalFilter}
         onVerticalFilterChange={onVerticalFilterChange}
         ratioFilter={ratioFilter}
@@ -169,11 +183,12 @@ export function MainContent({
         availableRatios={availableRatios}
         availableVerticals={availableVerticals}
       />
+      </ListToolbar>
 
       {isLoading ? (
         viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 items-start auto-rows-min">
-            {Array.from({ length: 8 }).map((_, i) => (
+          <div className={`${LIST_GRID_CLASS} items-start auto-rows-min`}>
+            {Array.from({ length: LIST_SKELETON_GRID_COUNT }).map((_, i) => (
                <div key={i} className="bg-white flex flex-col gap-[12px] p-[16px] rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] w-full h-full">
                    <Skeleton className="w-full h-[180px] rounded-[12px]" />
                    <div className="flex items-center justify-between gap-2 mt-auto">
@@ -184,8 +199,8 @@ export function MainContent({
             ))}
           </div>
         ) : (
-          <div className="space-y-[16px]">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div className={LIST_STACK_CLASS}>
+            {Array.from({ length: LIST_SKELETON_ROW_COUNT }).map((_, i) => (
                 <div key={i} className="flex items-center gap-[20px] p-[16px] bg-white rounded-[12px] shadow-sm border border-[#e9ebef]">
                     <Skeleton className="h-[60px] w-[120px] rounded-[8px]" />
                     <div className="flex-1 space-y-2">
@@ -199,7 +214,7 @@ export function MainContent({
       ) : banners.length === 0 ? (
         <EmptyState type={searchQuery ? 'search' : 'empty'} />
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6 items-start auto-rows-min">
+        <div className={`${LIST_GRID_CLASS} items-start auto-rows-min`}>
           {currentBanners.map((banner) => {
             const selected = isBannerSelected(banner.id);
             const isInMultiSelection = isMultiSelect && selectedBannerIds!.has(banner.id);
@@ -226,6 +241,7 @@ export function MainContent({
                     isSelected={selected}
                     onClick={(e) => onSelectBanner(banner.id, e.shiftKey)}
                     activeEditors={presenceMap?.[banner.id] || []}
+                    showCategoryBadge={showCategoryBadge}
                   />
                 </div>
               </BannerContextMenu>
@@ -236,12 +252,13 @@ export function MainContent({
                 isSelected={selected}
                 onClick={(e) => onSelectBanner(banner.id, e.shiftKey)}
                 activeEditors={presenceMap?.[banner.id] || []}
+                    showCategoryBadge={showCategoryBadge}
               />
             );
           })}
         </div>
       ) : (
-        <div className="space-y-[16px]">
+        <div className={LIST_STACK_CLASS}>
           {currentBanners.map((banner, index) => {
             const selected = isBannerSelected(banner.id);
             const isInMultiSelection = isMultiSelect && selectedBannerIds!.has(banner.id);
@@ -268,6 +285,7 @@ export function MainContent({
                     index={(currentPage - 1) * itemsPerPage + index}
                     isSelected={selected}
                     onClick={(e) => onSelectBanner(banner.id, e.shiftKey)}
+                    showCategoryBadge={showCategoryBadge}
                   />
                 </div>
               </BannerContextMenu>
@@ -278,21 +296,15 @@ export function MainContent({
                 index={(currentPage - 1) * itemsPerPage + index}
                 isSelected={selected}
                 onClick={(e) => onSelectBanner(banner.id, e.shiftKey)}
+                showCategoryBadge={showCategoryBadge}
               />
             );
           })}
         </div>
       )}
 
-      {totalItems > 0 && (
-        <CustomPagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            totalItems={totalItems}
-            itemsPerPage={itemsPerPage}
-        />
-      )}
+      {!isLoading && <ListPaginationBottom pagination={{ currentPage, totalItems, itemsPerPage, onPageChange: setCurrentPage, onItemsPerPageChange: setItemsPerPage }} />}
+
     </div>
   );
 }

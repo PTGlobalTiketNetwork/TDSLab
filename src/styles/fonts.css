@@ -175,6 +175,11 @@ select {
                'Droid Sans', 'Helvetica Neue', sans-serif;
 }
 
+/* Elements that browsers render in monospace by default */
+code, pre, kbd, samp {
+  font-family: 'Tiket Odyssey Text', 'Tiket_Odyssey_Text:Regular', sans-serif;
+}
+
 /* Utility class for Live Preview (uses Display variant) */
 .font-banner {
   font-family: 'Tiket Odyssey Display', sans-serif !important;
@@ -219,6 +224,12 @@ em {
    Force proper font-weight rendering
    ======================================== */
 
+/* Figma Regular family: use the main family so a bold/semibold class gets the real weight (no faux bold) */
+[class*="font-['Tiket_Odyssey_Text:Regular'"],
+[class*='font-["Tiket_Odyssey_Text:Regular'] {
+  font-family: 'Tiket Odyssey Text', sans-serif !important;
+}
+
 /* Force Bold rendering for Figma Bold font-family */
 [class*="font-['Tiket_Odyssey_Text:Bold'"],
 [class*='font-["Tiket_Odyssey_Text:Bold'],
@@ -231,6 +242,8 @@ em {
 /* Force SemiBold rendering for Figma SemiBold font-family */
 [class*="font-['Tiket_Odyssey_Text:SemiBold'"],
 [class*='font-["Tiket_Odyssey_Text:SemiBold'],
+[class*="font-['Tiket_Odyssey_Text:Semi_Bold'"],
+[class*='font-["Tiket_Odyssey_Text:Semi_Bold'],
 *[style*="font-family: 'Tiket_Odyssey_Text:SemiBold'"],
 *[style*='font-family: "Tiket_Odyssey_Text:SemiBold'] {
   font-family: 'Tiket Odyssey Text', sans-serif !important;

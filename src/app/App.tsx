@@ -37,6 +37,7 @@ import { AccessProvider, useAccess } from '../context/AccessContext';
 import { AccessGate } from './components/AccessGate';
 import { MenuVisibilityProvider } from '../context/MenuVisibilityContext';
 import { MenuManagementPage } from './pages/MenuManagementPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
 
 // Browser detection utility
 function isChromeBrowser(): boolean {
@@ -75,8 +76,8 @@ function AppContent() {
 
   // View Options (Persisted at App level for continuity)
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [verticalFilter, setVerticalFilter] = useState<string>("All");
-  const [ratioFilter, setRatioFilter] = useState<string>("All");
+  const [verticalFilter, setVerticalFilter] = useState<string[]>([]);
+  const [ratioFilter, setRatioFilter] = useState<string[]>([]); // [] = all
   const [sortBy, setSortBy] = useState<string>('created_at_desc');
 
   // Counters (Fetched here for Sidebar)
@@ -181,6 +182,7 @@ function AppContent() {
             'homepage-promo-banner': 'Homepage Promo Banner',
             'hero-landing-page-header': 'Hero Landing Page Header',
             'product-entry-point': 'Product Entry Point',
+            'dlp-assets': 'DLP Assets',
             'drafts': 'Drafts'
           };
           return map[slug] || 'Promo Banner';
@@ -194,6 +196,9 @@ function AppContent() {
       }
       if (path === '/settings/access') {
           return 'Access Management';
+      }
+      if (path === '/analytics') {
+          return 'Analytics';
       }
       if (path === '/settings/menu') {
           return 'Menu Management';
@@ -235,6 +240,7 @@ function AppContent() {
         'Homepage Promo Banner': 'homepage-promo-banner',
         'Hero Landing Page Header': 'hero-landing-page-header',
         'Product Entry Point': 'product-entry-point',
+        'DLP Assets': 'dlp-assets',
         'Drafts': 'drafts'
       };
       
@@ -249,6 +255,7 @@ function AppContent() {
           'Others': 'Others'
       };
 
+      if (item === 'Analytics') { navigate('/analytics'); return; }
       if (item === 'AI Models') { navigate('/settings/ai-models'); return; }
       if (item === 'Access Management') { navigate('/settings/access'); return; }
       if (item === 'Menu Management') { navigate('/settings/menu'); return; }
@@ -407,7 +414,7 @@ function AppContent() {
             isSidebarCollapsed={isSidebarCollapsed}
             fullWidth={false}
             showLogo={false}
-            hideControls={activeSidebarItem === 'AI Models' || activeSidebarItem === 'Access Management' || activeSidebarItem === 'Generative Resize' || activeSidebarItem === 'Banner Translate' || activeSidebarItem === 'Image Generation' || activeSidebarItem === 'Home'}
+            hideControls={activeSidebarItem === 'AI Models' || activeSidebarItem === 'Access Management' || activeSidebarItem === 'Generative Resize' || activeSidebarItem === 'Banner Translate' || activeSidebarItem === 'Image Generation' || activeSidebarItem === 'Analytics' || activeSidebarItem === 'Home'}
           />
         </>
       )}
@@ -470,6 +477,7 @@ function AppContent() {
         />
 
         <Route path="/settings/access" element={<AccessGate adminOnly><AccessManagementPage /></AccessGate>} />
+        <Route path="/analytics" element={<AccessGate adminOnly><AnalyticsPage isSidebarCollapsed={isSidebarCollapsed} /></AccessGate>} />
         <Route path="/settings/menu" element={<AccessGate adminOnly><MenuManagementPage isSidebarCollapsed={isSidebarCollapsed} /></AccessGate>} />
         <Route 
             path="/tools/generative-resize" 

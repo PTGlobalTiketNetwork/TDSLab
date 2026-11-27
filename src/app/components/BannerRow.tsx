@@ -1,3 +1,4 @@
+import { CategoryBadge, getBannerCategory } from './CategoryBadge';
 import { Banner } from '../../types/banner';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { BannerFormData } from './create-banner/types';
@@ -8,10 +9,11 @@ interface BannerRowProps {
   banner: Banner;
   index: number;
   isSelected: boolean;
+  showCategoryBadge?: boolean;
   onClick: (e: MouseEvent) => void;
 }
 
-export function BannerRow({ banner, index, isSelected, onClick }: BannerRowProps) {
+export function BannerRow({ banner, index, isSelected, onClick, showCategoryBadge }: BannerRowProps) {
   const formData = (banner as any).form_data as BannerFormData | undefined;
   const hasSourcePreview = Boolean(formData?.keyVisualUrl);
 
@@ -90,6 +92,11 @@ export function BannerRow({ banner, index, isSelected, onClick }: BannerRowProps
         <h3 className="text-[18px] font-bold text-[#303135] truncate leading-[24px]">
           {banner.name}
         </h3>
+        {showCategoryBadge && (
+          <div className="flex">
+            <CategoryBadge category={getBannerCategory(banner)} />
+          </div>
+        )}
       </div>
     </div>
   );

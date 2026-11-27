@@ -37,15 +37,23 @@ export interface TiketStepperProps {
   maxStepReached?: number;
   onStepClick: (stepId: number) => void;
   className?: string;
+  /** 'compact': for a fixed sticky bar (e.g. scrolled header) — sized directly (20px circle, 16px label) instead of CSS `zoom`, so the label never renders below 16px. */
+  size?: 'default' | 'compact';
 }
 
-export function TiketStepper({ 
-  steps, 
-  currentStep, 
-  maxStepReached = 1, 
+export function TiketStepper({
+  steps,
+  currentStep,
+  maxStepReached = 1,
   onStepClick,
-  className = ''
+  className = '',
+  size = 'default',
 }: TiketStepperProps) {
+  const compact = size === 'compact';
+  const circleSize = compact ? 'w-[20px] h-[20px]' : 'w-[24px] h-[24px]';
+  const circleText = compact ? 'text-[11px]' : 'text-[12px]';
+  const labelText = compact ? 'text-[16px] leading-[20px]' : 'text-[14px] leading-[20px]';
+  const connectorSize = compact ? 'w-[18px] h-[20px]' : 'w-[24px] h-[24px]';
   return (
     <div className={`flex items-center gap-[8px] ${className}`}>
       {steps.map((step, index) => {
@@ -55,8 +63,8 @@ export function TiketStepper({
         const isFuture = !isClickable;
 
         return (
-          <div 
-            key={step.id} 
+          <div
+            key={step.id}
             className={`flex items-center gap-[8px] ${isClickable ? 'cursor-pointer group' : 'cursor-not-allowed text-[#c0c3cf]'}`}
             onClick={() => {
               if (isClickable) {
@@ -67,18 +75,18 @@ export function TiketStepper({
             <div className="flex items-center gap-[8px]">
               {/* Step Number Circle */}
               <div
-                className={`w-[24px] h-[24px] rounded-full flex items-center justify-center text-[12px] font-semibold transition-colors ${
+                className={`${circleSize} rounded-full flex items-center justify-center ${circleText} font-semibold transition-colors shrink-0 ${
                   currentStep >= step.id
                     ? 'bg-[#007bff] text-white'
                     : 'border border-[#aeb2be] text-[#71747d] bg-white'
-                } ${isClickable ? 'group-hover:bg-[#0064D2]' : ''}`}
+                }`}
               >
                 {step.id}
               </div>
-              
+
               {/* Step Label */}
               <span
-                className={`text-[14px] leading-[20px] ${
+                className={`${labelText} whitespace-nowrap ${
                   currentStep >= step.id ? 'text-[#303135] font-normal' : 'text-[#71747d]'
                 } ${isClickable ? 'group-hover:text-[#007bff]' : ''}`}
                 style={{ fontFamily: "'Tiket Odyssey Text', sans-serif" }}
@@ -86,10 +94,10 @@ export function TiketStepper({
                 {step.label}
               </span>
             </div>
-            
+
             {/* Connector Line */}
             {index < steps.length - 1 && (
-              <div className="w-[24px] h-[24px] relative flex items-center">
+              <div className={`${connectorSize} relative flex items-center shrink-0`}>
                 <div className="w-full h-[1px] bg-[#c0c3cf]" />
               </div>
             )}

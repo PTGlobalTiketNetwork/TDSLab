@@ -5,7 +5,7 @@ import { AssetCard } from './AssetCard';
 import { AssetRow } from './AssetRow';
 import { AssetContextMenu } from './AssetContextMenu';
 import { EmptyState } from '../EmptyState';
-import { CustomPagination } from '../ui/CustomPagination';
+import { ListToolbar, ListPaginationBottom, listPageClass, LIST_GRID_CLASS, LIST_STACK_CLASS, useListPageSize, LIST_SKELETON_GRID_COUNT, LIST_SKELETON_ROW_COUNT } from '../ui/ListToolbar';
 
 import { Skeleton } from '../ui/skeleton';
 
@@ -42,7 +42,7 @@ export function AssetLibrary({
   const [productFilter, setProductFilter] = useState("All");
   const [sortBy, setSortBy] = useState("created_at_desc");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useListPageSize();
 
   const filteredAssets = useMemo(() => {
       let filtered = [...assets];
@@ -120,7 +120,6 @@ export function AssetLibrary({
   }, [highlightId, filteredAssets]);
 
   const totalItems = filteredAssets.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
   
   const currentAssets = filteredAssets.slice(
     (currentPage - 1) * itemsPerPage,
@@ -128,20 +127,24 @@ export function AssetLibrary({
   );
 
   return (
-    <div className="mr-[432px] px-[24px] py-[24px] min-h-full bg-[#f8f9fd]">
-      <AssetFilterBar
+    <div className={listPageClass(!!selectedAssetId)}>
+      <ListToolbar
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        productFilter={productFilter}
-        onProductFilterChange={setProductFilter}
-        sortBy={sortBy}
-        onSortChange={setSortBy}
-      />
+        pagination={isLoading ? null : { currentPage, totalItems, itemsPerPage, onPageChange: setCurrentPage, onItemsPerPageChange: setItemsPerPage }}
+      >
+        <AssetFilterBar
+          productFilter={productFilter}
+          onProductFilterChange={setProductFilter}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+        />
+      </ListToolbar>
 
       {isLoading ? (
         viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-x-[20px] gap-y-[20px]">
-                {Array.from({ length: 9 }).map((_, i) => (
+            <div className={LIST_GRID_CLASS}>
+                {Array.from({ length: LIST_SKELETON_GRID_COUNT }).map((_, i) => (
                     <div key={i} className="bg-white rounded-[12px] p-[16px] h-[160px] flex flex-col justify-between border border-[#d8dce8]">
                         <div className="flex-1 flex items-center justify-center w-full overflow-hidden">
                              <Skeleton className="w-[120px] h-[60px] rounded-[4px]" />
@@ -153,8 +156,8 @@ export function AssetLibrary({
                 ))}
             </div>
         ) : (
-            <div className="space-y-[16px]">
-                {Array.from({ length: 6 }).map((_, i) => (
+            <div className={LIST_STACK_CLASS}>
+                {Array.from({ length: LIST_SKELETON_ROW_COUNT }).map((_, i) => (
                     <div key={i} className="flex items-center gap-[20px] p-[16px] bg-white rounded-[12px]">
                         <Skeleton className="h-[40px] w-[40px] rounded-[8px]" />
                         <Skeleton className="h-[16px] w-1/3" />
@@ -165,7 +168,7 @@ export function AssetLibrary({
       ) : filteredAssets.length === 0 ? (
         <EmptyState type={searchQuery ? 'search' : 'empty'} />
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-x-[20px] gap-y-[20px]">
+        <div className={LIST_GRID_CLASS}>
           {currentAssets.map((asset) => (
             <AssetContextMenu
               key={asset.id}
@@ -184,7 +187,7 @@ export function AssetLibrary({
           ))}
         </div>
       ) : (
-        <div className="space-y-[16px]">
+        <div className={LIST_STACK_CLASS}>
           {currentAssets.map((asset, index) => (
             <AssetContextMenu
               key={asset.id}
@@ -205,15 +208,8 @@ export function AssetLibrary({
         </div>
       )}
 
-      {totalItems > 0 && (
-        <CustomPagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            totalItems={totalItems}
-            itemsPerPage={itemsPerPage}
-        />
-      )}
+      {!isLoading && <ListPaginationBottom pagination={{ currentPage, totalItems, itemsPerPage, onPageChange: setCurrentPage, onItemsPerPageChange: setItemsPerPage }} />}
+
     </div>
   );
 }

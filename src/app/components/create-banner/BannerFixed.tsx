@@ -4,6 +4,7 @@ import type { DiffHighlights } from '../../../utils/diffUtils';
 import { BannerSquare } from './BannerSquare';
 import { BannerLegacy } from './BannerLegacy';
 import { BannerEntryPoint } from './BannerEntryPoint';
+import { BannerDesktop51 } from './BannerDesktop51';
 
 export interface BannerFixedProps {
     formData: BannerFormData; 
@@ -26,6 +27,7 @@ export interface BannerFixedProps {
     fullSize?: boolean;
     hideBorder?: boolean;
     isShimmering?: boolean;
+    onFormChange?: (updates: Partial<BannerFormData>) => void; // editor preview only: drag/scale the content with a bounding box
 }
 
 export const BannerFixed = forwardRef<HTMLDivElement, BannerFixedProps>((props, ref) => {
@@ -36,6 +38,10 @@ export const BannerFixed = forwardRef<HTMLDivElement, BannerFixedProps>((props, 
 
   if (isProductEntryPoint) {
       return <BannerEntryPoint ref={ref} {...props} />;
+  }
+
+  if (isPromoBanner && (formData.bannerRatio === 'Desktop (5:1)' || formData.bannerRatio === 'Desktop (4:1)')) {
+      return <BannerDesktop51 ref={ref} formData={formData} lang={props.lang} label={props.hideHeader ? undefined : props.label} previewUrl={props.previewUrl} fullSize={props.fullSize} onFormChange={props.onFormChange} isDraggable={props.isDraggable} onMouseDown={props.onMouseDown} />;
   }
 
   if (isPromoBanner && isSquare) {

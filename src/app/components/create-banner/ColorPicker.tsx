@@ -111,9 +111,14 @@ interface ColorPickerProps {
   value?: string;
   onChange: (color: string) => void;
   defaultValue?: string;
+  /** 'chip': same size as a preset swatch (28px) with a caption underneath, for use inside a row of preset chips.
+   *  `chipActive` marks it as the selected one (ring + shows the current colour; otherwise a neutral rainbow). */
+  variant?: 'dot' | 'chip';
+  chipLabel?: string;
+  chipActive?: boolean;
 }
 
-export function ColorPicker({ value, onChange, defaultValue = '#ffffff' }: ColorPickerProps) {
+export function ColorPicker({ value, onChange, defaultValue = '#ffffff', variant = 'dot', chipLabel = 'Custom', chipActive = false }: ColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'tokens' | 'custom'>('tokens');
@@ -148,11 +153,21 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff' }: Color
     <div className="flex items-center gap-[8px]">
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
+          {variant === 'chip' ? (
+            <button type="button" title="Custom colour" className="flex flex-col items-center gap-[4px]">
+              <span
+                className={`block w-[28px] h-[28px] rounded-full transition-all ${chipActive ? 'ring-2 ring-offset-1 ring-[#303135] scale-110' : 'ring-1 ring-[#e0e0e0]'}`}
+                style={{ background: chipActive ? currentColor : 'conic-gradient(#FF5C5C, #FEDD00, #3CCC7D, #30B6C5, #007BFF, #9770F0, #DE3FA9, #FF5C5C)' }}
+              />
+              <span className={`text-[11px] leading-none ${chipActive ? 'font-bold text-[#303135]' : 'text-[#71747d]'}`}>{chipLabel}</span>
+            </button>
+          ) : (
           <div 
             className="relative w-[16px] h-[16px] rounded-full overflow-hidden border border-[#d8dce8] shrink-0 shadow-sm cursor-pointer hover:scale-110 transition-transform" 
             title="Pick color"
             style={{ backgroundColor: currentColor }}
           />
+          )}
         </PopoverTrigger>
         <PopoverContent className="w-[320px] p-0" align="start">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
@@ -245,9 +260,11 @@ export function ColorPicker({ value, onChange, defaultValue = '#ffffff' }: Color
           </Tabs>
         </PopoverContent>
       </Popover>
+      {variant === 'dot' && (
       <span className="text-[12px] text-[#9EA0A5] font-mono uppercase">
         {displayValue}
       </span>
+      )}
     </div>
   );
 }

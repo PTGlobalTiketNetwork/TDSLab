@@ -192,7 +192,8 @@ export function Home({ session }: HomeProps) {
             'Promo Banner': 'promo-banner',
             'Homepage Promo Banner': 'homepage-promo-banner',
             'Hero Landing Page Header': 'hero-landing-page-header',
-            'Product Entry Point': 'product-entry-point'
+            'Product Entry Point': 'product-entry-point',
+            'DLP Assets': 'dlp-assets'
         };
         const slug = slugMap[category] || 'promo-banner';
         navigate(`/banners/${slug}/create?edit=${id}`);
@@ -207,7 +208,8 @@ export function Home({ session }: HomeProps) {
                     'Promo Banner': 'promo-banner',
                     'Homepage Promo Banner': 'homepage-promo-banner',
                     'Hero Landing Page Header': 'hero-landing-page-header',
-                    'Product Entry Point': 'product-entry-point'
+                    'Product Entry Point': 'product-entry-point',
+                    'DLP Assets': 'dlp-assets'
                 };
                 const slug = (item.category && slugMap[item.category]) ? slugMap[item.category] : 'promo-banner';
                 navigate(`/banners/${slug}?highlight=${item.realId}`);
@@ -254,7 +256,7 @@ export function Home({ session }: HomeProps) {
                 {/* SECTION 1: Header/Hero */}
                 <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                     <div>
-                        <h1 className="text-[32px] font-bold text-[#303135] mb-2 font-['Tiket_Odyssey_Text']">
+                        <h1 className="text-[32px] font-bold text-[#303135] mb-2 font-sans">
                             {greeting}, {userName}!
                         </h1>
                         <p className="text-[#71747d] text-[16px] font-normal">

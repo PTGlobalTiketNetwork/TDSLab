@@ -14,9 +14,12 @@ interface RichTextEditorProps {
   onFontSizeChange?: (value: number) => void;
   minFontSize?: number;
   maxFontSize?: number;
+  defaultFontSize?: number; // enables the reset-to-default icon in the size controls
 
   // Global Color Control (if no text selected)
   onGlobalColorChange?: (color: string) => void;
+  // Colour of the whole field (shown in the toolbar when the cursor isn't inside a custom-coloured span)
+  globalColor?: string;
 
   // Vertical spacing (line-height) control
   lineHeight?: number; // percent, undefined = auto
@@ -34,7 +37,9 @@ export function RichTextEditor({
     onFontSizeChange,
     minFontSize = 12,
     maxFontSize = 100,
+    defaultFontSize,
     onGlobalColorChange,
+    globalColor,
     lineHeight,
     onLineHeightChange
 }: RichTextEditorProps) {
@@ -121,7 +126,12 @@ export function RichTextEditor({
   // --- Effects ---
 
   useEffect(() => {
-    if (editorRef.current && !isInternalChange.current) {
+    // Never repaint innerHTML while this editor has focus/selection — even a value update that's
+    // semantically identical (just reserialized through toHTML) can differ in whitespace/attribute
+    // order from the live DOM, forcing a full node replacement that destroys the user's current
+    // Selection. That silently breaks the next format action (Ctrl+B/I, toolbar buttons): they bail
+    // out early when the selection is collapsed/gone, with no visible error.
+    if (editorRef.current && !isInternalChange.current && document.activeElement !== editorRef.current) {
         const html = toHTML(value);
         if (editorRef.current.innerHTML !== html) {
             editorRef.current.innerHTML = html;
@@ -394,6 +404,13 @@ export function RichTextEditor({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+      // Ctrl/Cmd+B and Ctrl/Cmd+I must go through our tag system; the browser's
+      // native bold/italic would produce <b>/<i> nodes that getOutputValue drops.
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+          const k = e.key.toLowerCase();
+          if (k === 'b') { e.preventDefault(); applyTag('b'); return; }
+          if (k === 'i') { e.preventDefault(); applyItalic(); return; }
+      }
       if (singleLine && e.key === 'Enter') {
           e.preventDefault();
       }
@@ -408,9 +425,10 @@ export function RichTextEditor({
             onWeightChange={applyTag}
             fontSize={fontSize}
             onFontSizeChange={onFontSizeChange}
+            defaultFontSize={defaultFontSize}
             minFontSize={minFontSize}
             maxFontSize={maxFontSize}
-            activeColor={activeColor}
+            activeColor={activeColor ?? globalColor ?? null}
             onColorChange={applyColor}
             activeItalic={activeItalic}
             onItalicToggle={applyItalic}

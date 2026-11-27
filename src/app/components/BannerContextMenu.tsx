@@ -65,6 +65,9 @@ export function BannerContextMenu({
   const bulkHasDownloadable = isBulk && bulkBanners.some(b => b.imageUrl);
   const bulkHasPublished = isBulk && bulkBanners.some(b => b.status === 'published');
   const bulkHasDrafts = isBulk && bulkBanners.some(b => b.status === 'draft');
+  // DLP Assets projects aren't "banners" — use the category's own name when the whole selection is one category
+  const bulkCategories = isBulk ? [...new Set(bulkBanners.map(b => b.category).filter(Boolean))] : [];
+  const bulkNoun = bulkCategories.length === 1 ? (bulkCategories[0] === 'DLP Assets' ? 'DLP' : 'banners') : 'banners';
 
   return (
     <ContextMenu>
@@ -75,7 +78,7 @@ export function BannerContextMenu({
         {isBulk ? (
           <>
             <div className="px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">
-              {bulkCount} banners selected
+              {bulkCount} {bulkNoun} selected
             </div>
             <ContextMenuSeparator />
 
@@ -85,7 +88,7 @@ export function BannerContextMenu({
               className="gap-3"
             >
               <Copy className="size-4" />
-              <span>Duplicate {bulkCount} banners</span>
+              <span>Duplicate {bulkCount} {bulkNoun}</span>
             </ContextMenuItem>
 
             <ContextMenuItem
@@ -94,7 +97,7 @@ export function BannerContextMenu({
               className="gap-3"
             >
               <Download className="size-4" />
-              <span>Download {bulkCount} banners</span>
+              <span>Download {bulkCount} {bulkNoun}</span>
             </ContextMenuItem>
 
             {bulkHasPublished && (
@@ -135,7 +138,7 @@ export function BannerContextMenu({
               className="gap-3"
             >
               <Trash2 className="size-4" />
-              <span>Delete {bulkCount} banners</span>
+              <span>Delete {bulkCount} {bulkNoun}</span>
             </ContextMenuItem>
           </>
         ) : (

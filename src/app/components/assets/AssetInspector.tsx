@@ -22,20 +22,9 @@ export function AssetInspector({
   onMove,
   onDownload,
 }: AssetInspectorProps) {
+  // Nothing selected: no panel at all (the asset grid uses the full width), same as Banners' InspectorPanel
   if (!selectedAsset) {
-    return (
-      <div className="w-[432px] h-screen bg-white border-l border-[#d8dce8] fixed right-0 top-0 flex flex-col items-center justify-center px-[32px] z-10">
-        <div className="text-center">
-          
-          <h3 className="text-[18px] font-bold text-[#303135] mb-2">
-            Please select an asset
-          </h3>
-          <p className="text-[14px] text-[#71747d]">
-            To see the details here
-          </p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (

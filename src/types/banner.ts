@@ -1,9 +1,11 @@
 export type ProductCategory = 
   | "General"
   | "Hotel"
+  | "Accom"
   | "Accommodation" 
   | "Transport"
   | "Flight"
+  | "NFT"
   | "Train"
   | "Car Rental"
   | "ToDos"
@@ -24,7 +26,8 @@ export type BannerCategory =
   | "Promo Banner"
   | "Homepage Promo Banner"
   | "Hero Landing Page Header"
-  | "Product Entry Point";
+  | "Product Entry Point"
+  | "DLP Assets";
 
 export interface Banner {
   id: string;

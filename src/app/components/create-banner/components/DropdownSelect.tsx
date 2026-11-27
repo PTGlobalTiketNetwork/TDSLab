@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { Upload } from 'lucide-react';
 import chevronPaths from '../../../../imports/svg-dropdown-chevron';
 import iconPaths from '../../../../imports/svg-dropdown-icons';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
@@ -13,6 +14,9 @@ interface DropdownSelectProps {
   value: string;
   onChange: (value: string) => void;
   onAddNew?: () => void;
+  /** Shows a sticky "Upload new logo" row; receives the current search text (to prefill the asset name). */
+  onUploadNew?: (searchText: string) => void;
+  uploadNewLabel?: string;
   placeholder?: string;
   disableSearch?: boolean;
 }
@@ -52,6 +56,8 @@ export function DropdownSelect({
   value,
   onChange,
   onAddNew,
+  onUploadNew,
+  uploadNewLabel = 'Upload new logo',
   placeholder = "Select option",
   disableSearch = false
 }: DropdownSelectProps) {
@@ -99,16 +105,16 @@ export function DropdownSelect({
                        If I use this pattern:
                    */}
                    {selectedOption && (
-                     <p className="font-['Tiket_Odyssey_Text:Regular',sans-serif] leading-[1.34] text-[#71747d] text-[12px] w-full overflow-hidden text-ellipsis whitespace-nowrap">
+                     <p className="font-sans leading-[1.34] text-[#71747d] text-[12px] w-full overflow-hidden text-ellipsis whitespace-nowrap">
                        {placeholder}
                      </p>
                    )}
-                   <p className={`font-['Tiket_Odyssey_Text:Regular',sans-serif] leading-[1.43] text-[14px] w-full ${selectedOption ? 'text-[#303135]' : 'text-[#71747d]'}`}>
+                   <p className={`font-sans leading-[1.43] text-[14px] w-full ${selectedOption ? 'text-[#303135]' : 'text-[#71747d]'}`}>
                      {selectedOption ? selectedOption.label : placeholder}
                    </p>
                   </>
                ) : (
-                  <p className="font-['Tiket_Odyssey_Text:Regular',sans-serif] leading-[1.43] text-[#71747d] text-[14px] w-full">
+                  <p className="font-sans leading-[1.43] text-[#71747d] text-[14px] w-full">
                     {placeholder}
                   </p>
                )}
@@ -158,6 +164,11 @@ export function DropdownSelect({
 
           {/* Options List */}
           <div className="min-h-0 max-h-[240px] flex-1 overflow-y-auto custom-scrollbar">
+            {onUploadNew && filteredOptions.length === 0 && (
+              <div className="px-[12px] py-[12px] text-[14px] text-[#71747d]" style={{ fontFamily: "'Tiket Odyssey Text', sans-serif" }}>
+                {searchQuery.trim() ? `No results for "${searchQuery.trim()}"` : 'No logos yet'}
+              </div>
+            )}
             {filteredOptions.map((option) => (
               <div
                 key={option.id}
@@ -168,7 +179,7 @@ export function DropdownSelect({
                 }}
                 className="flex items-center justify-between px-[12px] py-[12px] hover:bg-[#f4f7fe] cursor-pointer"
               >
-                <span className="text-[16px] text-[#303135] font-['Tiket_Odyssey_Text:Regular',sans-serif] leading-[1.38]">
+                <span className="text-[16px] text-[#303135] font-sans leading-[1.38]">
                   {option.label}
                 </span>
                 {value === option.id && <TdsIcOvalCheck />}
@@ -186,12 +197,28 @@ export function DropdownSelect({
                 }}
                 className="flex items-center gap-[4px] px-[12px] py-[12px] hover:bg-[#f4f7fe] cursor-pointer"
               >
-                <span className="text-[16px] text-[#303135] font-['Tiket_Odyssey_Text:Regular',sans-serif] leading-[1.38]">
+                <span className="text-[16px] text-[#303135] font-sans leading-[1.38]">
                   + Add New
                 </span>
               </div>
             )}
           </div>
+
+          {onUploadNew && (
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                onUploadNew(searchQuery.trim());
+                setIsOpen(false);
+                setSearchQuery('');
+              }}
+              className="flex items-center gap-[8px] px-[12px] pt-[12px] pb-[4px] border-t border-[#e9ebef] hover:bg-[#f4f7fe] cursor-pointer text-[#007BFF]"
+              style={{ fontFamily: "'Tiket Odyssey Text', sans-serif" }}
+            >
+              <Upload size={16} />
+              <span className="text-[14px] font-bold leading-[1.43]">{uploadNewLabel}</span>
+            </div>
+          )}
         </div>
       </PopoverContent>
       </div>

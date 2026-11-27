@@ -7,6 +7,8 @@ interface CustomPaginationProps {
   onPageChange: (page: number) => void;
   totalItems: number;
   itemsPerPage: number;
+  /** Compact form for toolbars (no top margin, no full width). Used by ListToolbar. */
+  inline?: boolean;
 }
 
 export function CustomPagination({
@@ -15,6 +17,7 @@ export function CustomPagination({
   onPageChange,
   totalItems,
   itemsPerPage,
+  inline = false,
 }: CustomPaginationProps) {
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
@@ -43,8 +46,8 @@ export function CustomPagination({
   if (totalItems === 0) return null;
 
   return (
-    <div className="flex h-[32px] items-center justify-between w-full mt-6">
-      <p className="font-['Tiket_Odyssey_Text:Regular',sans-serif] leading-[16px] not-italic text-[#71747d] text-[12px] whitespace-nowrap">
+    <div className={inline ? 'flex h-[32px] items-center gap-[16px]' : 'flex h-[32px] items-center justify-between w-full mt-6'}>
+      <p className="font-sans leading-[16px] not-italic text-[#71747d] text-[12px] whitespace-nowrap">
         Showing {startItem}-{endItem} of {totalItems}
       </p>
       

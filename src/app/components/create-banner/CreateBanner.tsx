@@ -1,3 +1,4 @@
+import { useStickyBar, STICKY_SHADOW } from '@/hooks/useStickyBar';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Lock, Unlock, RotateCcw } from 'lucide-react';
@@ -9,6 +10,7 @@ import { FormStep3 } from './FormStep3';
 import { LivePreview } from './LivePreview';
 import { SuccessScreen } from './SuccessScreen';
 import { BannerService } from '../../../services/bannerService';
+import { SETTINGS_VERSION } from './settingsVersion';
 import { toast } from 'sonner';
 import { TiketSnackbar } from '../ui/TiketSnackbar';
 import { Header } from '../Header';
@@ -24,6 +26,7 @@ import { useNavigationBlocker } from '../../../context/NavigationBlockerContext'
 import { NavigationBlockerDialog } from '../NavigationBlockerDialog';
 import { Edit3, Save, Trash2 } from 'lucide-react';
 import { getUserAvatarUrl } from '../../utils/userDisplay';
+import { startCreationTimer, stopCreationTimer } from '../../../utils/creationTimer';
 
 interface CreateBannerProps {
   onBack: (message?: string, destination?: 'drafts' | 'category') => void;
@@ -34,9 +37,10 @@ interface CreateBannerProps {
   editingId?: string;
   initialStatus?: 'draft' | 'published';
   initialCategory?: string;
+  initialSeconds?: number; // active time already spent on this banner (editing)
 }
 
-const initialFormDataBase: BannerFormData = {
+export const initialFormDataBase: BannerFormData = {
   // Step 1: Configuration
   bannerName: '',
   bannerCategory: 'Promo Banner',
@@ -73,7 +77,7 @@ const initialFormDataBase: BannerFormData = {
       unit: 'K',
       unitDisplayType: 'icon',
       unitIconColor: '#FEE645',
-      labelDiscount: true,
+      labelDiscount: false,
       labelDiscountType: 'With icon',
       labelDiscountText: '',
       additionalLabel: false,
@@ -102,7 +106,7 @@ const initialFormDataBase: BannerFormData = {
       unit: 'Rb',
       unitDisplayType: 'icon',
       unitIconColor: '#FEE645',
-      labelDiscount: true,
+      labelDiscount: false,
       labelDiscountType: 'With icon',
       labelDiscountText: '',
       additionalLabel: false,
@@ -131,6 +135,7 @@ export function CreateBanner({
   editingId,
   initialStatus,
   initialCategory,
+  initialSeconds = 0,
   embedded = false,
   fullWidth = false,
   userId,
@@ -191,6 +196,7 @@ export function CreateBanner({
     'homepage-promo-banner': 'Homepage Promo Banner',
     'hero-landing-page-header': 'Hero Landing Page Header',
     'product-entry-point': 'Product Entry Point',
+    'dlp-assets': 'DLP Assets',
   };
 
   // Determine Category: 
@@ -229,6 +235,7 @@ export function CreateBanner({
       
       // Customize defaults based on Category
       const base = JSON.parse(JSON.stringify(initialFormDataBase)); // Deep clone to avoid mutation
+      base.settingsVersion = SETTINGS_VERSION;
       if (determinedCategory === 'Product Entry Point') {
           base.content.en.headlineFontSize = 14;
           base.content.id.headlineFontSize = 14;
@@ -247,6 +254,11 @@ export function CreateBanner({
           bannerCategory: determinedCategory as any
       };
   });
+  // Active-time tracker: counts while the create flow is open and the user is active (saved as metadata.creation_seconds)
+  useEffect(() => {
+    startCreationTimer(initialSeconds);
+    return () => stopCreationTimer();
+  }, []);
   const [isDone, setIsDone] = useState(false);
   const [errors, setErrors] = useState<{ bannerName?: string }>({});
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -287,6 +299,23 @@ export function CreateBanner({
 
   // Active Language Tab State (Lifted from FormStep2)
   const [activeTab, setActiveTab] = useState<'en' | 'id'>('en');
+  // The compact name + steps bar under the header only shows once the page is scrolled
+  const [scrolled, setScrolled] = useState(false);
+  const stepBarRef = useRef<HTMLDivElement>(null);
+  const { shadow: stepBarShadow } = useStickyBar(stepBarRef, scrolled);
+  useEffect(() => {
+    const onScroll = (e: Event) => {
+      const target = e.target as HTMLElement | Document | null;
+      const y = Math.max(window.scrollY, (target && (target as HTMLElement).scrollTop) || 0);
+      setScrolled(y > 80);
+    };
+    window.addEventListener('scroll', onScroll, true); // capture: works whichever element scrolls
+    return () => window.removeEventListener('scroll', onScroll, true);
+  }, []);
+  // 2:1 + desktop version. The form tabs (left) and the preview tabs (right) are independent:
+  // switching the form to Desktop does not change what the preview shows, and the preview starts on 'all'.
+  const [deviceTab, setDeviceTab] = useState<'mobile' | 'desktop'>('mobile'); // form
+  const [previewTab, setPreviewTab] = useState<'mobile' | 'desktop' | 'all'>('all'); // preview
 
   // Navigation Blocker State
   const [showNavigationBlocker, setShowNavigationBlocker] = useState(false);
@@ -549,6 +578,22 @@ export function CreateBanner({
 
   const updateFormData = useCallback((updates: Partial<BannerFormData>) => {
     setFormData(prev => {
+        // 2:1 + desktop version: CTA / partner logo / campaign logo toggles are linked both ways between Mobile and Desktop
+        if (prev.bannerRatio === 'Landscape (2:1)' && (prev.provideDesktopBanner || updates.provideDesktopBanner)) {
+            const pairs: [keyof BannerFormData, keyof BannerFormData][] = [
+                ['showPortraitCta', 'desktopCtaEnabled'],
+                ['showPartnerLogo', 'desktopShowPartnerLogo'],
+                ['showCampaignLogo', 'desktopShowCampaignLogo'],
+            ];
+            const linked: Record<string, any> = { ...updates };
+            pairs.forEach(([m, d]) => {
+                if (m in updates && !(d in updates)) linked[d as string] = (updates as any)[m];
+                if (d in updates && !(m in updates)) linked[m as string] = (updates as any)[d];
+                // switching "Add desktop version?" on: start from the Mobile state
+                if (updates.provideDesktopBanner && !prev.provideDesktopBanner && !(d in updates)) linked[d as string] = !!(prev as any)[m];
+            });
+            updates = linked as Partial<BannerFormData>;
+        }
         // Handle Category Switching Defaults
         if (updates.bannerCategory === 'Product Entry Point' && prev.bannerCategory !== 'Product Entry Point') {
              return {
@@ -686,7 +731,7 @@ export function CreateBanner({
                     headlineColor: defaults.headline?.color,
                     prefixColor: defaults.nudge?.color,
                     discountAmountColor: defaults.discountAmount?.color,
-                    unitIconColor: defaults.unitIcon?.color,
+                    unitIconColor: defaults.unitIcon?.color ?? prevContent.unitIconColor ?? '#FEE645',
                     termsColor: defaults.tnc?.color,
                     
                     // Toggles (if defined in defaults)
@@ -826,6 +871,7 @@ export function CreateBanner({
         editingId={editingId}
         initialStatus={initialStatus}
         onLogout={handleLogout}
+        onBackToEdit={() => { setIsDone(false); setIsOverwriteMode(false); }}
       />
     );
   }
@@ -873,6 +919,7 @@ export function CreateBanner({
         keyVisualFile: undefined, // Don't save File object
         manualBackgroundFile: undefined, // Don't save File object
         keyVisualUrl: keyVisualUrl, // Save URL instead
+        settingsVersion: formData.settingsVersion ?? SETTINGS_VERSION,
         last_step: currentStep // Save current step
       };
 
@@ -930,11 +977,18 @@ export function CreateBanner({
   ];
 
   return (
-    <div className={`min-h-screen bg-[#f8f9fd] flex flex-col relative w-full overflow-x-hidden ${embedded ? 'pt-[100px]' : ''}`}>
+    // overflow-x-clip (not hidden) so this div does not become a scroll container — that would break the sticky EN/ID tabs.
+    // --sticky-base = height of the fixed Header when it is rendered here; --sticky-top (set on the card) = base + the sticky breadcrumb.
+    <div
+      className={`min-h-screen bg-[#f8f9fd] flex flex-col relative w-full overflow-x-clip ${embedded ? 'pt-[64px]' : ''}`}
+      style={{ '--sticky-base': embedded ? '0px' : '64px' } as React.CSSProperties}
+    >
       <FontStyles />
       {/* Top Menu / Header */}
       {!embedded && (
         <Header 
+            compact
+            flat={scrolled}
             fullWidth 
             showLogo 
             hideSearch 
@@ -948,7 +1002,7 @@ export function CreateBanner({
 
       {/* Conflict Alert */}
       {remoteVersion && (
-        <div className={`fixed z-30 bg-blue-50 border-b border-blue-100 px-6 py-3 flex items-center justify-center shadow-sm w-full gap-4 transition-all duration-300 ${embedded ? 'top-[0px]' : 'top-[100px]'}`}>
+        <div className={`fixed z-30 bg-blue-50 border-b border-blue-100 px-6 py-3 flex items-center justify-center shadow-sm w-full gap-4 transition-all duration-300 ${embedded ? 'top-[0px]' : 'top-[64px]'}`}>
             <div className="flex items-center gap-2 text-blue-800">
                 <Info size={18} />
                 <span className="font-medium text-sm">{remoteVersion.userName} has just saved a new version of this banner.</span>
@@ -970,7 +1024,7 @@ export function CreateBanner({
       )}
 
       {/* Main Content Area */}
-      <div className={`${embedded ? '' : 'mt-[124px]'} w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]`}>
+      <div className={`${embedded ? '' : 'mt-[88px]'} w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]`}>
         
         {/* Breadcrumbs & Steps */}
         <div className="flex flex-col gap-[8px] items-start">
@@ -978,7 +1032,7 @@ export function CreateBanner({
             items={[
               { label: 'Banners' },
               { label: categoryDisplayLabels[formData.bannerCategory] || formData.bannerCategory, href: `/banners/${formData.bannerCategory}` },
-              { label: editingId ? 'Edit Banner' : 'Create New Banner' },
+              { label: `${editingId ? 'Edit Banner' : 'Create New Banner'}${formData.bannerRatio ? ` · ${formData.bannerRatio}` : ''}` },
             ]}
           />
           <TiketStepper
@@ -989,10 +1043,31 @@ export function CreateBanner({
           />
         </div>
 
+        {/* Scrolled state only: compact bar under the header with the banner name + steps */}
+        <div
+          ref={stepBarRef}
+          className={`fixed ${embedded ? 'top-[0px]' : 'top-[64px]'} left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[64px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+        >
+          <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-end pb-[16px] gap-[8px]">
+            <span className="text-[16px] font-semibold leading-[20px] text-[#303135] truncate">{formData.bannerName?.trim() || 'Untitled banner'}</span>
+            <TiketStepper
+              steps={steps}
+              currentStep={currentStep}
+              maxStepReached={maxStepReached}
+              onStepClick={handleStepClick}
+              size="compact"
+            />
+          </div>
+        </div>
+
         {/* Main Card Container */}
-        <div className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] w-full flex min-h-[600px]">
+        {/* items-start: the right preview column must size to its own content, not stretch to match
+            the left form column's height — stretching left a tall blank scrollable tail below the preview.
+            The divider below is a separate self-stretch element so it still spans the full row height
+            (whichever column is taller) instead of stopping at the shorter column's own content height. */}
+        <div className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] w-full flex items-start min-h-[600px]" style={{ '--sticky-top': 'calc(var(--sticky-base) + 64px)' } as React.CSSProperties}>
            {/* Left Side: Form */}
-           <div className="flex-1 flex flex-col border-r border-[#d8dce8] max-w-[680px]">
+           <div className="flex-1 flex flex-col max-w-[680px]">
              {/* Header */}
              <div className="pt-[24px] px-[24px] pb-[16px] border-b border-[#d8dce8]">
                <h2 className="text-[18px] font-bold text-[#303135] leading-[24px]">
@@ -1016,19 +1091,28 @@ export function CreateBanner({
                     formData={formData} 
                     onChange={updateFormData} 
                     activeTab={activeTab}
+                    deviceTab={deviceTab}
+                    onDeviceTabChange={setDeviceTab}
                     onTabChange={setActiveTab}
                     isTranslating={isTranslating}
                     setIsTranslating={setIsTranslating}
                   />
                 )}
                 {currentStep === 3 && (
-                  <FormStep3 formData={formData} onChange={updateFormData} />
+                  <FormStep3 formData={formData} onChange={updateFormData} deviceTab={deviceTab} onDeviceTabChange={setDeviceTab} />
                 )}
              </div>
            </div>
 
-           {/* Right Side: Preview */}
-           <div className="flex-1 flex flex-col bg-white rounded-tr-[12px] rounded-br-[12px]">
+           {/* Divider: self-stretch so it always spans the full row height, even though each column above sizes to its own content */}
+           <div className="w-px self-stretch bg-[#d8dce8] shrink-0" />
+
+           {/* Right Side: Preview — the whole column is sticky (self-start, so it has the full card height to travel in),
+               capped to the viewport below the header + stepper, and scrolls internally if taller. Inside the content box --sticky-top is
+               reset to 0 so LivePreview's All / Mobile / Desktop bar pins to the top of this scroll box. */}
+           <div
+             className="flex-1 min-w-0 flex flex-col bg-white rounded-tr-[12px] rounded-br-[12px] sticky top-[var(--sticky-top)] self-start max-h-[calc(100vh-var(--sticky-top))] overflow-y-auto"
+           >
               {/* Header */}
               <div className="pt-[24px] px-[24px] pb-[16px] border-b border-[#d8dce8] flex items-center justify-between">
                  <h2 className="text-[18px] font-bold text-[#303135] leading-[24px]">Preview</h2>
@@ -1058,13 +1142,15 @@ export function CreateBanner({
                  )}
               </div>
               {/* Preview Content */}
-              <div className="p-[24px] flex flex-col gap-[24px]">
+              <div className="p-[24px] min-w-0 flex flex-col gap-[24px]" style={{ '--sticky-top': '0px' } as React.CSSProperties}>
                  <LivePreview 
                    formData={formData} 
                    onChange={updateFormData} 
                    currentStep={currentStep + 1}
                    onControlsChange={setPreviewControls}
                    activeTab={activeTab}
+                   deviceTab={previewTab}
+                   onDeviceTabChange={setPreviewTab}
                    isTranslating={isTranslating}
                  />
               </div>

@@ -7,16 +7,16 @@ import { Switch } from '../components/ui/switch';
 const MENU_DESCRIPTIONS: Record<ManagedMenuItem, string> = {
   'Promo Banner': 'Standard promotional banners for campaigns.',
   'Product Entry Point': 'Mobile and desktop entry point banners.',
-  'Homepage Promo Banner': 'Banners displayed on the homepage promo section.',
-  'Hero Landing Page Header': 'Full-width hero headers for landing pages.',
+  'DLP Assets': 'DLP header and entry point banners in one set.',
+  'Auto Translate': 'Show the "Translate to EN / ID" button in the banner form.',
 };
 
 // Display-only labels — keys must stay the internal ManagedMenuItem values used for storage/comparison.
 const MENU_LABELS: Record<ManagedMenuItem, string> = {
   'Promo Banner': 'Promo Banner',
   'Product Entry Point': 'Product Entry Point',
-  'Homepage Promo Banner': 'Homepage Promo Banner',
-  'Hero Landing Page Header': 'Hero LP Header',
+  'DLP Assets': 'DLP Assets',
+  'Auto Translate': 'Translate',
 };
 
 export function MenuManagementPage({ isSidebarCollapsed = false }: { isSidebarCollapsed?: boolean }) {
@@ -27,7 +27,7 @@ export function MenuManagementPage({ isSidebarCollapsed = false }: { isSidebarCo
     toast.custom((id) => (
       <TiketSnackbar
         id={id}
-        message={`"${MENU_LABELS[item]}" is now ${value ? 'visible' : 'hidden'} in the sidebar.`}
+        message={`"${MENU_LABELS[item]}" is now ${value ? 'visible' : 'hidden'} ${item === 'Auto Translate' ? 'in the banner form' : 'in the sidebar'}.`}
       />
     ));
   };
@@ -60,10 +60,10 @@ export function MenuManagementPage({ isSidebarCollapsed = false }: { isSidebarCo
             {MANAGED_MENU_ITEMS.map((item) => {
               const isOn = loading ? true : (visibility[item] ?? true);
               return (
-                <div key={item} className="flex items-center justify-between px-[24px] py-[18px]">
+                <div key={item} className={`flex items-center justify-between py-[18px] pr-[24px] ${item === 'Auto Translate' ? 'pl-[48px] bg-[#fafbfe]' : 'pl-[24px]'}`}>
                   <div className="flex flex-col gap-0.5">
                     <span className={`text-[14px] font-medium ${isOn ? 'text-[#303135]' : 'text-[#aeb2be]'}`}>
-                      {MENU_LABELS[item]}
+                      {item === 'Auto Translate' ? '– ' : ''}{MENU_LABELS[item]}
                     </span>
                     <span className="text-[12px] text-[#aeb2be]">{MENU_DESCRIPTIONS[item]}</span>
                   </div>

@@ -181,6 +181,13 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
+/* Every font utility (font-sans / font-mono / font-serif) resolves to Tiket Odyssey Text */
+@theme {
+  --font-sans: 'Tiket Odyssey Text', 'Tiket_Odyssey_Text:Regular', sans-serif;
+  --font-mono: 'Tiket Odyssey Text', 'Tiket_Odyssey_Text:Regular', sans-serif;
+  --font-serif: 'Tiket Odyssey Text', 'Tiket_Odyssey_Text:Regular', sans-serif;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

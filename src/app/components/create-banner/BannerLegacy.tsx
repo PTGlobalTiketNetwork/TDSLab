@@ -1,11 +1,14 @@
 import { BannerFormData } from './types';
-import { FileText, CheckCircle } from 'lucide-react';
+import { FileText, CheckCircle, ChevronLeft, Share } from 'lucide-react';
 import TdsIcOvalPlus from '../../../imports/TdsIcOvalPlus-2016-512';
 import exampleImage from 'figma:asset/c593b610d3877a5faf067379a77363d554217a35.png';
 import { forwardRef, useState, useEffect } from 'react';
 import { Skeleton } from '../ui/skeleton';
 import type { DiffHighlights } from '../../../utils/diffUtils';
 import { BANNER_SPECS } from '../../../config/banner-layouts';
+import { tagsToHtml, getCurrencyLabel, getUnitLabel, isAmountHidden, getDefaultPortraitContentOffsetY, getDefaultPartnerLogoY, getDefaultPartnerLogoScale, getDefaultCampaignLogoY } from './utils/layoutUtils';
+import { BoundingBox } from './components/BoundingBox';
+import { ImageBox } from './components/ImageBox';
 
 interface BannerLegacyProps {
     formData: BannerFormData; 
@@ -25,6 +28,10 @@ interface BannerLegacyProps {
     isUnlocked?: boolean;
     onElementMove?: (key: string, x: number, y: number) => void;
     hideBorder?: boolean;
+    isShimmering?: boolean;
+    onFormChange?: (updates: Partial<BannerFormData>) => void;
+    /** Render only the 2:1 content column (headline, benefit, labels) — used by the Desktop 5:1 banner so it shows the very same component. */
+    contentOnly?: { width: number; center?: boolean; verticalCenter?: boolean };
 }
 
 export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({ 
@@ -44,7 +51,9 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
     highlights,
     isUnlocked,
     onElementMove,
-    isShimmering
+    isShimmering,
+    onFormChange,
+    contentOnly
 }, ref) => {
   const content = formData.content[lang];
   const isPromoBanner = formData.bannerCategory === 'Promo Banner';
@@ -57,14 +66,14 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
           headline: 'Headline Goes Here',
           subHeadline: 'Sub-headline Goes Here',
           secondHeadline: 'Second Headline Goes Here',
-          labelDiscountText: 'Add Label Discount',
+          labelDiscountText: 'Add Additional Perks',
           termsText: '*T&C apply',
       },
       id: {
           headline: 'Tulis Headline Disini',
           subHeadline: 'Tulis Sub-headline Disini',
           secondHeadline: 'Tulis Headline Kedua Disini',
-          labelDiscountText: 'Tambahkan Label Diskon',
+          labelDiscountText: 'Tambahkan Additional Perks',
           termsText: '*S&K berlaku',
       }
   };
@@ -75,9 +84,12 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
   const secondHeadlineText = content.secondHeadline || currentDefaults.secondHeadline;
   
   // Use explicit check for Discount Amount to show placeholder '50'
-  const discountAmountText = content.discountAmount || '50';
+  const discountAmountText = isAmountHidden(content.discountType, content.discountAmount) ? '' : (content.discountAmount || '50');
+  const secondDiscountAmountText = isAmountHidden(content.secondDiscountType, content.secondDiscountAmount) ? '' : (content.secondDiscountAmount || '0');
+  const currencyLabel = getCurrencyLabel(content.discountType, content.customCurrency);
+  const secondCurrencyLabel = getCurrencyLabel(content.secondDiscountType, content.secondCustomCurrency);
   
-  // Label Discount
+  // Additional Perks (labelDiscount)
   const labelDiscountText = content.labelDiscountText || currentDefaults.labelDiscountText;
   
   // Terms
@@ -94,7 +106,10 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
 
   const bgGradients: Record<string, string> = {
     'Hotel': 'linear-gradient(135deg, #FF6B6B 0%, #EE5D88 100%)',
+    'Accom': 'linear-gradient(135deg, #FF6B6B 0%, #EE5D88 100%)',
     'Transport': 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
+    'Flight': 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
+    'NFT': 'linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)',
     'ToDos': 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
     'Event': 'linear-gradient(135deg, #F093FB 0%, #F5576C 100%)',
   };
@@ -139,7 +154,8 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
       }
   }, [currentDisplayImage, isImagePreloaded]);
   
-  const containerBackground = (bgGradients[formData.verticalCategory] || '#e9ebef');
+  // Neutral grey behind the key visual for every banner, so nothing tints the artwork
+  const containerBackground = '#e9ebef';
 
   const hexToRgb = (hex: string) => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -149,29 +165,23 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
   const overlayColor = formData.overlayColor || '#000000';
   const rgb = hexToRgb(overlayColor);
   const opacityStart = (formData.gradientOpacity ?? 100) / 100;
-  const stopPos = formData.overlayGradientStop ?? 10;
+  const stopPos = formData.overlayGradientStop ?? (formData.bannerRatio === 'Landscape (2:1)' ? 20 : 10); // Start of the fade
+  const stopEnd = formData.overlayGradientEnd ?? (formData.bannerRatio === 'Landscape (2:1)' ? 70 : 100); // Where it has faded out
 
   const gradientStyle = {
-      background: `linear-gradient(90deg, rgba(${rgb},${opacityStart}) 0%, rgba(${rgb},${opacityStart}) ${stopPos}%, rgba(${rgb},0) 100%)`,
+      background: `linear-gradient(90deg, rgba(${rgb},${opacityStart}) 0%, rgba(${rgb},${opacityStart}) ${stopPos}%, rgba(${rgb},0) ${Math.max(stopPos + 1, stopEnd)}%)`,
       transform: 'translateZ(0)', // Fix Safari stacking context
+  };
+  // Optional second overlay layer: same colour and opacity, its own stop position
+  const opacity2 = (formData.overlay2Opacity ?? 100) / 100;
+  const gradientStyle2 = {
+      background: `linear-gradient(90deg, rgba(${rgb},${opacity2}) 0%, rgba(${rgb},${opacity2}) ${formData.overlayGradientStop2 ?? 40}%, rgba(${rgb},0) ${Math.max((formData.overlayGradientStop2 ?? 40) + 1, formData.overlayGradientEnd2 ?? 100)}%)`,
+      transform: 'translateZ(0)',
   };
 
   const renderHtml = (text: string | undefined, className: string, style?: React.CSSProperties) => {
     if (!text) return null;
-    const htmlContent = text
-        .replace(/\n/g, '<br/>')
-        .replace(/<sb>/g, '<span style="font-weight: 600">')
-        .replace(/<\/sb>/g, '</span>')
-        .replace(/<b>/g, '<span style="font-weight: 700">')
-        .replace(/<\/b>/g, '</span>')
-        .replace(/<eb>/g, '<span style="font-weight: 800">')
-        .replace(/<\/eb>/g, '</span>')
-        .replace(/<r>/g, '<span style="font-weight: 400">')
-        .replace(/<\/r>/g, '</span>')
-        .replace(/<i>/g, '<span style="font-style: italic; display: inline-block; transform: skewX(-10deg); transform-origin: 0 100%;">')
-        .replace(/<\/i>/g, '</span>')
-        .replace(/<c v="(.*?)">/g, '<span style="color: $1">')
-        .replace(/<\/c>/g, '</span>');
+    const htmlContent = tagsToHtml(text, 'font-style: italic; display: inline-block; transform: skewX(-10deg); transform-origin: 0 100%;');
     return <span className={`${className}`} style={style} dangerouslySetInnerHTML={{ __html: htmlContent }} />;
   };
 
@@ -203,10 +213,23 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
     );
   };
 
-  const renderLeftColumn = (fontScale = 1, forPortrait = false) => {
+  const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)';
+  // Landscape logo defaults (original): 16px, 100%
+  const lgPos = 16;
+  const lgScale = 1;
+
+  /**
+   * Nudge label (prefix) next to / above the discount number.
+   * `which` picks the first or second discount's nudge. In portrait the two-line presets are
+   * not nudged with translateY, so the block centers cleanly against the number.
+   */
+  // `inline`: the same per-word styles on one centered row (nudge placed above the number)
+  const renderLeftColumn = (fontScale = 1, forPortrait = false, which: 'first' | 'second' = 'first', inline = false) => {
     if (content.showPrefix === false) return null;
-    const text = content.mainBenefitPrefix;
-    const showRp = content.discountType === 'IDR';
+    const isSecond = which === 'second';
+    const text = isSecond ? content.secondBenefitPrefix : content.mainBenefitPrefix;
+    const pt = isSecond ? content.secondPrefixType : content.prefixType;
+    const label = isSecond ? secondCurrencyLabel : currencyLabel;
     if (!text) return null;
 
     const lowerText = text.toLowerCase().trim();
@@ -214,109 +237,81 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
     const shouldAlignBottom = lines.length > 1;
     let contentNode;
 
-    const color = content.prefixColor || 'white';
-    const pt = content.prefixType;
+    // Portrait nudge defaults to brand yellow (the picker overrides it); the second line (up to / from) stays white
+    const styled = forPortrait || isLandscape21; // new nudge style: yellow headline word, white up to / from, 95% spacing
+    const color = (isSecond ? (content.secondPrefixColor ?? content.prefixColor) : content.prefixColor) || (styled ? '#FEDD00' : 'white');
     const fs = Math.round(18 * fontScale);
-    const lh = Math.round(22 * fontScale);
-    const tyUp = Math.round(6 * fontScale);
+    // Portrait presets default to 95% line spacing
+    const lh = (forPortrait || isLandscape21) ? Math.round(fs * 0.95) : Math.round(22 * fontScale);
+    const tyUp = (forPortrait || isLandscape21) ? 0 : Math.round(6 * fontScale); // the old 6px nudge on the first line made 2:1 lines overlap
+    const base = 'font-banner';
+    const line = (t: string, weight: 'bold' | 'normal', extra: React.CSSProperties = {}, first = false) => (
+      <span
+        className={`${weight === 'bold' ? 'font-bold' : 'font-normal'} ${base}`}
+        style={{ color, fontSize: `${fs}px`, lineHeight: `${lh}px`, display: inline ? 'inline-block' : 'block', whiteSpace: 'nowrap', ...(first && tyUp && !inline ? { transform: `translateY(${tyUp}px)` } : {}), ...extra }}
+      >{t}</span>
+    );
 
-    if (lowerText === 'discount' || lowerText === 'diskon') {
-        contentNode = (
-            <span className="font-bold font-banner" style={{ color, fontSize: `${fs}px`, lineHeight: `${lh}px` }}>{text}</span>
-        );
-    } else if (lowerText === 'discount up to') {
-        contentNode = (
-            <>
-                <span className="font-bold font-banner" style={{ color, fontSize: `${fs}px`, lineHeight: `${lh}px`, display: 'block', transform: `translateY(${tyUp}px)` }}>Discount</span>
-                <span className="font-normal font-banner" style={{ color: 'white', fontSize: `${fs}px`, lineHeight: `${lh}px`, display: 'block' }}>up to</span>
-            </>
-        );
-    } else if (lowerText === 'diskon hingga') {
-        contentNode = (
-            <>
-                <span className="font-bold font-banner" style={{ color, fontSize: `${fs}px`, lineHeight: `${lh}px`, display: 'block', transform: `translateY(${tyUp}px)` }}>Diskon</span>
-                <span className="font-normal font-banner" style={{ color: 'white', fontSize: `${fs}px`, lineHeight: `${lh}px`, display: 'block' }}>hingga</span>
-            </>
-        );
-    } else if (lowerText === 'up to' || lowerText === 'hingga') {
-        contentNode = (
-            <span className="font-normal font-banner" style={{ color, fontSize: `${fs}px`, lineHeight: `${lh}px` }}>{text}</span>
-        );
-    } else if (lowerText === 'start from') {
-        contentNode = (
-            <>
-                <span className="font-bold font-banner" style={{ color, fontSize: `${fs}px`, lineHeight: `${lh}px`, display: 'block', transform: `translateY(${tyUp}px)` }}>Start</span>
-                <span className="font-bold font-banner" style={{ color, fontSize: `${fs}px`, lineHeight: `${lh}px`, display: 'block' }}>from</span>
-            </>
-        );
-    } else if (lowerText === 'mulai dari') {
-        contentNode = (
-            <>
-                <span className="font-bold font-banner" style={{ color, fontSize: `${fs}px`, lineHeight: `${lh}px`, display: 'block', transform: `translateY(${tyUp}px)` }}>Mulai</span>
-                <span className="font-bold font-banner" style={{ color, fontSize: `${fs}px`, lineHeight: `${lh}px`, display: 'block' }}>dari</span>
-            </>
-        );
+    if (pt !== 'custom' && (lowerText === 'discount' || lowerText === 'diskon')) {
+        contentNode = line(text, 'bold');
+    } else if (pt !== 'custom' && (lowerText === 'discount up to' || lowerText === 'diskon hingga')) {
+        const [w1, ...rest] = text.split(' ');
+        contentNode = (<>{line(w1, 'bold', {}, true)}{line(rest.join(' '), 'normal', { color: 'white' })}</>);
+    } else if (pt !== 'custom' && (lowerText === 'up to' || lowerText === 'hingga')) {
+        contentNode = line(text, 'normal', styled ? { color: 'white' } : {});
+    } else if (pt !== 'custom' && (lowerText === 'start from' || lowerText === 'mulai dari')) {
+        // "Start" / "Mulai" bold, "from" / "dari" regular
+        const [w1, ...rest] = text.split(' ');
+        contentNode = (<>{line(w1, 'bold', {}, true)}{line(rest.join(' '), 'normal', styled ? { color: 'white' } : {})}</>);
     } else if (pt === 'instant_cashback') {
-        const isID = lang === 'id';
-        const fontStyle: React.CSSProperties['fontStyle'] = isID ? 'italic' : 'normal';
-        contentNode = (
-            <>
-                <span className="font-bold font-banner" style={{ color, fontStyle, fontSize: `${fs}px`, lineHeight: `${lh}px`, display: 'block', transform: `translateY(${tyUp}px)` }}>Instant</span>
-                <span className="font-bold font-banner" style={{ color, fontStyle, fontSize: `${fs}px`, lineHeight: `${lh}px`, display: 'block' }}>cashback</span>
-            </>
-        );
+        const fontStyle: React.CSSProperties['fontStyle'] = lang === 'id' ? 'italic' : 'normal';
+        contentNode = (<>{line('Instant', 'bold', { fontStyle }, true)}{line('cashback', 'bold', { fontStyle })}</>);
     } else if (pt === 'instant_cashback_upto') {
         const isID = lang === 'id';
         const fontStyle: React.CSSProperties['fontStyle'] = isID ? 'italic' : 'normal';
-        const thirdLine = isID ? 'hingga' : 'up to';
-        contentNode = (
-            <>
-                <span className="font-bold font-banner" style={{ color, fontStyle, fontSize: `${fs}px`, lineHeight: `${fs}px`, display: 'block', transform: `translateY(${tyUp}px)` }}>Instant</span>
-                <span className="font-bold font-banner" style={{ color, fontStyle, fontSize: `${fs}px`, lineHeight: `${fs}px`, display: 'block' }}>cashback</span>
-                <span className="font-normal font-banner" style={{ color: 'white', fontStyle: 'normal', fontSize: `${fs}px`, lineHeight: `${fs}px`, display: 'block' }}>{thirdLine}</span>
-            </>
-        );
+        const tight = { lineHeight: `${(forPortrait || isLandscape21) ? Math.round(fs * 0.95) : fs}px` };
+        contentNode = (<>
+            {line('Instant', 'bold', { fontStyle, ...tight }, true)}
+            {line('cashback', 'bold', { fontStyle, ...tight })}
+            {line(isID ? 'hingga' : 'up to', 'normal', { color: 'white', ...tight })}
+        </>);
     } else {
-        const isCustom = content.prefixType === 'custom';
+        const isCustom = pt === 'custom';
         const customSize = (content.prefixFontSize || 20) * fontScale;
         const isMultiline = lines.length >= 4;
 
+        // Render the whole value at once: tags may span line breaks (e.g. <i>+ instant\ncashback</i>)
         contentNode = (
-            <>{lines.map((line, idx) => (
-                <span
-                    key={idx}
-                    className="font-banner text-left whitespace-nowrap"
-                    style={{
-                        color: content.prefixColor || 'white',
-                        fontSize: isCustom ? `${customSize}px` : `${fs}px`,
-                        lineHeight: isCustom ? (typeof content.prefixLineHeight === 'number' ? content.prefixLineHeight / 100 : '1.2') : `${lh}px`,
-                    }}
-                    dangerouslySetInnerHTML={{ __html: line.replace(/<sb>/g, '<span style="font-weight: 600">').replace(/<\/sb>/g, '</span>').replace(/<b>/g, '<span style="font-weight: 700">').replace(/<\/b>/g, '</span>').replace(/<eb>/g, '<span style="font-weight: 800">').replace(/<\/eb>/g, '</span>').replace(/<r>/g, '<span style="font-weight: 400">').replace(/<\/r>/g, '</span>').replace(/<c v="(.*?)">/g, '<span style="color: $1">').replace(/<\/c>/g, '</span>') }}
-                />
-            ))}</>
+            <span
+                className={`${base} text-left whitespace-nowrap block`}
+                style={{
+                    color,
+                    fontSize: isCustom ? `${customSize}px` : `${fs}px`,
+                    lineHeight: isCustom ? (typeof content.prefixLineHeight === 'number' ? content.prefixLineHeight / 100 : '1.2') : `${lh}px`,
+                }}
+                dangerouslySetInnerHTML={{ __html: tagsToHtml(text) }}
+            />
         );
 
         const rpFs = Math.round(15 * fontScale);
         const rpLh = Math.round(16 * fontScale);
-        if (isMultiline && showRp) {
+        if (!forPortrait && isMultiline && label) {
             return (
                 <div className="flex items-start gap-[4px] h-auto self-stretch text-left">
                     <div className="flex flex-col items-start self-end translate-y-[2px] mt-[0px] mr-[0px] mb-[6px] ml-[0px]">{contentNode}</div>
-                    <span className="font-bold drop-shadow-md font-banner" style={{ color: content.prefixColor || 'white', fontSize: `${rpFs}px`, lineHeight: `${rpLh}px`, marginTop: `${Math.round(6 * fontScale)}px`, marginLeft: `${Math.round(6 * fontScale)}px` }}>Rp</span>
+                    <span className="font-bold drop-shadow-md font-banner" style={{ color, fontSize: `${rpFs}px`, lineHeight: `${rpLh}px`, marginTop: `${Math.round(6 * fontScale)}px`, marginLeft: `${Math.round(6 * fontScale)}px` }}>{label}</span>
                 </div>
             );
         }
     }
 
-    if (forPortrait) {
-      // Rp is rendered next to the number (value group), so prefix column holds text only
-      return (
-        <div className="flex flex-col items-end self-stretch text-left">
-          <div className="flex-1 flex flex-col items-end justify-center">
-            <div className="flex flex-col items-start">{contentNode}</div>
-          </div>
-        </div>
-      );
+    if (inline) {
+      return <div className="flex flex-row flex-wrap items-baseline justify-center text-center" style={{ columnGap: `${Math.round(fs * 0.25)}px` }}>{contentNode}</div>;
+    }
+
+    if (forPortrait || isLandscape21) {
+      // Currency is rendered next to the number (value group), so the prefix column holds text only
+      return <div className="flex flex-col items-start justify-center">{contentNode}</div>;
     }
 
     return (
@@ -337,6 +332,120 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
       )
   }
 
+  // Benefit block (nudge + number(s) + unit). `cs` = overall scale, `rowMax` = max row width in px (two-benefit fit),
+  // `bleed` = how far the row may run past its container's padding.
+  const renderBenefit = (cs: number, rowMax: number, bleed: number, align: 'center' | 'start' = 'center') => {
+                      const amountBase = (content.discountAmountFontSize || 80) * 2;
+                      const hasPrefix = !!content.mainBenefitPrefix && content.showPrefix !== false;
+
+                      // One "currency + number + unit" group. `fit` shrinks the group so two benefits fit the canvas.
+                      const renderValue = (which: 'first' | 'second', fit = 1) => {
+                        const isSecond = which === 'second';
+                        const cur = isSecond ? secondCurrencyLabel : currencyLabel;
+                        const amount = isSecond ? secondDiscountAmountText : discountAmountText;
+                        const unit = amount ? (isSecond ? content.secondDiscountUnit : content.unit) : '';
+                        const unitAsIcon = (isSecond ? content.secondUnitDisplayType : content.unitDisplayType) === 'icon';
+                        const amountColor = (isSecond ? content.secondDiscountAmountColor : undefined) || content.discountAmountColor || 'white';
+                        const unitColor = isSecond ? (content.secondUnitColor || content.unitColor) : content.unitColor;
+                        const unitBg = (isSecond ? (content.secondUnitIconColor ?? content.unitIconColor) : content.unitIconColor) || '#FEE645';
+                        const s = cs * fit;
+                        const badge = (unit === 'mio' ? 60 : 48) * s;
+                        return (
+                          <div className="relative flex items-end whitespace-nowrap">
+                            {cur && (
+                              <span className="font-bold drop-shadow-md font-banner self-start" style={{ fontSize: `${30 * s}px`, lineHeight: 1, color: amountColor, marginRight: `${4 * s}px` }}>{cur}</span>
+                            )}
+                            {amount && <span className="font-extrabold drop-shadow-md font-banner" style={{ fontSize: `${amountBase * s}px`, lineHeight: `${132 * s}px`, letterSpacing: `${-8 * s}px`, color: amountColor }}>
+                              {amount}
+                            </span>}
+                            {unit && (
+                              unitAsIcon ? (
+                                <div className="flex items-center justify-center rounded-full shrink-0 z-10" style={{ boxShadow: '0 4px 6px rgba(0,0,0,0.2)', width: `${badge}px`, height: `${badge}px`, marginBottom: `${10 * s}px`, marginLeft: `${-12 * s}px`, backgroundColor: unitBg }}>
+                                  <span className="font-bold font-banner leading-none" style={{ fontSize: `${28 * s}px`, color: unitColor || '#0064D2' }}>{getUnitLabel(unit)}</span>
+                                </div>
+                              ) : (
+                                <span className="font-bold drop-shadow-md font-banner" style={{ fontSize: `${48 * s}px`, lineHeight: 1, marginLeft: `${4 * s}px`, marginBottom: `${16 * s}px`, color: unitColor || 'white' }}>{getUnitLabel(unit)}</span>
+                              )
+                            )}
+                          </div>
+                        );
+                      };
+
+                      const renderTopLabel = (which: 'first' | 'second', s: number) => {
+                        if (content.showPrefix === false) return null;
+                        const isSecond = which === 'second';
+                        const text = isSecond ? content.secondBenefitPrefix : content.mainBenefitPrefix;
+                        const pt = isSecond ? content.secondPrefixType : content.prefixType;
+                        if (!text) return null;
+                        const isCustom = pt === 'custom';
+                        return (
+                          <span
+                            className={`font-banner text-center whitespace-nowrap ${isCustom ? '' : 'font-bold'}`}
+                            style={{
+                              color: (isSecond ? (content.secondPrefixColor ?? content.prefixColor) : content.prefixColor) || '#FEDD00',
+                              fontSize: `${(isCustom ? (content.prefixFontSize || 20) : 18) * 2 * s}px`,
+                              lineHeight: isCustom && typeof content.prefixLineHeight === 'number' ? content.prefixLineHeight / 100 : 1.2,
+                            }}
+                            // Presets render on one line; custom keeps the author's line breaks and formatting
+                            dangerouslySetInnerHTML={{ __html: isCustom ? tagsToHtml(text) : tagsToHtml(text.replace(/\n/g, ' ')) }}
+                          />
+                        );
+                      };
+
+                      if (!content.hasSecondDiscount && formData.nudgeOnTop) {
+                        // Option: nudge centered above the number (same style as the two-benefit labels)
+                        return (
+                          <div className={`flex flex-col ${align === 'center' ? 'items-center' : 'items-start'}`} style={{ marginTop: `${16 * cs}px` }}>
+                            {hasPrefix && renderLeftColumn(2 * cs, true, 'first', true)}
+                            <div style={{ marginTop: `${22 * cs}px` }}>{renderValue('first')}</div>
+                          </div>
+                        );
+                      }
+
+                      if (!content.hasSecondDiscount) {
+                        // Label on the left, vertically centered against the number
+                        return (
+                          <div className="flex items-center justify-center" style={{ gap: `${12 * cs}px`, marginTop: `${16 * cs}px` }}>
+                            {hasPrefix && renderLeftColumn(2 * cs, true)}
+                            {renderValue('first')}
+                          </div>
+                        );
+                      }
+
+                      // Two benefits (Figma 80:430): label centered above each number, "+" between the numbers.
+                      // Estimate the row width and shrink everything so it fits the canvas (12px edge padding).
+                      const groupWidth = (cur: string, amount: string, unit?: string) =>
+                        (cur ? cur.length * 18 + 4 : 0) + amount.length * (amountBase * 0.62 - 8) + (unit ? 44 : 0);
+                      // The nudge label above each number can be wider than the number itself — count it too
+                      const labelWidth = (text?: string, type?: string) => {
+                        if (!text || content.showPrefix === false) return 0;
+                        const plain = text.replace(/<[^>]*>/g, '');
+                        const size = (type === 'custom' ? (content.prefixFontSize || 20) : 18) * 2;
+                        return plain.length * size * 0.55;
+                      };
+                      const estWidth = (Math.max(groupWidth(currencyLabel, discountAmountText, discountAmountText ? content.unit : undefined), labelWidth(content.mainBenefitPrefix, content.prefixType))
+                        + Math.max(groupWidth(secondCurrencyLabel, secondDiscountAmountText, secondDiscountAmountText ? content.secondDiscountUnit : undefined), labelWidth(content.secondBenefitPrefix, content.secondPrefixType))
+                        + 96 + 32) * cs;
+                      const fit = Math.min(1, rowMax / estWidth);
+                      const s = cs * fit;
+
+                      // Pull the numbers up so the visible gap between the label and the digits is ~4px (the number's line box has built-in space above the glyphs)
+                      const valueTrim = -22;
+
+                      return (
+                        <div
+                          className={`grid items-end ${align === 'center' ? 'justify-center' : 'justify-start'}`}
+                          style={{ gridTemplateColumns: 'auto auto auto', columnGap: `${16 * s}px`, rowGap: 0, marginTop: `${16 * cs}px`, marginLeft: `${-bleed}px`, marginRight: `${-bleed}px` }}
+                        >
+                          <div className="flex justify-center" style={{ gridColumn: 1, gridRow: 1 }}>{renderTopLabel('first', s)}</div>
+                          <div className="flex justify-center" style={{ gridColumn: 3, gridRow: 1 }}>{renderTopLabel('second', s)}</div>
+                          <div className="flex justify-center" style={{ gridColumn: 1, gridRow: 2, marginTop: `${-valueTrim * s}px` }}>{renderValue('first', fit)}</div>
+                          <span className="font-bold drop-shadow-md font-banner self-center" style={{ gridColumn: 2, gridRow: 2, transform: `translateY(${-valueTrim / 2 * s}px)`, fontSize: `${96 * s}px`, lineHeight: 1, color: content.discountAmountColor || 'white' }}>+</span>
+                          <div className="flex justify-center" style={{ gridColumn: 3, gridRow: 2, marginTop: `${-valueTrim * s}px` }}>{renderValue('second', fit)}</div>
+                        </div>
+                      );
+  };
+
   if (isPortrait) {
     return (
       <div className="flex justify-center w-full">{/* centers the fixed 360px banner in the Preview panel */}
@@ -344,9 +453,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
         {!hideHeader && (
           <div className="bg-[#f2f8ff] rounded-[4px] p-[10px] w-full">
             <div className="flex gap-[8px] items-center">
-              <div className="h-[16px] w-[24px] relative shrink-0">
-                <img src={lang === 'en' ? "https://flagcdn.com/w40/us.png" : "https://flagcdn.com/w40/id.png"} alt={lang} className="w-full h-full object-cover rounded-[2px]" crossOrigin="anonymous" />
-              </div>
+              <span className="text-[18px] leading-none shrink-0" role="img" aria-label={lang}>{lang === 'en' ? '🇺🇸' : '🇮🇩'}</span>
               <p className="text-[16px] font-bold leading-[22px] text-[#71747d]">{label}</p>
             </div>
           </div>
@@ -358,7 +465,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
           style={{ width: '360px', height: '480px', flexShrink: 0, borderRadius: '12px', overflow: 'hidden', cursor: isDraggable ? 'grab' : 'default' }}
           onMouseDown={onMouseDown}
         >
-          <div style={{ position: 'absolute', top: 0, left: 0, width: '720px', height: '960px', transform: 'scale(0.5)', transformOrigin: 'top left' }}>
+          <div data-canvas-w="720" style={{ position: 'absolute', top: 0, left: 0, width: '720px', height: '960px', transform: 'scale(0.5)', transformOrigin: 'top left' }}>
           <div className="relative w-full h-full isolate" style={{ background: containerBackground }}>
             {/* Background image */}
             <div className="absolute inset-0 z-0 overflow-hidden">
@@ -368,6 +475,23 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
               {!thumbnailUrl && !isImageLoaded && (
                 <Skeleton className="w-full h-full absolute inset-0 z-0" />
               )}
+              {isDraggable && !!onFormChange && !isPlaceholder ? (
+                <ImageBox
+                  wrapperStyle={imageStyle}
+                  position={position} scale={scale}
+                  onPositionChange={(p) => onFormChange({ keyVisualPosition: p })}
+                  onScaleChange={(s) => onFormChange({ keyVisualScale: s })}
+                >
+                  <img
+                    src={currentDisplayImage}
+                    alt="Background"
+                    style={{ display: 'block', width: 'auto', minWidth: '100%', height: 'auto', maxWidth: 'none', opacity: isImageLoaded ? 1 : 0, transition: 'opacity 500ms ease-in-out' }}
+                    draggable={false}
+                    crossOrigin="anonymous"
+                    onLoad={() => setInternalImageLoaded(true)}
+                  />
+                </ImageBox>
+              ) : (
               <img
                 src={currentDisplayImage}
                 alt="Background"
@@ -376,21 +500,50 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                 crossOrigin="anonymous"
                 onLoad={() => setInternalImageLoaded(true)}
               />
+              )}
             </div>
 
             {/* Gradient overlay — same controls as 2:1, direction bottom-to-top */}
-            <div className="absolute bottom-0 left-0 right-0 h-[640px] z-10 pointer-events-none" style={{ background: `linear-gradient(to top, rgba(${rgb},${opacityStart}) 0%, rgba(${rgb},${opacityStart}) ${stopPos}%, rgba(${rgb},0) 100%)`, transform: 'translateZ(0)' }} />
+            <div className="absolute bottom-0 left-0 right-0 h-[640px] z-10 pointer-events-none" style={{ background: `linear-gradient(to top, rgba(${rgb},${opacityStart}) 0%, rgba(${rgb},${opacityStart}) ${stopPos}%, rgba(${rgb},0) ${Math.max(stopPos + 1, stopEnd)}%)`, transform: 'translateZ(0)' }} />
+            {/* DLP Header mobile: iOS status bar + transparent top bar (joy-proto `status-bar/ios` + `top-transparent/icons`), built at 360 logical px and scaled 2x */}
+            {formData.dlpRole === 'header-mobile' && formData.dlpNavbar !== false && (
+              <div data-dlp-navbar className="absolute top-0 left-0 z-20 pointer-events-none" style={{ width: 360, transform: 'scale(2)', transformOrigin: 'top left', fontFamily: 'inherit' }}>
+                {/* Status bar (iOS, inverted = white) */}
+                <div className="flex items-center justify-between text-white" style={{ minHeight: 44, padding: '8px 20px' }}>
+                  <span className="font-semibold whitespace-nowrap" style={{ padding: '8px 19px', fontSize: 14, lineHeight: '20px' }}>9:41</span>
+                  <span className="flex items-center justify-end" style={{ padding: '4px 0', gap: 5 }}>
+                    <svg width="17" height="10.667" viewBox="0 0 17 10.667" fill="currentColor"><path d="M2 6.66699C2.55228 6.66699 3 7.11471 3 7.66699V9.66699C2.99982 10.2191 2.55218 10.667 2 10.667H1C0.447824 10.667 0.000175969 10.2191 0 9.66699V7.66699C0 7.11471 0.447715 6.66699 1 6.66699H2ZM6.66699 4.66699C7.21913 4.66717 7.66699 5.11482 7.66699 5.66699V9.66699C7.66682 10.219 7.21902 10.6668 6.66699 10.667H5.66699C5.11482 10.667 4.66717 10.2191 4.66699 9.66699V5.66699C4.66699 5.11471 5.11471 4.66699 5.66699 4.66699H6.66699ZM11.333 2.33301C11.8852 2.33301 12.3328 2.78087 12.333 3.33301V9.66699C12.3328 10.2191 11.8852 10.667 11.333 10.667H10.333C9.78098 10.6668 9.33318 10.219 9.33301 9.66699V3.33301C9.33318 2.78098 9.78098 2.33318 10.333 2.33301H11.333ZM16 0C16.5523 0 17 0.447715 17 1V9.66699C16.9998 10.2191 16.5522 10.667 16 10.667H15C14.4478 10.667 14.0002 10.2191 14 9.66699V1C14 0.447715 14.4477 0 15 0H16Z" /></svg>
+                    <svg width="15.272" height="10.966" viewBox="0 0 15.2725 10.966" fill="currentColor"><path d="M5.42676 8.40057C6.70234 7.32168 8.57111 7.32168 9.84669 8.40057C9.91071 8.45859 9.94746 8.54074 9.94923 8.62713C9.95095 8.71359 9.9172 8.79702 9.85548 8.8576L7.85841 10.8732C7.79988 10.9324 7.71998 10.966 7.63673 10.966C7.55347 10.966 7.47359 10.9324 7.41505 10.8732L5.417 8.8576C5.3554 8.797 5.32148 8.71351 5.32325 8.62713C5.32508 8.54068 5.36262 8.45855 5.42676 8.40057ZM2.76173 5.71111C5.50982 3.15507 9.76555 3.15512 12.5137 5.71111C12.5756 5.77097 12.6113 5.85351 12.6123 5.93963C12.6132 6.02581 12.5793 6.10892 12.5186 6.1701L11.3643 7.33709C11.2453 7.45619 11.0527 7.45884 10.9307 7.34295C10.0282 6.52576 8.85417 6.07337 7.63673 6.07342C6.42004 6.07392 5.24661 6.52628 4.34473 7.34295C4.22266 7.45877 4.03007 7.45617 3.91114 7.33709L2.75684 6.1701C2.69617 6.10903 2.66228 6.02572 2.66309 5.93963C2.66403 5.8535 2.69976 5.77095 2.76173 5.71111ZM0.0966866 3.02947C4.3118 -1.0097 10.9618 -1.00995 15.1768 3.02947C15.2377 3.08942 15.2719 3.17156 15.2725 3.25701C15.273 3.34257 15.239 3.42481 15.1787 3.48553L14.0225 4.65252C13.9033 4.77199 13.7107 4.77324 13.5899 4.65545C11.9839 3.12872 9.85255 2.27764 7.63673 2.27752C5.42063 2.27751 3.28877 3.12856 1.68262 4.65545C1.56183 4.77344 1.36905 4.77222 1.25001 4.65252L0.0937569 3.48553C0.0334926 3.42476 -0.000556156 3.34259 6.87362e-06 3.25701C0.000622824 3.1715 0.0356758 3.08939 0.0966866 3.02947Z" /></svg>
+                    <svg width="24.328" height="11.333" viewBox="0 0 24.328 11.3333" fill="currentColor"><path opacity="0.35" stroke="currentColor" d="M2.66699 0.5H19.333C20.5296 0.5 21.5 1.47037 21.5 2.66699V8.66699C21.4998 9.86346 20.5295 10.833 19.333 10.833H2.66699C1.47048 10.833 0.500176 9.86346 0.5 8.66699V2.66699C0.5 1.47038 1.47037 0.5 2.66699 0.5Z" /><path opacity="0.4" d="M23 3.66667V7.66667C23.8047 7.32789 24.328 6.5398 24.328 5.66667C24.328 4.79353 23.8047 4.00544 23 3.66667" /><path d="M2 3.33333C2 2.59695 2.59695 2 3.33333 2H18.6667C19.403 2 20 2.59695 20 3.33333V8C20 8.73638 19.403 9.33333 18.6667 9.33333H3.33333C2.59695 9.33333 2 8.73638 2 8V3.33333Z" /></svg>
+                  </span>
+                </div>
+                {/* Top bar (transparent): floating white circular icon buttons */}
+                <div className="flex items-center" style={{ padding: '0 20px 12px', gap: 16 }}>
+                  {[0].map((k) => (
+                    <span key={k} className="flex items-center justify-center bg-white rounded-full" style={{ padding: 8, boxShadow: '0 2px 8px #30313529' }}>
+                      <ChevronLeft size={20} color="#4d4f56" />
+                    </span>
+                  ))}
+                  <span className="flex items-center ml-auto" style={{ gap: 12 }}>
+                    <span className="flex items-center justify-center bg-white rounded-full" style={{ padding: 8, boxShadow: '0 2px 8px #30313529' }}>
+                      <Share size={20} color="#4d4f56" />
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
+            {formData.overlay2Enabled && <div className="absolute bottom-0 left-0 right-0 h-[640px] z-10 pointer-events-none" style={{ background: `linear-gradient(to top, rgba(${rgb},${opacity2}) 0%, rgba(${rgb},${opacity2}) ${formData.overlayGradientStop2 ?? 40}%, rgba(${rgb},0) ${Math.max((formData.overlayGradientStop2 ?? 40) + 1, formData.overlayGradientEnd2 ?? 100)}%)`, transform: 'translateZ(0)' }} />}
 
             {/* Partner logo */}
             {formData.showPartnerLogo && (
-              <div className="absolute right-0 z-20 pointer-events-none" style={{ top: `${formData.partnerLogoY ?? 20}px`, transform: 'translateZ(0)' }}>
-                <div className="flex items-center gap-[20px] px-[24px] py-[8px] bg-white shadow-sm" style={{ borderRadius: '40px 0 0 40px', transform: `translateZ(0) scale(${formData.partnerLogoScale ?? 1})`, transformOrigin: 'top right' }}>
+              <div className="absolute right-0 z-20 pointer-events-none" style={{ top: `${formData.partnerLogoY ?? getDefaultPartnerLogoY(formData)}px`, transform: 'translateZ(0)' }}>
+                <div className="flex items-center gap-[20px] px-[24px] py-[8px] bg-white shadow-sm" style={{ borderRadius: '40px 0 0 40px', transform: `translateZ(0) scale(${formData.partnerLogoScale ?? getDefaultPartnerLogoScale(formData)})`, transformOrigin: 'top right' }}>
                   {formData.partnerLogos.slice(0, 3).map((slot, idx) => {
                     const isUrl = slot.logo?.startsWith('http') || slot.logo?.startsWith('figma:');
                     const imgSrc = isUrl ? slot.logo : (slot.logo ? `https://placehold.co/132x66/0064D2/FFFFFF/png?text=${slot.logo.substring(0, 3).toUpperCase()}` : exampleImage);
                     return (
                       <div key={slot.id || idx} className="h-[40px] min-w-[80px] max-w-[160px] flex items-center justify-center">
-                        <img src={imgSrc} alt={slot.logo || "Partner"} className="h-full w-auto object-contain" crossOrigin="anonymous" />
+                        <img src={imgSrc} alt={slot.logo || "Partner"} className="h-full w-auto object-contain" crossOrigin="anonymous" onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />
                       </div>
                     );
                   })}
@@ -400,9 +553,9 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
 
             {/* Campaign logo */}
             {formData.showCampaignLogo && (
-              <div className="absolute z-20 pointer-events-none" style={{ top: `${(formData.campaignLogoY ?? 16) * 1.2}px`, left: `${(formData.campaignLogoX ?? 16) * 1.2}px`, transformOrigin: 'top left' }}>
-                <div className="w-[86px] h-[43px] flex items-center justify-center" style={{ transform: `scale(${formData.campaignLogoScale ?? 1})`, transformOrigin: 'top left' }}>
-                  <img src={formData.campaignLogo || exampleImage} alt="Campaign Logo" className="w-full h-full object-contain" />
+              <div className="absolute z-20 pointer-events-none" style={{ top: `${(formData.campaignLogoY ?? getDefaultCampaignLogoY(formData)) * 1.2}px`, left: `${(formData.campaignLogoX ?? 20) * 1.2}px`, transformOrigin: 'top left' }}>
+                <div className="w-[86px] h-[43px] flex items-center justify-center" style={{ transform: `scale(${formData.campaignLogoScale ?? 1.6})`, transformOrigin: 'top left' }}>
+                  <img src={formData.campaignLogo || exampleImage} alt="Campaign Logo" className="w-full h-full object-contain" onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />
                 </div>
               </div>
             )}
@@ -410,16 +563,25 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
             {/* Portrait content — auto-layout column, 20px from canvas bottom, 24px gaps */}
             {(() => {
               const cs = (formData.portraitContentScale ?? 120) / 100;
+              const defaultContentOffsetY = getDefaultPortraitContentOffsetY(formData, content);
               return (
                 <div
                   className="absolute left-0 right-0 z-20 flex flex-col items-center pointer-events-none px-[48px]"
                   style={{ bottom: '40px', gap: '0px' }}
                 >
                   {/* Main content block — headline + benefit + labels, all scaled by cs */}
-                  <div className="flex flex-col items-center w-full" style={{ gap: `${4 * cs}px` }}>
+                  <BoundingBox
+                    enabled={!!onFormChange}
+                    className="flex flex-col items-center w-full"
+                    style={{ gap: `${4 * cs}px`, transform: `translateY(${formData.portraitContentOffsetY ?? defaultContentOffsetY}px)` }}
+                    offsetY={formData.portraitContentOffsetY ?? defaultContentOffsetY} offsetUnit={1} offsetMin={-200} offsetMax={200}
+                    onOffsetChange={(v) => onFormChange?.({ portraitContentOffsetY: v })}
+                    scale={formData.portraitContentScale ?? 120} scaleMin={60} scaleMax={200}
+                    onScaleChange={(v) => onFormChange?.({ portraitContentScale: v })}
+                  >
                     {/* Headline */}
                     <h3
-                      className={`drop-shadow-md font-banner leading-[1.1] text-center w-full ${isTwoHeadlines ? 'font-bold line-clamp-2 break-words' : ''}`}
+                      className={`drop-shadow-md font-banner font-bold leading-[1.1] text-center w-full ${isTwoHeadlines ? 'line-clamp-2 break-words' : ''}`}
                       style={{ fontSize: `${(content.headlineFontSize || defaultHeadlineSize) * 2 * cs}px`, color: content.headlineColor || '#FEDD00' }}
                     >
                       {renderHtml(headlineText, "")}
@@ -428,7 +590,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                     {/* Sub-headline / 2nd headline */}
                     {secondLineText && formData.headlineType !== '1 Headline' && (
                       <h3
-                        className={`drop-shadow-md font-banner text-center w-full ${isTwoHeadlines ? 'leading-[1.1] font-bold line-clamp-2 break-words' : ''}`}
+                        className={`drop-shadow-md font-banner font-bold text-center w-full ${isTwoHeadlines ? 'leading-[1.1] line-clamp-2 break-words' : ''}`}
                         style={{ fontSize: isTwoHeadlines ? `${(content.headlineFontSize || defaultHeadlineSize) * 2 * cs}px` : `${(content.subHeadlineFontSize || 18) * 2 * cs}px`, color: content.subHeadlineColor || 'white' }}
                       >
                         {renderHtml(secondLineText, "")}
@@ -436,48 +598,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                     )}
 
                     {/* Nudge / benefit row */}
-                    {!isTwoHeadlines && formData.discountEnabled !== false && (
-                      <div className={`flex ${content.mainBenefitPrefix && content.showPrefix !== false ? 'items-center' : 'items-baseline'} justify-center gap-[8px]`} style={{ marginTop: `${16 * cs}px` }}>
-                        {renderLeftColumn(2 * cs, true)}
-                        <div className="relative flex items-end">
-                          {content.discountType === 'IDR' && !(content.prefixType === 'custom' && (content.mainBenefitPrefix || '').split('\n').length >= 4 && content.showPrefix !== false) && (
-                            <span className="font-bold drop-shadow-md font-banner self-start mr-[2px] ml-[4px]" style={{ fontSize: `${30 * cs}px`, color: content.discountAmountColor || 'white', marginTop: `${-20 * cs}px` }}>Rp</span>
-                          )}
-                          <span className="font-extrabold drop-shadow-md font-banner ml-[4px]" style={{ fontSize: `${(content.discountAmountFontSize || 80) * 2 * cs}px`, lineHeight: `${132 * cs}px`, letterSpacing: `${-8 * cs}px`, color: content.discountAmountColor || 'white' }}>
-                            {discountAmountText}
-                          </span>
-                          {content.unit && (
-                            content.unitDisplayType === 'icon' ? (
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', boxShadow: '0 4px 6px rgba(0,0,0,0.2)', flexShrink: 0, zIndex: 10, width: `${(content.unit === 'mio' ? 60 : 48) * cs}px`, height: `${(content.unit === 'mio' ? 60 : 48) * cs}px`, marginBottom: `${18 * cs}px`, backgroundColor: content.unitIconColor || 'white', position: 'relative', bottom: '0px', left: `${-12 * cs}px` }}>
-                                <span className="font-bold leading-none" style={{ fontSize: `${30 * cs}px`, color: content.unitColor || '#0064D2' }}>{content.unit}</span>
-                              </div>
-                            ) : (
-                              <span className="font-bold drop-shadow-md font-banner" style={{ fontSize: `${48 * cs}px`, marginLeft: `${4 * cs}px`, marginBottom: `${8 * cs}px`, color: content.unitColor || 'white' }}>{content.unit}</span>
-                            )
-                          )}
-                          {content.hasSecondDiscount && (
-                            <>
-                              <span className="font-bold drop-shadow-md font-banner" style={{ fontSize: `${96 * cs}px`, marginBottom: `${16 * cs}px`, marginRight: `${6 * cs}px`, marginLeft: content.unitDisplayType === 'icon' ? `${2 * cs}px` : `${8 * cs}px`, color: content.discountAmountColor || 'white' }}>+</span>
-                              {content.secondDiscountType === 'IDR' && (
-                                <span className="font-bold drop-shadow-md font-banner self-start" style={{ fontSize: `${30 * cs}px`, marginRight: `${2 * cs}px`, marginLeft: `${4 * cs}px`, marginTop: `${8 * cs}px`, color: content.secondDiscountAmountColor || content.discountAmountColor || 'white' }}>Rp</span>
-                              )}
-                              <span className="font-extrabold drop-shadow-md font-banner" style={{ fontSize: `${160 * cs}px`, lineHeight: `${132 * cs}px`, letterSpacing: `${-8 * cs}px`, color: content.secondDiscountAmountColor || content.discountAmountColor || 'white' }}>
-                                {content.secondDiscountAmount || '0'}
-                              </span>
-                              {content.secondDiscountUnit && (
-                                content.secondUnitDisplayType === 'icon' ? (
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', boxShadow: '0 4px 6px rgba(0,0,0,0.2)', flexShrink: 0, zIndex: 10, width: `${(content.secondDiscountUnit === 'mio' ? 60 : 48) * cs}px`, height: `${(content.secondDiscountUnit === 'mio' ? 60 : 48) * cs}px`, marginBottom: `${18 * cs}px`, backgroundColor: content.secondUnitIconColor || 'white', position: 'relative', left: `${-16 * cs}px` }}>
-                                    <span className="font-bold leading-none" style={{ fontSize: `${30 * cs}px`, color: content.secondUnitColor || '#0064D2' }}>{content.secondDiscountUnit}</span>
-                                  </div>
-                                ) : (
-                                  <span className="font-bold drop-shadow-md font-banner" style={{ fontSize: `${48 * cs}px`, marginLeft: `${4 * cs}px`, marginBottom: `${4 * cs}px`, color: content.secondUnitColor || content.unitColor || 'white' }}>{content.secondDiscountUnit}</span>
-                                )
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                    {!isTwoHeadlines && formData.discountEnabled !== false && renderBenefit((formData.portraitContentScale ?? 120) / 100 * ((formData.portraitBenefitScale ?? 100) / 100), 720 - 12 * 2, 36)}
 
                     {/* Label discount */}
                     {content.labelDiscount && formData.headlineType !== 'With Sub-Headline' && (
@@ -491,15 +612,15 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
 
                     {/* Additional label */}
                     {content.additionalLabel && formData.headlineType !== 'With Sub-Headline' && (
-                      <div className="font-bold tracking-wider font-banner shadow-sm" style={{ fontSize: `${24 * cs}px`, borderRadius: `${20 * cs}px`, padding: `${8 * cs}px ${24 * cs}px`, marginTop: `${16 * cs}px`, backgroundColor: content.additionalLabelBackgroundColor || '#FEDD00', color: content.additionalLabelTextColor || '#0064D2' }}>
+                      <div className="font-bold tracking-wider font-banner shadow-sm" style={{ fontSize: `${24 * cs}px`, borderRadius: '999px', padding: `${8 * cs}px ${24 * cs}px`, marginTop: `${16 * cs}px`, backgroundColor: content.additionalLabelBackgroundColor || '#FEDD00', color: content.additionalLabelTextColor || '#0064D2' }}>
                         {renderHtml(content.additionalLabelText, "") || 'LIMITED OFFER'}
                       </div>
                     )}
-                  </div>
+                  </BoundingBox>
 
                   {/* CTA Button — fixed size (not affected by content scale) */}
-                  {formData.showPortraitCta && (() => {
-                    const widthMode = formData.portraitCtaWidthMode ?? 'hugged';
+                  {formData.showPortraitCta && formData.dlpRole !== 'header-mobile' && (() => {
+                    const widthMode = formData.portraitCtaWidthMode ?? 'fixed';
                     const fixedW = formData.portraitCtaFixedWidth ?? 480;
                     return (
                       <div
@@ -520,11 +641,10 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                   })()}
 
                   {/* T&C — fixed default size, not cs-scaled */}
-                  {content.termsAndCondition && (
-                    <div className="text-center w-full" style={{ marginTop: formData.showPortraitCta ? '24px' : '32px' }}>
-                      <div className="font-banner leading-[1.4]" style={{ fontSize: `${(content.termsFontSize || 11) * 2}px`, color: content.termsColor || 'rgba(255,255,255,0.8)' }}>{renderHtml(termsText, "")}</div>
-                    </div>
-                  )}
+                  {/* When T&C is off it is only hidden (visibility), so the content keeps the same position */}
+                  <div className="text-center w-full" style={{ marginTop: formData.showPortraitCta && formData.dlpRole !== 'header-mobile' ? '24px' : '32px', visibility: content.termsAndCondition ? 'visible' : 'hidden' }}>
+                    <div className="font-banner leading-[1.4]" style={{ fontSize: `${(content.termsFontSize || 11) * 2}px`, color: content.termsColor || 'rgba(255,255,255,0.8)' }}>{renderHtml(termsText, "")}</div>
+                  </div>
                 </div>
               );
             })()}
@@ -545,14 +665,138 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
     );
   }
 
+  // The 2:1 content column (headline, nudge/benefit, labels). Shared with the Desktop 5:1 banner via `contentOnly`.
+  const landscapeContent = (
+                 <BoundingBox
+                     enabled={isLandscape21 && !!onFormChange}
+                     style={isLandscape21 ? { transform: `translateY(${(formData.portraitContentOffsetY ?? 0) / 2}px) scale(${(formData.landscapeContentScale ?? 100) / 100})`, transformOrigin: 'left center' } : undefined}
+                     selfScale={(formData.landscapeContentScale ?? 100) / 100}
+                     className={`${contentOnly?.center ? '[&_h3]:!text-center' : ''} ${contentOnly?.verticalCenter ? '!mt-0' : ''} flex flex-col ${contentOnly?.center ? 'items-center' : 'items-start'} gap-[2px] w-full mr-[0px] mb-[0px] ml-[0px] ${formData.headlineType === '1 Headline' ? (formData.discountEnabled === false && content.showPrefix === false ? 'mt-[0px]' : content.hasSecondDiscount ? 'mt-[26px]' : 'mt-[32px]') : formData.headlineType === 'With Sub-Headline' ? (formData.discountEnabled === false && content.showPrefix === false ? 'mt-[0px]' : 'mt-[12px]') : 'mt-[12px]'}`}
+                     offsetY={formData.portraitContentOffsetY ?? 0} offsetUnit={2} offsetMin={-200} offsetMax={200}
+                     onOffsetChange={(v) => onFormChange?.({ portraitContentOffsetY: v })}
+                     scale={formData.landscapeContentScale ?? 100} scaleMin={60} scaleMax={200}
+                     onScaleChange={(v) => onFormChange?.({ landscapeContentScale: v })}
+                   >
+                     <HighlightWrapper active={highlights?.headlineDiff} label="Headline Changed">
+                       <>
+                         {headlineText && (
+                             <h3 className={`drop-shadow-md font-banner font-bold leading-[1.1] mb-[0px] text-left ${formData.headlineType !== '1 Headline' ? 'mt-[4px]' : 'mt-[-4px]'} ${isTwoHeadlines ? 'line-clamp-2 w-full break-words' : ''}`} style={{ fontSize: `${content.headlineFontSize || defaultHeadlineSize}px`, color: content.headlineColor || '#FEDD00' }}>
+                                 {renderHtml(headlineText, "")}
+                             </h3>
+                         )}
+                         {secondLineText && formData.headlineType !== '1 Headline' && (
+                            <h3 className={`drop-shadow-md font-banner font-bold text-left ${isTwoHeadlines ? 'leading-[1.1] -mt-[4px] line-clamp-2 w-full break-words' : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[2px]' : '-mt-[4px]')}`} style={{ fontSize: isTwoHeadlines ? `${content.headlineFontSize || defaultHeadlineSize}px` : `${content.subHeadlineFontSize || 18}px`, color: content.subHeadlineColor || 'white' }}>
+                                {renderHtml(secondLineText, "")}
+                            </h3>
+                         )}
+                       </>
+                     </HighlightWrapper>
+                     {!isTwoHeadlines && (
+                     <HighlightWrapper active={highlights?.nudgeDiff} label="Nudge Changed">
+                       {isLandscape21 && (content.hasSecondDiscount || formData.nudgeOnTop) ? renderBenefit(0.5 * ((formData.portraitBenefitScale ?? 100) / 100), contentOnly ? contentOnly.width - 40 : 290, 0, contentOnly?.center ? 'center' : 'start') : (
+                       <div style={isLandscape21 ? { transform: `scale(${(formData.portraitBenefitScale ?? 100) / 100})`, transformOrigin: contentOnly?.center ? 'center' : 'left center' } : undefined}>
+                       <div className={`flex ${content.mainBenefitPrefix && content.showPrefix !== false ? 'items-stretch' : 'items-baseline'} gap-[4px] ${formData.headlineType === '1 Headline' ? (content.hasSecondDiscount ? 'mt-[-4px]' : 'mt-[16px]') : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[10px]' : 'mt-[-6px]')}`}>
+                         {renderLeftColumn()}
+                         {formData.discountEnabled !== false && (
+                         <div className="relative flex items-end">
+                             {currencyLabel && !(content.prefixType === 'custom' && (content.mainBenefitPrefix || '').split('\n').length >= 4 && content.showPrefix !== false) && (
+                                <span className={`text-[15px] font-bold drop-shadow-md font-banner self-start mr-[2px] ml-[4px] ${formData.headlineType === '1 Headline' ? (content.hasSecondDiscount ? 'mt-[-4px]' : 'mt-[-10px]') : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[0px]' : 'mt-[14px]')}`} style={{ color: content.discountAmountColor || 'white' }}>{currencyLabel}</span>
+                             )}
+                             {discountAmountText && <span className={`text-[80px] font-extrabold tracking-[-4px] drop-shadow-md font-banner leading-[66px] ml-[4px] mt-[0px]`} style={{ color: content.discountAmountColor || 'white' }}>{discountAmountText}</span>}
+                             {discountAmountText && content.unit && (
+                                 content.unitDisplayType === 'icon' ? (
+                                     <div className={`flex items-center justify-center rounded-full shadow-lg shrink-0 z-10 mt-[0px] mr-[0px] ml-[0px] ${content.unit === 'mio' ? (content.hasSecondDiscount ? 'w-[30px] h-[30px] mb-[9px] translate-x-[-4px]' : 'w-[30px] h-[30px] mb-[9px] ' + (formData.headlineType === '1 Headline' || formData.headlineType === 'With Sub-Headline' ? 'translate-x-[-2px]' : 'translate-x-[4px]')) : 'w-[24px] h-[24px] mb-[9px]'}`} style={{ backgroundColor: content.unitIconColor || '#FEE645', position: 'relative', bottom: '0px', left: '-6px', right: 'auto' }}>
+                                         <span className="text-[15px] font-bold font-banner leading-none translate-y-[1px]" style={{ color: content.unitColor || '#0064D2' }}>{getUnitLabel(content.unit)}</span>
+                                     </div>
+                                 ) : (
+                                     <span className={`text-[24px] font-bold drop-shadow-md font-banner ml-[2px] mb-[4px]`} style={{ color: content.unitColor || 'white' }}>{getUnitLabel(content.unit)}</span>
+                                 )
+                             )}
+                             {content.hasSecondDiscount && (
+                                 <>
+                                     <span className={`text-[48px] font-bold drop-shadow-md font-banner mb-[8px] mr-[3px] ${content.unitDisplayType === 'icon' ? 'ml-[1px]' : 'ml-[4px]'}`} style={{ color: content.discountAmountColor || 'white' }}>+</span>
+                                     {secondCurrencyLabel && (
+                                         <span className={`text-[15px] font-bold drop-shadow-md font-banner self-start mr-[2px] ml-[4px] ${formData.headlineType === '1 Headline' ? 'mt-[4px]' : 'mt-[10px]'}`} style={{ color: content.secondDiscountAmountColor || content.discountAmountColor || 'white' }}>{secondCurrencyLabel}</span>
+                                     )}
+                                     {secondDiscountAmountText && <span className="text-[80px] font-extrabold tracking-[-4px] drop-shadow-md font-banner leading-[66px]" style={{ color: content.secondDiscountAmountColor || content.discountAmountColor || 'white' }}>{secondDiscountAmountText}</span>}
+                                     {secondDiscountAmountText && content.secondDiscountUnit && (
+                                         content.secondUnitDisplayType === 'icon' ? (
+                                              <div className={`flex items-center justify-center rounded-full shadow-lg shrink-0 z-10 mt-[0px] mr-[8px] ml-[0px] ${content.secondDiscountUnit === 'mio' ? 'w-[30px] h-[30px] mb-[9px] translate-x-[0px]' : 'w-[24px] h-[24px] mb-[9px]'}`} style={{ backgroundColor: content.secondUnitIconColor || 'white', marginBottom: '8px', position: 'relative', top: '-2px', left: '-8px' }}>
+                                                  <span className="text-[15px] font-bold font-banner leading-none translate-y-[1px]" style={{ color: content.secondUnitColor || '#0064D2' }}>{getUnitLabel(content.secondDiscountUnit)}</span>
+                                              </div>
+                                         ) : (
+                                              <span className="text-[24px] font-bold drop-shadow-md font-banner ml-[2px] mb-[2px]" style={{ color: content.secondUnitColor || content.unitColor || 'white' }}>{getUnitLabel(content.secondDiscountUnit)}</span>
+                                         )
+                                     )}
+                                 </>
+                             )}
+                         </div>
+                         )}
+                       </div>
+                     </div>
+                       )}
+                     </HighlightWrapper>
+                     )}
+                     <HighlightWrapper active={highlights?.labelDiscountDiff} label="Additional Perks Changed">
+                      {content.labelDiscount && formData.headlineType !== 'With Sub-Headline' && (
+                          <div className={`flex items-center gap-[6px] ${isTwoHeadlines ? 'mt-[14px]' : 'mt-[2px]'}`}>
+                             {content.labelDiscountType === 'With icon' && (
+                                 <div className="w-[16px] h-[16px]" style={{ '--fill-0': content.labelDiscountIconColor || 'white' } as React.CSSProperties}><TdsIcOvalPlus /></div>
+                             )}
+                             <div className="text-[14px] font-bold drop-shadow-md font-banner" style={{ color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "", { transform: 'translateY(0)' })}</div>
+                          </div>
+                      )}
+                     </HighlightWrapper>
+                     <HighlightWrapper active={highlights?.additionalLabelDiff} label="Additional Label Changed">
+                      {content.additionalLabel && formData.headlineType !== 'With Sub-Headline' && (
+                          <div 
+                             className={`text-[12px] font-bold px-[12px] py-[4px] rounded-[999px] tracking-wider font-banner shadow-sm mt-[8px]`}
+                             style={{ 
+                                 backgroundColor: content.additionalLabelBackgroundColor || '#FEDD00',
+                                 color: content.additionalLabelTextColor || '#0064D2'
+                             }}
+                          >
+                             {renderHtml(content.additionalLabelText, "") || 'LIMITED OFFER'}
+                          </div>
+                      )}
+                     </HighlightWrapper>
+                     {/* 2:1 CTA — same settings as the 3:4 CTA (colours, width mode); sizes are half of the 720px canvas values */}
+                     {isLandscape21 && formData.showPortraitCta && (
+                         <div
+                             className="flex items-center justify-center font-bold font-banner whitespace-nowrap"
+                             style={{
+                                 backgroundColor: formData.ctaButtonColor || '#007BFF',
+                                 color: formData.ctaTextColor || '#FFFFFF',
+                                 fontSize: `${16 * ((formData.landscapeCtaScale ?? 80) / 100)}px`,
+                                 borderRadius: `${8 * ((formData.landscapeCtaScale ?? 80) / 100)}px`,
+                                 padding: `${12 * ((formData.landscapeCtaScale ?? 80) / 100)}px ${24 * ((formData.landscapeCtaScale ?? 80) / 100)}px`,
+                                 marginTop: '12px',
+                                 ...((formData.portraitCtaWidthMode ?? 'fixed') === 'fixed' ? { width: `${((formData.portraitCtaFixedWidth ?? 360) / 2) * ((formData.landscapeCtaScale ?? 80) / 100)}px` } : {}),
+                             }}
+                         >
+                             {content.ctaText || (lang === 'en' ? 'Book Now' : 'Pesan Sekarang')}
+                         </div>
+                     )}
+                     {formData.bannerStyle === 'Style 3 (Flagship/big campaign)' && (
+                         <div className="mt-[16px] h-[36px] px-[20px] bg-[#0064D2] rounded-full text-white text-[14px] font-bold flex items-center shadow-lg cursor-default">Book Now</div>
+                     )}
+                 </BoundingBox>
+  );
+
+  if (contentOnly) {
+    return (
+      <div ref={ref} className="flex flex-col justify-center" style={{ width: contentOnly.width, height: 300, padding: '15px 20px', alignItems: contentOnly.center ? 'center' : 'flex-start' }}>
+        {landscapeContent}
+      </div>
+    );
+  }
+
   return (
     <div className={`flex flex-col gap-[8px] w-[600px] flex-shrink-0 ${className || ''}`} style={{ transform: `scale(${renderScale})`, transformOrigin: 'top left' }} ref={ref}>
       {!hideHeader && (
       <div className="bg-[#f2f8ff] rounded-[4px] p-[10px] w-full">
         <div className="flex gap-[8px] items-center">
-           <div className="h-[16px] w-[24px] relative shrink-0">
-             <img src={lang === 'en' ? "https://flagcdn.com/w40/us.png" : "https://flagcdn.com/w40/id.png"} alt={lang} className="w-full h-full object-cover rounded-[2px]" crossOrigin="anonymous" />
-           </div>
+           <span className="text-[18px] leading-none shrink-0" role="img" aria-label={lang}>{lang === 'en' ? '🇺🇸' : '🇮🇩'}</span>
            <p className="text-[16px] font-bold leading-[22px] text-[#71747d]">{label}</p>
         </div>
       </div>
@@ -576,6 +820,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
             />
         )}
         <div  
+            data-canvas-w="600"
             className={`w-full relative rounded-[12px] overflow-hidden ${currentRatioClass} isolate`} 
             style={{ 
                 background: containerBackground, 
@@ -605,6 +850,23 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                  <Skeleton className="w-full h-full absolute inset-0 z-0" />
              )}
              
+             {isDraggable && !!onFormChange && !isPlaceholder ? (
+                <ImageBox
+                    wrapperStyle={imageStyle}
+                    position={position} scale={scale}
+                    onPositionChange={(p) => onFormChange({ keyVisualPosition: p })}
+                    onScaleChange={(s) => onFormChange({ keyVisualScale: s })}
+                >
+                    <img
+                        src={currentDisplayImage}
+                        alt="Background"
+                        style={{ display: 'block', width: 'auto', minWidth: '100%', height: 'auto', maxWidth: 'none', opacity: isImageLoaded ? 1 : 0, transition: 'opacity 500ms ease-in-out' }}
+                        draggable={false}
+                        crossOrigin="anonymous"
+                        onLoad={() => setInternalImageLoaded(true)}
+                    />
+                </ImageBox>
+             ) : (
              <img 
                 src={currentDisplayImage} 
                 alt="Background" 
@@ -618,96 +880,15 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                 crossOrigin="anonymous"
                 onLoad={() => setInternalImageLoaded(true)}
              />
+             )}
          </div>
          
          <div className="absolute inset-0 pointer-events-none z-10" style={gradientStyle} />
+         {formData.overlay2Enabled && <div className="absolute inset-0 pointer-events-none z-10" style={gradientStyle2} />}
 
          <div className="absolute left-0 top-0 h-full w-[55%] z-20 pointer-events-none" style={{ transform: 'translateZ(0)' }}>
              <div className="h-full w-full px-[20px] py-[15px] flex flex-col justify-center items-start">
-                 <div className={`flex flex-col items-start gap-[2px] w-full mr-[0px] mb-[0px] ml-[0px] ${formData.headlineType === '1 Headline' ? (formData.discountEnabled === false && content.showPrefix === false ? 'mt-[0px]' : content.hasSecondDiscount ? 'mt-[26px]' : 'mt-[32px]') : formData.headlineType === 'With Sub-Headline' ? (formData.discountEnabled === false && content.showPrefix === false ? 'mt-[0px]' : 'mt-[12px]') : 'mt-[12px]'}`}>
-                     <HighlightWrapper active={highlights?.headlineDiff} label="Headline Changed">
-                       <>
-                         {headlineText && (
-                             <h3 className={`drop-shadow-md font-banner leading-[1.1] mb-[0px] text-left ${formData.headlineType !== '1 Headline' ? 'mt-[4px]' : 'mt-[-4px]'} ${isTwoHeadlines ? 'font-bold line-clamp-2 w-full break-words' : ''}`} style={{ fontSize: `${content.headlineFontSize || defaultHeadlineSize}px`, color: content.headlineColor || 'white' }}>
-                                 {renderHtml(headlineText, "")} 
-                             </h3>
-                         )}
-                         {secondLineText && formData.headlineType !== '1 Headline' && (
-                            <h3 className={`drop-shadow-md font-banner text-left ${isTwoHeadlines ? 'leading-[1.1] -mt-[4px] font-bold line-clamp-2 w-full break-words' : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[2px]' : '-mt-[4px]')}`} style={{ fontSize: isTwoHeadlines ? `${content.headlineFontSize || defaultHeadlineSize}px` : `${content.subHeadlineFontSize || 18}px`, color: content.subHeadlineColor || 'white' }}>
-                                {renderHtml(secondLineText, "")}
-                            </h3>
-                         )}
-                       </>
-                     </HighlightWrapper>
-                     {!isTwoHeadlines && (
-                     <HighlightWrapper active={highlights?.nudgeDiff} label="Nudge Changed">
-                       <div className={`flex ${content.mainBenefitPrefix && content.showPrefix !== false ? 'items-stretch' : 'items-baseline'} gap-[4px] ${formData.headlineType === '1 Headline' ? (content.hasSecondDiscount ? 'mt-[-4px]' : 'mt-[8px]') : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[10px]' : 'mt-[-6px]')}`}>
-                         {renderLeftColumn()}
-                         {formData.discountEnabled !== false && (
-                         <div className="relative flex items-end">
-                             {content.discountType === 'IDR' && !(content.prefixType === 'custom' && (content.mainBenefitPrefix || '').split('\n').length >= 4 && content.showPrefix !== false) && (
-                                <span className={`text-[15px] font-bold drop-shadow-md font-banner self-start mr-[2px] ml-[4px] ${formData.headlineType === '1 Headline' ? (content.hasSecondDiscount ? 'mt-[-4px]' : 'mt-[-10px]') : (formData.headlineType === 'With Sub-Headline' && !content.hasSecondDiscount ? 'mt-[0px]' : 'mt-[14px]')}`} style={{ color: content.discountAmountColor || 'white' }}>Rp</span>
-                             )}
-                             <span className={`text-[80px] font-extrabold tracking-[-4px] drop-shadow-md font-banner leading-[66px] ml-[4px] mt-[0px]`} style={{ color: content.discountAmountColor || 'white' }}>{discountAmountText}</span>
-                             {content.unit && (
-                                 content.unitDisplayType === 'icon' ? (
-                                     <div className={`flex items-center justify-center rounded-full shadow-lg shrink-0 z-10 mt-[0px] mr-[0px] ml-[0px] ${content.unit === 'mio' ? (content.hasSecondDiscount ? 'w-[30px] h-[30px] mb-[9px] translate-x-[-4px]' : 'w-[30px] h-[30px] mb-[9px] ' + (formData.headlineType === '1 Headline' || formData.headlineType === 'With Sub-Headline' ? 'translate-x-[-2px]' : 'translate-x-[4px]')) : 'w-[24px] h-[24px] mb-[9px]'}`} style={{ backgroundColor: content.unitIconColor || 'white', position: 'relative', bottom: '0px', left: '-6px', right: 'auto' }}>
-                                         <span className="text-[15px] font-bold leading-none translate-y-[1px]" style={{ color: content.unitColor || '#0064D2' }}>{content.unit}</span>
-                                     </div>
-                                 ) : (
-                                     <span className={`text-[24px] font-bold drop-shadow-md font-banner ml-[2px] mb-[4px]`} style={{ color: content.unitColor || 'white' }}>{content.unit}</span>
-                                 )
-                             )}
-                             {content.hasSecondDiscount && (
-                                 <>
-                                     <span className={`text-[48px] font-bold drop-shadow-md font-banner mb-[8px] mr-[3px] ${content.unitDisplayType === 'icon' ? 'ml-[1px]' : 'ml-[4px]'}`} style={{ color: content.discountAmountColor || 'white' }}>+</span>
-                                     {content.secondDiscountType === 'IDR' && (
-                                         <span className={`text-[15px] font-bold drop-shadow-md font-banner self-start mr-[2px] ml-[4px] ${formData.headlineType === '1 Headline' ? 'mt-[4px]' : 'mt-[10px]'}`} style={{ color: content.secondDiscountAmountColor || content.discountAmountColor || 'white' }}>Rp</span>
-                                     )}
-                                     <span className="text-[80px] font-extrabold tracking-[-4px] drop-shadow-md font-banner leading-[66px]" style={{ color: content.secondDiscountAmountColor || content.discountAmountColor || 'white' }}>{content.secondDiscountAmount || '0'}</span>
-                                     {content.secondDiscountUnit && (
-                                         content.secondUnitDisplayType === 'icon' ? (
-                                              <div className={`flex items-center justify-center rounded-full shadow-lg shrink-0 z-10 mt-[0px] mr-[8px] ml-[0px] ${content.secondDiscountUnit === 'mio' ? 'w-[30px] h-[30px] mb-[9px] translate-x-[0px]' : 'w-[24px] h-[24px] mb-[9px]'}`} style={{ backgroundColor: content.secondUnitIconColor || 'white', marginBottom: '8px', position: 'relative', top: '-2px', left: '-8px' }}>
-                                                  <span className="text-[15px] font-bold leading-none translate-y-[1px]" style={{ color: content.secondUnitColor || '#0064D2' }}>{content.secondDiscountUnit}</span>
-                                              </div>
-                                         ) : (
-                                              <span className="text-[24px] font-bold drop-shadow-md font-banner ml-[2px] mb-[2px]" style={{ color: content.secondUnitColor || content.unitColor || 'white' }}>{content.secondDiscountUnit}</span>
-                                         )
-                                     )}
-                                 </>
-                             )}
-                         </div>
-                         )}
-                       </div>
-                     </HighlightWrapper>
-                     )}
-                     <HighlightWrapper active={highlights?.labelDiscountDiff} label="Label Discount Changed">
-                      {content.labelDiscount && formData.headlineType !== 'With Sub-Headline' && (
-                          <div className={`flex items-center gap-[6px] ${isTwoHeadlines ? 'mt-[14px]' : 'mt-[2px]'}`}>
-                             {content.labelDiscountType === 'With icon' && (
-                                 <div className="w-[16px] h-[16px]" style={{ '--fill-0': content.labelDiscountIconColor || 'white' } as React.CSSProperties}><TdsIcOvalPlus /></div>
-                             )}
-                             <div className="text-[14px] font-bold drop-shadow-md font-banner" style={{ color: content.labelDiscountColor || 'white' }}>{renderHtml(labelDiscountText, "", { transform: 'translateY(0)' })}</div>
-                          </div>
-                      )}
-                     </HighlightWrapper>
-                     <HighlightWrapper active={highlights?.additionalLabelDiff} label="Additional Label Changed">
-                      {content.additionalLabel && formData.headlineType !== 'With Sub-Headline' && (
-                          <div 
-                             className={`text-[12px] font-bold px-[12px] py-[4px] rounded-[10px] tracking-wider font-banner shadow-sm mt-[8px]`}
-                             style={{ 
-                                 backgroundColor: content.additionalLabelBackgroundColor || '#FEDD00',
-                                 color: content.additionalLabelTextColor || '#0064D2'
-                             }}
-                          >
-                             {renderHtml(content.additionalLabelText, "") || 'LIMITED OFFER'}
-                          </div>
-                      )}
-                     </HighlightWrapper>
-                     {formData.bannerStyle === 'Style 3 (Flagship/big campaign)' && (
-                         <div className="mt-[16px] h-[36px] px-[20px] bg-[#0064D2] rounded-full text-white text-[14px] font-bold flex items-center shadow-lg cursor-default">Book Now</div>
-                     )}
-                 </div>
+                 {landscapeContent}
              </div>
              {content.termsAndCondition && (
                  <div className="absolute bottom-[15px] left-[20px] max-w-[calc(100%-40px)] z-30">
@@ -721,14 +902,14 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
          {formData.showPartnerLogo && (
             <div className="absolute right-0 z-20 pointer-events-none" style={{ top: `${formData.partnerLogoY ?? 16}px`, transform: 'translateZ(0)' }}>
               <HighlightWrapper active={highlights?.partnerLogoDiff} label="Partner Logo Changed">
-                <div className="flex items-center gap-[10px] h-[35px] pl-[20px] pr-[10px] bg-white rounded-l-full rounded-r-none shadow-sm" style={{ transform: `translateZ(0) scale(${formData.partnerLogoScale ?? 1})`, transformOrigin: 'top right' }}>
+                <div className="flex items-center gap-[10px] h-[35px] pl-[20px] pr-[10px] bg-white rounded-l-full rounded-r-none shadow-sm" style={{ transform: `translateZ(0) scale(${formData.partnerLogoScale ?? lgScale})`, transformOrigin: 'top right' }}>
                     {formData.partnerLogos.slice(0, 3).map((slot, idx) => {
                          const isUrl = slot.logo?.startsWith('http') || slot.logo?.startsWith('figma:');
                          const imgSrc = isUrl ? slot.logo : (slot.logo ? `https://placehold.co/132x66/0064D2/FFFFFF/png?text=${slot.logo.substring(0, 3).toUpperCase()}` : exampleImage);
                          
                          return (
                          <div key={slot.id || idx} className="h-[27px] min-w-[66px] max-w-[132px] flex items-center justify-center" title={slot.logo || slot.type}>
-                            <img src={imgSrc} alt={slot.logo || "Partner"} className="h-full w-auto object-contain" crossOrigin="anonymous" />
+                            <img src={imgSrc} alt={slot.logo || "Partner"} className="h-full w-auto object-contain" crossOrigin="anonymous" onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />
                          </div>
                          );
                     })}
@@ -737,10 +918,10 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
             </div>
          )}
          {formData.showCampaignLogo && (
-             <div className="absolute z-20 pointer-events-none" style={{ top: `${formData.campaignLogoY ?? 16}px`, left: `${formData.campaignLogoX ?? 16}px`, transform: 'translateZ(0)', transformOrigin: 'top left' }}>
+             <div className="absolute z-20 pointer-events-none" style={{ top: `${formData.campaignLogoY ?? lgPos}px`, left: `${formData.campaignLogoX ?? lgPos}px`, transform: 'translateZ(0)', transformOrigin: 'top left' }}>
                <HighlightWrapper active={highlights?.campaignLogoDiff} label="Campaign Logo Changed">
-                 <div className="w-[72px] h-[36px] flex items-center justify-center" style={{ transform: `scale(${formData.campaignLogoScale ?? 1})`, transformOrigin: 'top left' }}>
-                    <img src={formData.campaignLogo || exampleImage} alt="Campaign Logo" className="w-full h-full object-contain" />
+                 <div className="w-[72px] h-[36px] flex items-center justify-center" style={{ transform: `scale(${formData.campaignLogoScale ?? lgScale})`, transformOrigin: 'top left' }}>
+                    <img src={formData.campaignLogo || exampleImage} alt="Campaign Logo" className="w-full h-full object-contain" onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />
                  </div>
                </HighlightWrapper>
              </div>

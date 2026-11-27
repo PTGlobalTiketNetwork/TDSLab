@@ -38,7 +38,7 @@ export function Steps({ currentStep, maxStepReached = 1, onStepClick }: StepsPro
                   currentStep >= step.id
                     ? 'bg-[#007bff] text-white'
                     : 'border border-[#aeb2be] text-[#71747d] bg-white'
-                } ${isClickable ? 'group-hover:bg-[#0064D2]' : ''}`}
+                }`}
               >
                 {step.id}
               </div>
