@@ -616,7 +616,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                     {/* Additional label */}
                     {content.additionalLabel && formData.headlineType !== 'With Sub-Headline' && (
                       content.additionalLabelType === 'Voucher' ? (
-                        <div className="inline-flex items-center font-banner shadow-sm" style={{ gap: `${8 * cs}px`, borderRadius: `${6 * cs}px`, padding: `${6 * cs}px ${8 * cs}px`, marginTop: `${16 * cs}px`, backgroundColor: content.additionalLabelBackgroundColor || '#FFFFFF', color: content.additionalLabelTextColor || '#007BFF' }}>
+                        <div className="inline-flex items-center font-banner shadow-sm" style={{ gap: `${8 * cs}px`, borderRadius: `${6 * cs}px`, padding: `${10 * cs}px ${10 * cs}px`, marginTop: `${16 * cs}px`, backgroundColor: content.additionalLabelBackgroundColor || '#FFFFFF', color: content.additionalLabelTextColor || '#007BFF' }}>
                           <div className="font-normal leading-[1.15] text-left shrink-0" style={{ fontSize: `${(content.additionalLabelFontSize || 16) * 0.4 * cs}px` }}>
                             <div>{lang === 'id' ? 'Kode' : 'Promo'}</div>
                             <div>{lang === 'id' ? 'Promo:' : 'Code:'}</div>
@@ -770,7 +770,7 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
                           content.additionalLabelType === 'Voucher' ? (
                           <div
                              className="inline-flex items-center gap-[8px] font-banner shadow-sm mt-[8px]"
-                             style={{ borderRadius: '6px', padding: '6px 8px', backgroundColor: content.additionalLabelBackgroundColor || '#FFFFFF', color: content.additionalLabelTextColor || '#007BFF' }}
+                             style={{ borderRadius: '6px', padding: '10px 10px', backgroundColor: content.additionalLabelBackgroundColor || '#FFFFFF', color: content.additionalLabelTextColor || '#007BFF' }}
                           >
                              <div className="font-normal leading-[1.15] text-left shrink-0" style={{ fontSize: `${(content.additionalLabelFontSize || 16) * 0.4}px` }}>
                                  <div>{lang === 'id' ? 'Kode' : 'Promo'}</div>
