@@ -422,7 +422,7 @@ export function LivePreview({ formData, onChange, currentStep, onControlsChange,
           )}
         </div>
       )}
-      <div ref={wrapRef} className={`w-full ${compact || embedded ? '' : 'overflow-x-auto'} ${compact && isPortraitRatio ? 'max-w-[75%] mx-auto' : ''} ${showMobile ? '' : 'hidden'}`}>
+      <div ref={wrapRef} className={`w-full ${compact || embedded ? '' : 'overflow-x-auto overflow-y-hidden'} ${compact && isPortraitRatio ? 'max-w-[75%] mx-auto' : ''} ${showMobile ? '' : 'hidden'}`}>
       <div className={sideBySide ? "flex flex-row items-start gap-[16px] w-max mx-auto" : isStacked ? "flex flex-col items-start gap-[16px] w-max mx-auto" : (embedded && isDesktopStandalone) ? "flex flex-row gap-[12px] w-full lg:flex-col lg:gap-[24px]" : "flex flex-col gap-[24px] w-full"} style={(sideBySide || fitsToWidth || isStacked) ? { zoom } : isLandscape21 ? { zoom: landscapeZoom / 100 } : undefined}>
       <div ref={measureRef} className="flex flex-col w-full min-w-0">
         <BannerFixed 
