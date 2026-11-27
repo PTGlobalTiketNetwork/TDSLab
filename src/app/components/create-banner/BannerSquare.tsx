@@ -1153,7 +1153,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
 
       {/* Scaled Canvas Wrapper - Centered */}
       <div className="flex justify-center w-full">
-        <div style={{ width: '400px', height: '400px' /* Removed overflow: hidden to allow highlight to be seen */ }}>
+        <div style={{ width: '400px', height: '400px', overflow: 'clip', overflowClipMargin: '12px' /* clip the unscaled 600px layout box (it made the preview scroll) but keep room for the highlight ring */ } as React.CSSProperties}>
           <div style={{ transform: `scale(${SCALE_FACTOR})`, transformOrigin: 'top left' }} className="relative inline-block">
              {backgroundHighlight}
              {bannerContent}

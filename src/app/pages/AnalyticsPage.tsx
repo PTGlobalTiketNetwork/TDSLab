@@ -201,7 +201,7 @@ function BreakdownCard({ title, data, order }: { title: string; data: { name: st
 export function AnalyticsPage({ isSidebarCollapsed = false }: { isSidebarCollapsed?: boolean }) {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
-  const [range, setRange] = useState<RangeKey>('month');
+  const [range, setRange] = useState<RangeKey>('day');
   const [customFrom, setCustomFrom] = useState(() => format(subDays(new Date(), 29), 'yyyy-MM-dd'));
   const [customTo, setCustomTo] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const now = new Date();

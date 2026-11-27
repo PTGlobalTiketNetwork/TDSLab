@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, type MouseEvent } from 'react';
 import { Asset } from '../../types/asset';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 
@@ -6,7 +6,7 @@ interface AssetRowProps {
   asset: Asset;
   index: number;
   isSelected: boolean;
-  onClick: () => void;
+  onClick: (e: MouseEvent) => void;
 }
 
 export const AssetRow = forwardRef<HTMLDivElement, AssetRowProps>(
@@ -15,11 +15,12 @@ export const AssetRow = forwardRef<HTMLDivElement, AssetRowProps>(
     const formattedIndex = (index + 1).toString().padStart(2, '0');
 
     return (
-      <div 
+      <div
         ref={ref}
         id={`asset-card-${asset.id}`}
-        onClick={(e) => { e.stopPropagation(); onClick(); }}
-        className={`bg-white rounded-[12px] h-[64px] flex items-center px-[24px] cursor-pointer transition-all hover:shadow-sm ${
+        onClick={(e) => { e.stopPropagation(); onClick(e); }}
+        onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
+        className={`bg-white rounded-[12px] h-[64px] flex items-center px-[24px] cursor-pointer transition-all hover:shadow-sm select-none ${
           isSelected ? 'border-[2px] border-[#007BFF] px-[23px]' : 'border border-[#d8dce8]'
         }`}
         {...props}

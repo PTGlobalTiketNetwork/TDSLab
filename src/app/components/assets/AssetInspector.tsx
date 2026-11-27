@@ -2,26 +2,112 @@ import { Asset } from '../../types/asset';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import TdsIcImage from '../../../imports/TdsIcImage';
 import svgPaths from '../../../imports/svg-3n792bvqad';
-import { Maximize2, FolderInput } from 'lucide-react';
+import { Maximize2, FolderInput, X, Trash2 } from 'lucide-react';
 import { Download } from 'lucide-react';
 import { Lightbox } from '../Lightbox';
 import { formatStoredName } from '../../utils/userDisplay';
 
 interface AssetInspectorProps {
   selectedAsset: Asset | null;
+  selectedAssets?: Asset[];
   onEdit: (asset: Asset) => void;
   onDelete: (asset: Asset) => void;
   onMove?: (asset: Asset) => void;
   onDownload?: (asset: Asset) => void;
+  onBulkDownload?: (assets: Asset[]) => void;
+  onBulkDelete?: (assets: Asset[]) => void;
+  onClearSelection?: () => void;
 }
 
 export function AssetInspector({
   selectedAsset,
+  selectedAssets,
   onEdit,
   onDelete,
   onMove,
   onDownload,
+  onBulkDownload,
+  onBulkDelete,
+  onClearSelection,
 }: AssetInspectorProps) {
+  // 2+ selected: switch to the bulk summary + actions panel (mirrors BannerListPage's InspectorPanel)
+  if (selectedAssets && selectedAssets.length >= 2) {
+    const count = selectedAssets.length;
+    const categories = [...new Set(selectedAssets.map(a => a.category).filter(Boolean))];
+    const noun = count === 1 ? 'asset' : 'assets';
+
+    return (
+      <div className="w-[432px] h-[calc(100vh-100px)] bg-white border-l border-[#d8dce8] fixed right-0 top-[100px] overflow-y-auto z-40 flex flex-col">
+        <div className="p-[24px] border-b border-[#e8eaee]">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[20px] font-bold text-[#303135]">{count} assets selected</h3>
+            <button onClick={onClearSelection} className="text-[14px] text-[#007BFF] hover:text-[#0064D2] font-medium transition-colors">
+              Deselect All
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-[24px] pt-[24px] pb-[24px]">
+          {categories.length > 0 && (
+            <div className="mb-4">
+              <p className="text-[12px] font-medium text-[#71747d] mb-2">Categories</p>
+              <div className="flex flex-wrap gap-2">
+                {categories.map((c) => (
+                  <span key={c} className="inline-flex items-center px-3 py-1 bg-[#f4f7fe] rounded-[6px] text-[12px] font-bold text-[#303135]">
+                    {c}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-[#f8f9fd] rounded-[8px] p-[16px] max-h-[240px] overflow-y-auto mb-6">
+            <p className="text-[12px] font-medium text-[#71747d] mb-2">Selected assets</p>
+            <div className="space-y-2">
+              {selectedAssets.map((a) => (
+                <div key={a.id} className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-[#007BFF] shrink-0" />
+                  <p className="text-[13px] text-[#303135] truncate">{a.name}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[12px] font-medium text-[#71747d] mb-2">Bulk Actions</p>
+
+            <button
+              onClick={() => onBulkDownload?.(selectedAssets)}
+              disabled={!selectedAssets.some((a) => a.imageUrl)}
+              className="w-full h-[40px] px-4 flex items-center gap-3 rounded-[8px] text-[14px] font-medium text-[#303135] bg-[#f0f1f5] hover:bg-[#e4e5ea] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Download className="size-4" />
+              Download {count} {noun}
+            </button>
+
+            <button
+              onClick={onClearSelection}
+              className="w-full h-[40px] px-4 flex items-center gap-3 rounded-[8px] text-[14px] font-medium text-[#303135] bg-[#f0f1f5] hover:bg-[#e4e5ea] transition-colors"
+            >
+              <X className="size-4" />
+              Clear Selection
+            </button>
+
+            <div className="pt-2">
+              <button
+                onClick={() => onBulkDelete?.(selectedAssets)}
+                className="w-full h-[40px] px-4 flex items-center gap-3 rounded-[8px] text-[14px] font-bold text-[#F15C59] bg-[#FFDFDF] hover:bg-[#FC9999] transition-colors"
+              >
+                <Trash2 className="size-4" />
+                Delete {count} {noun}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Nothing selected: no panel at all (the asset grid uses the full width), same as Banners' InspectorPanel
   if (!selectedAsset) {
     return null;

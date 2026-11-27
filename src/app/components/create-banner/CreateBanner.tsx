@@ -1167,29 +1167,6 @@ export function CreateBanner({
               <div className="pt-[24px] px-[24px] pb-[16px] border-b border-[#d8dce8] flex items-center justify-between">
                  <h2 className="text-[18px] font-bold text-[#303135] leading-[24px]">Preview</h2>
                  
-                 {/* Lock/Unlock Controls - Only show for Square (1:1) */}
-                 {previewControls?.isSquare && (
-                   <div className="flex items-center gap-2">
-                     {previewControls.isUnlocked && (
-                       <button 
-                         onClick={previewControls.onResetPositions}
-                         className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-bold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                       >
-                         <RotateCcw size={14} />
-                         Reset Positions
-                       </button>
-                     )}
-                     
-                     <button 
-                       onClick={previewControls.onToggleLock}
-                       className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-bold transition-colors ${
-                         previewControls.isUnlocked ? 'bg-orange-50 text-orange-600' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                       }`}
-                     >
-                       {previewControls.isUnlocked ? <Unlock size={14} /> : <Lock size={14} />}
-                     </button>
-                   </div>
-                 )}
               </div>
               {/* Preview Content */}
               <div className="p-[24px] min-w-0 flex flex-col gap-[24px]" style={{ '--sticky-top': '0px' } as React.CSSProperties}>

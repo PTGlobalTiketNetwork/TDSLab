@@ -192,7 +192,7 @@ export function Sidebar({
   const isLogoAssetsActive = location.pathname.startsWith('/assets');
   const { isVisible, showNewBadge } = useMenuVisibility();
 
-  const [isBannersExpanded, setIsBannersExpanded] = useState(false);
+  const [isBannersExpanded, setIsBannersExpanded] = useState(true); // open by default (also on Home)
   const [isLogoAssetsExpanded, setIsLogoAssetsExpanded] = useState(false);
   const [isToolsExpanded, setIsToolsExpanded] = useState(false);
   const [isSettingsExpanded, setIsSettingsExpanded] = useState(false);
