@@ -655,7 +655,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
 
                     {content.additionalLabel && formData.headlineType !== 'With Sub-Headline' && (
                         content.additionalLabelType === 'Voucher' ? (
-                        <div className="inline-flex items-center gap-[8px] font-banner" style={{ borderRadius: '6px', padding: '7px 10px 9px', marginTop: '16px', backgroundColor: content.additionalLabelBackgroundColor || '#FFFFFF', color: content.additionalLabelTextColor || '#007BFF' }}>
+                        <div className="inline-flex items-center gap-[8px] font-banner" style={{ borderRadius: '6px', padding: '8px 10px 6px', marginTop: '16px', backgroundColor: content.additionalLabelBackgroundColor || '#FFFFFF', color: content.additionalLabelTextColor || '#007BFF' }}>
                             <div className="font-normal leading-[1.15] text-left shrink-0" style={{ fontSize: `${(content.additionalLabelFontSize || 16) * 0.4}px` }}>
                                 <div>{lang === 'id' ? 'Kode' : 'Promo'}</div>
                                 <div>{lang === 'id' ? 'Promo:' : 'Code:'}</div>
@@ -1052,7 +1052,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                     {content.additionalLabelType === 'Voucher' ? (
                     <div
                         className="inline-flex items-center gap-[8px] font-banner whitespace-nowrap relative"
-                        style={{ borderRadius: '6px', padding: '7px 10px 9px', backgroundColor: content.additionalLabelBackgroundColor || '#FFFFFF', color: content.additionalLabelTextColor || '#007BFF' }}
+                        style={{ borderRadius: '6px', padding: '8px 10px 6px', backgroundColor: content.additionalLabelBackgroundColor || '#FFFFFF', color: content.additionalLabelTextColor || '#007BFF' }}
                     >
                         <div className="font-normal leading-[1.15] text-left shrink-0" style={{ fontSize: `${(content.additionalLabelFontSize || 16) * 0.4}px` }}>
                             <div>{lang === 'id' ? 'Kode' : 'Promo'}</div>
