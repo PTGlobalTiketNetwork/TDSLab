@@ -229,7 +229,12 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         polaroidCrops: src.polaroidCrops,
         polaroidRotations: src.polaroidRotations,
         polaroidOverlay: src.polaroidOverlay,
-        polaroidVouchers: src.polaroidVouchers,
+        // Only the voucher colour travels: each size keeps its own on/off, position, rotation and scale
+        ...(() => {
+          const color = src.polaroidVouchers?.top?.color || src.polaroidVouchers?.bottom?.color;
+          const dst = itemForm(to).polaroidVouchers;
+          return color ? { polaroidVouchers: { ...dst, top: { ...dst?.top, color }, bottom: { ...dst?.bottom, color } } } : {};
+        })(),
         ...overlayUpdates,
       })),
       keyVisualFile: src.keyVisualFile, // File object: shared, not cloned
