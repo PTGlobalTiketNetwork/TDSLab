@@ -16,10 +16,11 @@ import { TiketSnackbar } from './ui/TiketSnackbar';
 import { BannerFixed } from './create-banner/BannerFixed';
 import { desktopCanvasHeight } from './create-banner/BannerDesktop51';
 import { BannerFormData } from './create-banner/types';
+import { migrateSavedFormData } from './create-banner/components/PolaroidCollage';
 import { handoffStore } from '../../utils/indexedDB';
 import { fontEmbedCSS, getBase64FontCSS } from '../utils/fontCss';
 import {
-  captureBannerElement,
+  captureBannerElement, DESKTOP_MAX_EXPORT_WIDTH, DESKTOP_EXPORT_CAP_NOTE, isDesktopBannerRatio, cappedPixelRatio, dlpZipBaseName,
   ensureDataUrlForCapture,
   waitForRenderStable,
   buildDlpZipManifest,
@@ -207,7 +208,7 @@ export function InspectorPanel({
   // Cache busting logic
   const cacheBuster = selectedBanner && (selectedBanner as any).updatedAt ? new Date((selectedBanner as any).updatedAt).getTime() : selectedBanner?.id || 'preview';
   const rawImageUrl = selectedBanner?.imageUrl;
-  const selectedFormData = selectedBanner?.form_data as BannerFormData | undefined;
+  const selectedFormData = migrateSavedFormData(selectedBanner?.form_data as BannerFormData | undefined);
   const selectedIsDlpAssets = selectedFormData?.bannerCategory === 'DLP Assets' && !!selectedFormData?.dlp?.header;
   const ttdItems = getTtdPreviewItems(selectedFormData);
   const activeTtdItem = ttdItem && ttdItems.includes(ttdItem) ? ttdItem : (ttdItems[0] ?? null);
@@ -545,7 +546,9 @@ export function InspectorPanel({
             useCORS: true,
             fontEmbedCSS: base64FontCSS,
             skipFonts: true,
-            pixelRatio: scaleFactor,
+            pixelRatio: isDesktopBannerRatio(formData?.bannerRatio)
+                ? Math.min(scaleFactor, DESKTOP_MAX_EXPORT_WIDTH / (bannerElement.offsetWidth || DESKTOP_MAX_EXPORT_WIDTH))
+                : scaleFactor,
             filter: (node) => !(node instanceof HTMLElement && node.hasAttribute('data-dlp-navbar')),
             style: {
                 transform: 'none',
@@ -584,6 +587,7 @@ export function InspectorPanel({
       const banners = buildDlpZipManifest(dlp);
       await dlpZipRenderer.current?.downloadDlpZip({
         projectName: selectedBanner.name || 'DLP Assets',
+        zipName: dlpZipBaseName((formData as any)?.verticalCategory === 'Hotel' ? 'Accom' : (formData as any)?.verticalCategory, selectedBanner.name || ''),
         scaleFactor,
         banners,
       });
@@ -692,7 +696,7 @@ export function InspectorPanel({
   // Prepare form data for hidden rendering
   // If we are restoring, we MUST use the history item's data to capture the correct visual state
   const effectiveBanner = restoreItem || selectedBanner;
-  const formData = effectiveBanner.form_data as BannerFormData | undefined;
+  const formData = migrateSavedFormData(effectiveBanner.form_data as BannerFormData | undefined);
   
   const previewUrl = capturePreviewUrl || formData?.keyVisualUrl || null;
   const scale = formData?.keyVisualScale || 100;
@@ -1285,6 +1289,8 @@ export function InspectorPanel({
                    <div 
                      className="rounded-xl overflow-hidden shadow-2xl bg-transparent" 
                      style={{ 
+                       // The 5:1 banner sizes itself to its container's width, which is otherwise 0 here
+                       ...(previewFormData?.bannerRatio === 'Desktop (5:1)' || previewFormData?.bannerRatio === 'Desktop (4:1)' ? { width: 560 } : {}),
                        opacity: viewLanguage === 'en' ? 1 : 0,
                        transition: 'opacity 150ms ease-in-out',
                        willChange: 'opacity',
@@ -1314,6 +1320,8 @@ export function InspectorPanel({
                    <div 
                      className="rounded-xl overflow-hidden shadow-2xl bg-transparent" 
                      style={{ 
+                       // The 5:1 banner sizes itself to its container's width, which is otherwise 0 here
+                       ...(previewFormData?.bannerRatio === 'Desktop (5:1)' || previewFormData?.bannerRatio === 'Desktop (4:1)' ? { width: 560 } : {}),
                        opacity: viewLanguage === 'id' ? 1 : 0,
                        transition: 'opacity 150ms ease-in-out',
                        willChange: 'opacity',
@@ -1456,6 +1464,7 @@ export function InspectorPanel({
                           </button>
                         ))}
                       </div>
+                      <p className="text-[11px] text-gray-500">{DESKTOP_EXPORT_CAP_NOTE} (scale is capped)</p>
                     </div>
                   ) : (
                     <div className="flex flex-col gap-4">
@@ -1502,6 +1511,9 @@ export function InspectorPanel({
                                 ))}
                             </div>
                         </div>
+                        {isDesktopBannerRatio(formData?.bannerRatio) && (
+                          <p className="text-[11px] text-gray-500">{DESKTOP_EXPORT_CAP_NOTE} (scale is capped)</p>
+                        )}
                     </div>
                   )}
                 </PopoverContent>

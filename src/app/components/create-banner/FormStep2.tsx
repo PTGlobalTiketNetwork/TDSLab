@@ -10,10 +10,11 @@ import { ColorPicker } from './ColorPicker';
 import { RichTextEditor } from './components/RichTextEditor';
 import { StyledInput } from './components/FormElements';
 import { Switch } from '../ui/switch';
+import { EditableSliderValue } from '../ui/EditableSliderValue';
 import { DropdownSelect } from './components/DropdownSelect';
 import { LayoutConfigTool } from './LayoutConfigTool';
 import { BANNER_SPECS } from '../../../config/banner-layouts';
-import { prefixOptions, loadDefaultPositions, CURRENCY_OPTIONS, getUnitLabel, getDefaultPortraitContentOffsetY, getDefaultLandscapeContentScale, getDefaultDesktopContentScale, analyzeUniformFormat, applyUniformFormat, NEW_LANDSCAPE_21_CONTENT_SCALE } from './utils/layoutUtils';
+import { prefixOptions, loadDefaultPositions, CURRENCY_OPTIONS, getUnitLabel, getDefaultPortraitContentOffsetY, getDefaultLandscapeContentScale, getDefaultDesktopContentScale, analyzeUniformFormat, applyUniformFormat, stripFontSizeTags, NEW_LANDSCAPE_21_CONTENT_SCALE, NUDGE_TYPES_WITHOUT_AMOUNT, FREE_TEXT_PREFIX_TYPES } from './utils/layoutUtils';
 import { projectId } from '../../../../utils/supabase/info';
 import { getAuthToken } from '../../../utils/supabase/client';
 import { toast } from 'sonner';
@@ -124,7 +125,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
            payload.termsText = (sourceContent as any).termsText;
       }
 
-      if (sourceContent.prefixType === 'custom') {
+      if (FREE_TEXT_PREFIX_TYPES.includes(sourceContent.prefixType)) {
           payload.nudgeText = sourceContent.mainBenefitPrefix;
       }
 
@@ -233,7 +234,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
 
         if (k === 'prefixType') {
             otherUpdates.prefixType = val as any;
-            if (val !== 'custom') {
+            if (!FREE_TEXT_PREFIX_TYPES.includes(val as string)) {
                  // Find equivalent text for the other language
                  const option = prefixOptions[otherTab].find(o => o.id === val);
                  if (option) {
@@ -246,7 +247,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
         }
         else if (k === 'secondPrefixType') {
             otherUpdates.secondPrefixType = val as any;
-            otherUpdates.secondBenefitPrefix = val === 'custom'
+            otherUpdates.secondBenefitPrefix = FREE_TEXT_PREFIX_TYPES.includes(val as string)
                 ? (formData.content[otherTab].secondCustomPrefixText || '')
                 : (prefixOptions[otherTab].find(o => o.id === val)?.value || '');
         }
@@ -289,13 +290,29 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
         // headline text (not a partial selection), since the two languages have different words.
         else if (formData.headlineFormatSynced && (k === 'headlineFontSize' || k === 'subHeadlineFontSize')) {
             (otherUpdates as any)[k] = val;
+            // Clear any leftover per-character size override on the other language's text — otherwise it keeps
+            // rendering at its old size regardless of the new block-level size the Size field now shows.
+            const textKey = k === 'headlineFontSize' ? 'headline' : 'subHeadline';
+            const otherText = formData.content[otherTab][textKey] || '';
+            (otherUpdates as any)[textKey] = stripFontSizeTags(otherText);
         }
         else if (formData.headlineFormatSynced && (k === 'headline' || k === 'subHeadline' || k === 'secondHeadline')) {
             const format = analyzeUniformFormat(val as string);
             if (format) {
                 const otherText = formData.content[otherTab][k as 'headline' | 'subHeadline' | 'secondHeadline'] || '';
-                (otherUpdates as any)[k] = applyUniformFormat(otherText, format);
+                (otherUpdates as any)[k] = applyUniformFormat(stripFontSizeTags(otherText), format);
             }
+        }
+
+        // Sync Additional Perks size/style (weight, italic) when the toggle is on — same pattern as the headline sync above.
+        else if (formData.labelDiscountFormatSynced && k === 'labelDiscountFontSize') {
+            (otherUpdates as any)[k] = val;
+            otherUpdates.labelDiscountText = stripFontSizeTags(formData.content[otherTab].labelDiscountText || '');
+        }
+        else if (formData.labelDiscountFormatSynced && k === 'labelDiscountText') {
+            const format = analyzeUniformFormat(val as string);
+            const otherText = formData.content[otherTab].labelDiscountText || '';
+            otherUpdates.labelDiscountText = format ? applyUniformFormat(stripFontSizeTags(otherText), format) : stripFontSizeTags(otherText);
         }
 
         // Sync Colors
@@ -315,8 +332,9 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
 
         // Sync preset text for Additional Label
         else if (k === 'additionalLabelText') {
-             const isPreset = (updates.additionalLabelType === 'Preset') || 
-                              (!updates.additionalLabelType && formData.content[activeTab].additionalLabelType === 'Preset');
+             // Preset labels and voucher codes are the same in both languages
+             const type = updates.additionalLabelType ?? formData.content[activeTab].additionalLabelType;
+             const isPreset = type === 'Preset' || type === 'Voucher';
              if (isPreset) {
                  otherUpdates.additionalLabelText = val as string;
              }
@@ -345,6 +363,8 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
   // DLP Mobile Header 1:1 draws the 3:4 content block, so it gets the 3:4 controls (nudge position, unit icon, benefit scale)
   const isDlpSquare = isSquare && formData.dlpRole === 'header-mobile';
   const isPortrait = formData.bannerRatio === 'Portrait (3:4)';
+  // 3:4 and 1:1 render Additional Perks at 28 by default, the landscape layouts at 14
+  const perksDefaultSize = isPortrait || isSquare ? 28 : 14;
   // Landscape (3:1) is a TTD Promo Asset ratio that clones the 2:1 layout onto a wider canvas — treated identically everywhere 2:1 is.
   const isLandscape21 = formData.bannerRatio === 'Landscape (2:1)' || formData.bannerRatio === 'Landscape (3:1)';
   // Portrait 3:4 and Landscape 2:1 share the Discount 1/2 cards, per-discount nudge, benefit scale and content position
@@ -412,11 +432,11 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
       const cur = formData.content[activeTab];
       const other = formData.content[otherLang];
 
-      // Remember custom text when leaving Custom, restore it when coming back (per language)
-      const curCustom = cur.prefixType === 'custom' ? (cur.mainBenefitPrefix || '') : (cur.customPrefixText || '');
-      const otherCustom = other.prefixType === 'custom' ? (other.mainBenefitPrefix || '') : (other.customPrefixText || '');
-      if (optionId === 'custom') value = curCustom;
-      const mappedValue = optionId === 'custom' ? otherCustom : (otherOption?.value || '');
+      // Remember free-text (Custom / Buy X get Y) when leaving it, restore it when coming back (per language)
+      const curCustom = FREE_TEXT_PREFIX_TYPES.includes(cur.prefixType) ? (cur.mainBenefitPrefix || '') : (cur.customPrefixText || '');
+      const otherCustom = FREE_TEXT_PREFIX_TYPES.includes(other.prefixType) ? (other.mainBenefitPrefix || '') : (other.customPrefixText || '');
+      if (FREE_TEXT_PREFIX_TYPES.includes(optionId)) value = curCustom || value;
+      const mappedValue = FREE_TEXT_PREFIX_TYPES.includes(optionId) ? (otherCustom || otherOption?.value || '') : (otherOption?.value || '');
 
       // 1. Save current positions for OLD nudge type
       const oldNudgeId = formData.content[activeTab].prefixType || 'custom';
@@ -436,7 +456,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
       const hasDouble = currentContent.hasSecondDiscount;
 
       // If no saved positions, try defaults
-      if (!newPositions && isSquare && optionId !== 'custom') {
+      if (!newPositions && isSquare && !FREE_TEXT_PREFIX_TYPES.includes(optionId)) {
            const defaults = loadDefaultPositions(activeTab, optionId, hasDouble);
            if (defaults) {
                newPositions = defaults;
@@ -451,6 +471,10 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
            }
       }
       
+      // Nudge types like "Buy X get X" imply there's no numeric discount — force amount/unit off
+      const forcesNoAmount = NUDGE_TYPES_WITHOUT_AMOUNT.includes(optionId);
+      const noAmountOverrides = forcesNoAmount ? { discountType: 'Non-IDR' as const, unit: '' as const } : {};
+
       // 3. Update Content
       const newContent = {
            ...formData.content,
@@ -459,13 +483,15 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                prefixType: optionId as any,
                mainBenefitPrefix: value,
                customPrefixText: curCustom,
-               prefixFontSize: newFontSize
+               prefixFontSize: newFontSize,
+               ...noAmountOverrides
            },
            [otherLang]: {
                ...formData.content[otherLang],
                prefixType: mappedId as any,
                mainBenefitPrefix: mappedValue,
                customPrefixText: otherCustom,
+               ...noAmountOverrides
            }
       };
 
@@ -561,7 +587,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
   };
 
   const renderNudge1 = () => (
-               <div className="flex flex-col gap-[8px]">
+               <div className="flex flex-col gap-[12px]">
                    <div className="flex items-center justify-between">
                        <div className="flex items-center gap-[8px]">
                             <label className="text-[14px] font-bold text-[#303135]">Nudge Type</label>
@@ -587,7 +613,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                    
                    {currentContent.showPrefix !== false && (
                    <>
-                   <div className="flex flex-wrap gap-x-[24px] gap-y-[12px]">
+                   <div className="grid grid-cols-2 gap-x-[24px] gap-y-[12px]">
                        {currentPrefixOptions.map((option) => (
                            <Radio
                                key={option.id}
@@ -601,7 +627,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                    </div>
                    
                    {/* Custom Prefix Input with Toolbar */}
-                   {currentContent.prefixType === 'custom' && (
+                   {FREE_TEXT_PREFIX_TYPES.includes(currentContent.prefixType) && (
                        <div className="flex flex-col mt-[8px]">
                            <RichTextEditor
                                value={currentContent.mainBenefitPrefix || ''}
@@ -641,7 +667,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                       <div className="flex items-center justify-between">
                         <label className="text-[14px] font-bold text-[#303135]">{label}</label>
                         <div className="flex items-center gap-[8px]">
-                          <span className="text-[13px] font-semibold text-[#007BFF]">{(formData as any)[key] ?? def}{unit}</span>
+                          <EditableSliderValue value={(formData as any)[key] ?? def} onChange={(v) => onChange({ [key]: v } as any)} suffix={unit} min={min} max={max} className="text-[13px] font-semibold text-[#007BFF]" />
                           <button type="button" onClick={() => onChange({ [key]: def } as any)} className="text-[#71747d] hover:text-[#303135] transition-colors" title={`Reset to ${def}${unit}`}>
                             <RotateCw size={12} />
                           </button>
@@ -855,7 +881,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                       <div className="flex items-center justify-between">
                         <label className="text-[14px] font-bold text-[#303135]">{label}</label>
                         <div className="flex items-center gap-[8px]">
-                          <span className="text-[13px] font-semibold text-[#007BFF]">{(formData as any)[key] ?? def}{unit}</span>
+                          <EditableSliderValue value={(formData as any)[key] ?? def} onChange={(v) => onChange({ [key]: v } as any)} suffix={unit} min={min} max={max} className="text-[13px] font-semibold text-[#007BFF]" />
                           <button type="button" onClick={() => onChange({ [key]: def } as any)} className="text-[#71747d] hover:text-[#303135] transition-colors" title={`Reset to ${def}${unit}`}>
                             <RotateCw size={12} />
                           </button>
@@ -878,7 +904,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
               <div className="flex items-center justify-between">
                 <label className="text-[14px] font-bold text-[#303135]">{label}</label>
                 <div className="flex items-center gap-[8px]">
-                  <span className="text-[13px] font-semibold text-[#007BFF]">{formData[key] ?? def}{unit}</span>
+                  <EditableSliderValue value={formData[key] ?? def} onChange={(v) => onChange({ [key]: v })} suffix={unit} min={min} max={max} className="text-[13px] font-semibold text-[#007BFF]" />
                   <button type="button" onClick={() => onChange({ [key]: def })} className="text-[#71747d] hover:text-[#303135] transition-colors" title={`Reset to ${def}${unit}`}>
                     <RotateCw size={12} />
                   </button>
@@ -896,7 +922,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
           <div className="flex items-center justify-between">
             <label className="text-[14px] font-bold text-[#303135]">Content Scale</label>
             <div className="flex items-center gap-[8px]">
-              <span className="text-[13px] font-semibold text-[#007BFF]">{formData.portraitContentScale ?? 120}%</span>
+              <EditableSliderValue value={formData.portraitContentScale ?? 120} onChange={(v) => onChange({ portraitContentScale: v })} suffix="%" min={60} max={200} className="text-[13px] font-semibold text-[#007BFF]" />
               <button
                 type="button"
                 onClick={() => onChange({ portraitContentScale: 120 })}
@@ -930,7 +956,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
           <div className="flex items-center justify-between">
             <label className="text-[14px] font-bold text-[#303135]">Content Scale</label>
             <div className="flex items-center gap-[8px]">
-              <span className="text-[13px] font-semibold text-[#007BFF]">{formData.landscapeContentScale ?? getDefaultLandscapeContentScale(formData)}%</span>
+              <EditableSliderValue value={formData.landscapeContentScale ?? getDefaultLandscapeContentScale(formData)} onChange={(v) => onChange({ landscapeContentScale: v })} suffix="%" min={60} max={200} className="text-[13px] font-semibold text-[#007BFF]" />
               <button type="button" onClick={() => onChange({ landscapeContentScale: formData.bannerRatio === 'Landscape (2:1)' ? NEW_LANDSCAPE_21_CONTENT_SCALE : getDefaultLandscapeContentScale(formData) })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset to default">
                 <RotateCw size={12} />
               </button>
@@ -952,7 +978,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
             <div className="flex items-center justify-between">
               <label className="text-[14px] font-bold text-[#303135]">Content Position Y</label>
               <div className="flex items-center gap-[8px]">
-                <span className="text-[13px] font-semibold text-[#007BFF]">{formData.portraitContentOffsetY ?? getDefaultPortraitContentOffsetY(formData, currentContent)}px</span>
+                <EditableSliderValue value={formData.portraitContentOffsetY ?? getDefaultPortraitContentOffsetY(formData, currentContent)} onChange={(v) => onChange({ portraitContentOffsetY: v })} suffix="px" min={-200} max={200} className="text-[13px] font-semibold text-[#007BFF]" />
                 <button type="button" onClick={() => onChange({ portraitContentOffsetY: getDefaultPortraitContentOffsetY(formData, currentContent) })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset to default">
                   <RotateCw size={12} />
                 </button>
@@ -1086,15 +1112,36 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-[8px]">
                             <label className="text-[14px] font-bold text-[#303135]">
-                                {formData.headlineType === '2 Headlines' ? 'Headline 1 (Max 5 words)' : 'Headline (Max 5 words)'}
+                                {formData.headlineType === '2 Headlines' ? 'Headline 1 (Rec. 5 words)' : 'Headline (Rec. 5 words)'}
                             </label>
                             <ColorPicker value={currentContent.headlineColor || '#FEDD00'} onChange={(v) => updateContent({ headlineColor: v })} />
                         </div>
                         <label className="flex items-center gap-[6px] text-[12px] font-semibold text-[#5e6066] cursor-pointer" title="Mirrors headline font size, weight and italic between EN and ID">
-                            Sync style
+                            Sync style with {activeTab === 'en' ? 'ID' : 'EN'}
                             <Switch
                                 checked={!!formData.headlineFormatSynced}
-                                onCheckedChange={(checked) => onChange({ headlineFormatSynced: checked })}
+                                onCheckedChange={(checked) => {
+                                    const otherTab = activeTab === 'en' ? 'id' : 'en';
+                                    const otherUpdates: Partial<ContentTranslation> = {};
+                                    if (checked) {
+                                        // Turning sync on adopts this language's CURRENT style on the other one right away, instead of
+                                        // only mirroring future edits (which left the other language's old style in place until next edit).
+                                        otherUpdates.headlineFontSize = currentContent.headlineFontSize;
+                                        otherUpdates.subHeadlineFontSize = currentContent.subHeadlineFontSize;
+                                        (['headline', 'subHeadline', 'secondHeadline'] as const).forEach((k) => {
+                                            // Always strip any leftover per-character size override on the other language's text — the
+                                            // block-level size above is now authoritative, so an old <fs> tag would otherwise keep
+                                            // part of that text rendering at its stale size regardless of what the Size field shows.
+                                            const otherText = stripFontSizeTags(formData.content[otherTab][k] || '');
+                                            const format = analyzeUniformFormat(currentContent[k] || '');
+                                            otherUpdates[k] = format ? applyUniformFormat(otherText, format) : otherText;
+                                        });
+                                    }
+                                    onChange({
+                                        headlineFormatSynced: checked,
+                                        content: { ...formData.content, [otherTab]: { ...formData.content[otherTab], ...otherUpdates } },
+                                    });
+                                }}
                                 className="data-[state=checked]:bg-[#007BFF]"
                             />
                         </label>
@@ -1130,7 +1177,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                     <div className="flex flex-col gap-[8px]">
                         <div className="flex items-center gap-[8px]">
                             <label className="text-[14px] font-bold text-[#303135]">
-                                {formData.headlineType === '2 Headlines' ? 'Headline 2 (Max 5 words)' : 'Sub-headline (Max 5 words)'}
+                                {formData.headlineType === '2 Headlines' ? 'Headline 2 (Rec. 5 words)' : 'Sub-headline (Rec. 5 words)'}
                             </label>
                             <ColorPicker value={currentContent.subHeadlineColor} onChange={(v) => updateContent({ subHeadlineColor: v })} />
                         </div>
@@ -1158,13 +1205,6 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                 )}
            </div>
 
-           {/* Nudge Type Selection (Prefix) - Hidden for 2 Headlines. Always its own box — never nested inside the Discount box. */}
-           {formData.headlineType !== '2 Headlines' && (
-               <div className="rounded-[12px] border border-[#e9ebef] p-[16px]">
-                   {renderNudge1()}
-               </div>
-           )}
-
           {/* NEW FIELDS START HERE */}
           <div className="flex flex-col gap-[20px]">
 
@@ -1175,7 +1215,13 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                   <label className="text-[14px] font-bold text-[#303135]">Discount Amount & Unit</label>
                   <Switch
                       checked={formData.discountEnabled !== false}
-                      onCheckedChange={(checked) => onChange({ discountEnabled: checked })}
+                      onCheckedChange={(checked) => {
+                          if (checked) { onChange({ discountEnabled: true }); return; }
+                          const off = { showPrefix: false, unitDisplayType: 'text', secondUnitDisplayType: 'text' } as Partial<ContentTranslation>;
+                          const content = { ...formData.content } as typeof formData.content;
+                          (Object.keys(content) as (keyof typeof content)[]).forEach((lang) => { content[lang] = { ...content[lang], ...off }; });
+                          onChange({ discountEnabled: false, nudgeOnTop: false, content });
+                      }}
                       className="data-[state=checked]:bg-[#007BFF]"
                   />
               </div>
@@ -1187,7 +1233,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
           <div className="flex items-center justify-between">
             <label className="text-[14px] font-bold text-[#303135]">Benefit Scale</label>
             <div className="flex items-center gap-[8px]">
-              <span className="text-[13px] font-semibold text-[#007BFF]">{formData.portraitBenefitScale ?? 100}%</span>
+              <EditableSliderValue value={formData.portraitBenefitScale ?? 100} onChange={(v) => onChange({ portraitBenefitScale: v })} suffix="%" min={50} max={150} className="text-[13px] font-semibold text-[#007BFF]" />
               <button
                 type="button"
                 onClick={() => onChange({ portraitBenefitScale: 100 })}
@@ -1217,6 +1263,9 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
               <div className="flex flex-col gap-[24px] rounded-[12px] border border-[#e9ebef] p-[16px]">
               {currentContent.hasSecondDiscount && renderCollapseHeader('d1', 'Discount 1', `${currentContent.discountAmount || ''}${getUnitLabel(currentContent.unit)}`)}
               <div className={`flex flex-col gap-[24px] ${currentContent.hasSecondDiscount && collapsed.d1 ? 'hidden' : ''}`}>
+              {/* Nudge Type Selection (Prefix) - Hidden for 2 Headlines */}
+              {formData.headlineType !== '2 Headlines' && renderNudge1()}
+              {formData.headlineType !== '2 Headlines' && currentContent.showPrefix !== false && <div className="border-t border-[#e9ebef]" />}
               {/* Discount Amount */}
               <div className="flex flex-col gap-[8px]">
                   <div className="flex flex-wrap items-center justify-between gap-[8px]">
@@ -1352,7 +1401,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                                   <label className="text-[14px] font-bold text-[#303135]">Nudge Type 2</label>
                                   <ColorPicker value={currentContent.secondPrefixColor ?? currentContent.prefixColor} onChange={(v) => updateContent({ secondPrefixColor: v })} defaultValue="#FEDD00" />
                               </div>
-                              <div className="flex flex-wrap gap-x-[24px] gap-y-[12px]">
+                              <div className="grid grid-cols-2 gap-x-[24px] gap-y-[12px]">
                                   {currentPrefixOptions.map((option) => (
                                       <Radio
                                           key={option.id}
@@ -1360,11 +1409,13 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                                           checked={currentContent.secondPrefixType === option.id}
                                           onChange={() => {
                                               const prev = currentContent;
-                                              const custom = prev.secondPrefixType === 'custom' ? (prev.secondBenefitPrefix || '') : (prev.secondCustomPrefixText || '');
+                                              const custom = FREE_TEXT_PREFIX_TYPES.includes(prev.secondPrefixType) ? (prev.secondBenefitPrefix || '') : (prev.secondCustomPrefixText || '');
+                                              const noAmountOverrides = NUDGE_TYPES_WITHOUT_AMOUNT.includes(option.id) ? { secondDiscountType: 'Non-IDR' as const, secondDiscountUnit: '' as const } : {};
                                               updateContent({
                                                   secondPrefixType: option.id as any,
-                                                  secondBenefitPrefix: option.id === 'custom' ? custom : option.value,
+                                                  secondBenefitPrefix: FREE_TEXT_PREFIX_TYPES.includes(option.id) ? (custom || option.value) : option.value,
                                                   secondCustomPrefixText: custom,
+                                                  ...noAmountOverrides
                                               });
                                           }}
                                       >
@@ -1372,7 +1423,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                                       </Radio>
                                   ))}
                               </div>
-                              {currentContent.secondPrefixType === 'custom' && (
+                              {FREE_TEXT_PREFIX_TYPES.includes(currentContent.secondPrefixType) && (
                                   <RichTextEditor
                                       value={currentContent.secondBenefitPrefix || ''}
                                       onChange={(val) => updateContent({ secondBenefitPrefix: val, secondCustomPrefixText: val })}
@@ -1510,7 +1561,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
               <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px]">
                   <div className="flex items-center justify-between">
                       <div className="flex items-center gap-[8px]">
-                          <label className="text-[14px] font-bold text-[#303135]">Additional Perks (optional)</label>
+                          <label className="text-[14px] font-bold text-[#303135]">Additional Info/Perks (optional)</label>
                           {currentContent.labelDiscount && (
                                <ColorPicker value={currentContent.labelDiscountColor} onChange={(v) => updateContent({ labelDiscountColor: v })} />
                           )}
@@ -1543,8 +1594,30 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                                        <ColorPicker value={currentContent.labelDiscountIconColor} onChange={(v) => updateContent({ labelDiscountIconColor: v })} />
                                   </div>
                               )}
+
+                              <label className="ml-auto flex items-center gap-[6px] text-[12px] font-semibold text-[#5e6066] cursor-pointer" title="Mirrors Additional Perks font size, weight and italic between EN and ID">
+                                  Sync style with {activeTab === 'en' ? 'ID' : 'EN'}
+                                  <Switch
+                                      checked={!!formData.labelDiscountFormatSynced}
+                                      onCheckedChange={(checked) => {
+                                          const otherTab = activeTab === 'en' ? 'id' : 'en';
+                                          const otherUpdates: Partial<ContentTranslation> = {};
+                                          if (checked) {
+                                              otherUpdates.labelDiscountFontSize = currentContent.labelDiscountFontSize;
+                                              const otherText = stripFontSizeTags(formData.content[otherTab].labelDiscountText || '');
+                                              const format = analyzeUniformFormat(currentContent.labelDiscountText || '');
+                                              otherUpdates.labelDiscountText = format ? applyUniformFormat(otherText, format) : otherText;
+                                          }
+                                          onChange({
+                                              labelDiscountFormatSynced: checked,
+                                              content: { ...formData.content, [otherTab]: { ...formData.content[otherTab], ...otherUpdates } },
+                                          });
+                                      }}
+                                      className="data-[state=checked]:bg-[#007BFF]"
+                                  />
+                              </label>
                           </div>
-                          
+
                           <div className="flex flex-col">
                               <RichTextEditor
                                   value={currentContent.labelDiscountText || ''}
@@ -1552,6 +1625,11 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                                   onGlobalColorChange={(v) => updateContent({ labelDiscountColor: v })}
                                   placeholder={activeTab === 'en' ? "Add Additional Perks" : "Tambahkan Perks Tambahan"}
                                   singleLine
+                                  fontSize={currentContent.labelDiscountFontSize || perksDefaultSize}
+                                  defaultFontSize={perksDefaultSize}
+                                  onFontSizeChange={(val) => updateContent({ labelDiscountFontSize: val })}
+                                  minFontSize={10}
+                                  maxFontSize={28}
                               />
                           </div>
                       </div>
@@ -1580,25 +1658,32 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                               </div>
                               <div className="flex items-center gap-[8px]">
                                   <span className="text-[12px] text-[#71747d]">Bg:</span>
-                                  <ColorPicker value={currentContent.additionalLabelBackgroundColor} onChange={(v) => updateContent({ additionalLabelBackgroundColor: v })} defaultValue="#FEDD00" />
+                                  <ColorPicker value={currentContent.additionalLabelBackgroundColor} onChange={(v) => updateContent({ additionalLabelBackgroundColor: v })} defaultValue={currentContent.additionalLabelType === 'Voucher' ? '#FFFFFF' : '#FEDD00'} />
                               </div>
                           </div>
 
                           {/* Type Selection */}
                           <div className="flex gap-[24px]">
-                              <Radio 
+                              <Radio
                                   name={`additionalLabelType-${activeTab}`}
                                   checked={currentContent.additionalLabelType === 'Preset'}
                                   onChange={() => updateContent({ additionalLabelType: 'Preset' })}
                               >
                                   <span className="text-[14px] text-[#303135]">Preset</span>
                               </Radio>
-                              <Radio 
+                              <Radio
                                   name={`additionalLabelType-${activeTab}`}
                                   checked={currentContent.additionalLabelType === 'Custom'}
                                   onChange={() => updateContent({ additionalLabelType: 'Custom' })}
                               >
                                   <span className="text-[14px] text-[#303135]">Custom</span>
+                              </Radio>
+                              <Radio
+                                  name={`additionalLabelType-${activeTab}`}
+                                  checked={currentContent.additionalLabelType === 'Voucher'}
+                                  onChange={() => updateContent({ additionalLabelType: 'Voucher', additionalLabelText: 'VOUCHERCODE', additionalLabelTextColor: '#007BFF', additionalLabelBackgroundColor: '#FFFFFF', additionalLabelFontSize: 16 })}
+                              >
+                                  <span className="text-[14px] text-[#303135]">Voucher</span>
                               </Radio>
                           </div>
 
@@ -1627,6 +1712,23 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                                       minFontSize={10}
                                       maxFontSize={24}
                                   />
+                              </div>
+                          ) : currentContent.additionalLabelType === 'Voucher' ? (
+                              <div className="flex flex-col gap-[4px]">
+                                  <RichTextEditor
+                                      value={currentContent.additionalLabelText || ''}
+                                      onChange={(val) => updateContent({ additionalLabelText: val })}
+                                      onGlobalColorChange={(v) => updateContent({ additionalLabelTextColor: v })}
+                                      placeholder="VOUCHERCODE"
+                                      singleLine
+                                      maxLength={19}
+                                      fontSize={currentContent.additionalLabelFontSize || 16}
+                                      defaultFontSize={16}
+                                      onFontSizeChange={(val) => updateContent({ additionalLabelFontSize: val })}
+                                      minFontSize={16}
+                                      maxFontSize={40}
+                                  />
+                                  <span className="text-[11px] text-[#9EA0A5]">Max 19 characters — always shown in UPPERCASE</span>
                               </div>
                           ) : (
                               <DropdownSelect
@@ -1683,7 +1785,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                           <div className="flex items-center justify-between">
                             <label className="text-[14px] font-bold text-[#303135]">Button Size</label>
                             <div className="flex items-center gap-[8px]">
-                              <span className="text-[13px] font-semibold text-[#007BFF]">{formData.landscapeCtaScale ?? 80}%</span>
+                              <EditableSliderValue value={formData.landscapeCtaScale ?? 80} onChange={(v) => onChange({ landscapeCtaScale: v })} suffix="%" min={50} max={100} className="text-[13px] font-semibold text-[#007BFF]" />
                               <button type="button" onClick={() => onChange({ landscapeCtaScale: 80 })} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset to 80%">
                                 <RotateCw size={12} />
                               </button>
@@ -1713,7 +1815,7 @@ export function FormStep2({ formData, onChange, activeTab, onTabChange, isTransl
                             <div className="flex items-center justify-between">
                               <span className="text-[14px] font-bold text-[#303135]">Width</span>
                               <div className="flex items-center gap-[8px]">
-                                <span className="text-[13px] font-semibold text-[#007BFF]">{formData.portraitCtaFixedWidth ?? (isLandscape21 ? 360 : 480)}px</span>
+                                <EditableSliderValue value={formData.portraitCtaFixedWidth ?? (isLandscape21 ? 360 : 480)} onChange={(v) => onChange({ portraitCtaFixedWidth: v })} suffix="px" min={200} max={480} className="text-[13px] font-semibold text-[#007BFF]" />
                                 <button
                                   type="button"
                                   onClick={() => onChange({ portraitCtaFixedWidth: isLandscape21 ? 360 : 480 })}

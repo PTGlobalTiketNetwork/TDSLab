@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import JSZip from 'jszip';
 import { BannerFixed } from './create-banner/BannerFixed';
 import { BannerFormData } from './create-banner/types';
+import { migrateSavedFormData } from './create-banner/components/PolaroidCollage';
 import { getBase64FontCSS } from '../utils/fontCss';
-import { captureBannerElement, ensureDataUrlForCapture, sanitizeFileName, waitForRenderStable, type DlpZipBannerSpec } from '../utils/bannerCapture';
+import { captureBannerElement, DESKTOP_MAX_EXPORT_WIDTH, isDesktopBannerRatio, ensureDataUrlForCapture, sanitizeFileName, waitForRenderStable, type DlpZipBannerSpec } from '../utils/bannerCapture';
 import { Banner } from '../../types/banner';
 import { toast } from 'sonner';
 import { TiketSnackbar } from './ui/TiketSnackbar';
@@ -15,7 +16,7 @@ export interface OffscreenBannerRendererHandle {
   /** Capture the current EN banner composition for handoff to another tool. */
   captureBannerForResize: (banner: Banner) => Promise<Blob>;
   /** DLP Assets: render every sub-banner's EN + ID and bundle them into one ZIP download. */
-  downloadDlpZip: (params: { projectName: string; scaleFactor: number; banners: DlpZipBannerSpec[]; extraFiles?: () => Promise<{ path: string; blob: Blob }[]> }) => Promise<void>;
+  downloadDlpZip: (params: { projectName: string; zipName?: string; scaleFactor: number; banners: DlpZipBannerSpec[]; extraFiles?: () => Promise<{ path: string; blob: Blob }[]> }) => Promise<void>;
 }
 
 export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>((_, ref) => {
@@ -54,6 +55,7 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
     const { dataUrl } = await captureBannerElement(bannerElement, {
       pixelRatio: scaleFactor,
       fontCss: base64FontCSS,
+      maxOutputWidth: desktopCap(banner.form_data as BannerFormData | undefined),
     });
 
     const link = document.createElement('a');
@@ -63,7 +65,7 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
   };
 
   const downloadBanner = useCallback(async (banner: Banner, scaleFactor: number) => {
-    const formData = banner.form_data as BannerFormData | undefined;
+    const formData = migrateSavedFormData(banner.form_data as BannerFormData | undefined);
 
     if (!formData) {
       // Fallback: no form data, use legacy image fetch for both URLs
@@ -144,7 +146,7 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
   }, []);
 
   const captureBannerForResize = useCallback(async (banner: Banner): Promise<Blob> => {
-    const formData = banner.form_data as BannerFormData | undefined;
+    const formData = migrateSavedFormData(banner.form_data as BannerFormData | undefined);
 
     // Static/legacy records do not have a composition to rebuild.
     if (!formData) {
@@ -228,15 +230,15 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
     const idElement = idRef.current.children[0] as HTMLElement;
     if (!enElement || !idElement) throw new Error('Banner preview element was not found');
 
-    const en = await captureBannerElement(enElement, { pixelRatio: scaleFactor, fontCss: base64FontCSS });
+    const en = await captureBannerElement(enElement, { pixelRatio: scaleFactor, fontCss: base64FontCSS, maxOutputWidth: desktopCap(formData) });
     // Brief delay before the second capture, mirroring the gap between EN/ID in downloadBanner.
     await new Promise((r) => setTimeout(r, 300));
-    const id = await captureBannerElement(idElement, { pixelRatio: scaleFactor, fontCss: base64FontCSS });
+    const id = await captureBannerElement(idElement, { pixelRatio: scaleFactor, fontCss: base64FontCSS, maxOutputWidth: desktopCap(formData) });
 
     return { en: en.blob, id: id.blob };
   }, []);
 
-  const downloadDlpZip = useCallback(async (params: { projectName: string; scaleFactor: number; banners: DlpZipBannerSpec[]; extraFiles?: () => Promise<{ path: string; blob: Blob }[]> }) => {
+  const downloadDlpZip = useCallback(async (params: { projectName: string; zipName?: string; scaleFactor: number; banners: DlpZipBannerSpec[]; extraFiles?: () => Promise<{ path: string; blob: Blob }[]> }) => {
     const { projectName, scaleFactor, banners, extraFiles } = params;
     const scaleLabel = scaleFactor !== 1 ? ` at ${scaleFactor}x` : '';
 
@@ -307,7 +309,7 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
         }
         for (const { path, blob } of extras) zip.file(path, blob);
         const zipBlob = await zip.generateAsync({ type: 'blob' });
-        downloadBlob(zipBlob, `${sanitizeFileName(projectName)}.zip`);
+        downloadBlob(zipBlob, `${sanitizeFileName(params.zipName || projectName)}.zip`);
 
         toast.dismiss(loadingToast);
         const failedNote = failedFolders.length ? ` (${failedFolders.length} failed to render and were skipped)` : '';
@@ -385,6 +387,7 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
             fullSize={true}
             renderScale={renderState.renderScale}
             isImagePreloaded={!!renderState.previewUrl}
+            showPolaroidBadges={false}
           />
           <BannerFixed
             key={`${renderState.renderKey}-id`}
@@ -399,6 +402,7 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
             fullSize={true}
             renderScale={renderState.renderScale}
             isImagePreloaded={!!renderState.previewUrl}
+            showPolaroidBadges={false}
           />
         </div>,
         document.body,
@@ -409,6 +413,10 @@ export const OffscreenBannerRenderer = forwardRef<OffscreenBannerRendererHandle>
 OffscreenBannerRenderer.displayName = 'OffscreenBannerRenderer';
 
 // Legacy fallback: fetch raster image and download (no vector rendering)
+function desktopCap(formData?: BannerFormData | null): number | undefined {
+  return isDesktopBannerRatio(formData?.bannerRatio) ? DESKTOP_MAX_EXPORT_WIDTH : undefined;
+}
+
 async function legacyDownload(banner: Banner, scaleFactor: number) {
   const enUrl = banner.imageUrl;
   const idUrl = (banner as any).image_url_id || null;

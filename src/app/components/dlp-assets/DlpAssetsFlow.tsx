@@ -1,5 +1,6 @@
 import { useStickyBar, STICKY_SHADOW } from '@/hooks/useStickyBar';
 import { useEffect, useRef, useState } from 'react';
+import { useAutoSaveDraft, AutoSaveIndicator } from '@/hooks/useAutoSaveDraft';
 import { ArrowRight, ArrowLeftRight, Copy, Eye, EyeOff, Maximize2, AlertTriangle, Edit3, Trash2, Info, Save } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
 import { Header } from '../Header';
@@ -20,9 +21,10 @@ import { getUserDisplayName } from '../../utils/userDisplay';
 import { SETTINGS_VERSION } from '../create-banner/settingsVersion';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import { startCreationTimer, stopCreationTimer } from '../../../utils/creationTimer';
-import { buildDlpZipManifest } from '../../utils/bannerCapture';
+import { buildDlpZipManifest, DESKTOP_EXPORT_CAP_NOTE, dlpZipBaseName } from '../../utils/bannerCapture';
 import { Download } from 'lucide-react';
 import type { BannerFormData } from '../create-banner/types';
+import { migrateSavedFormData } from '../create-banner/components/PolaroidCollage';
 import type { Banner } from '../../../types/banner';
 
 // Blue like the Next button
@@ -82,7 +84,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
     startCreationTimer(initialSeconds);
     return () => stopCreationTimer();
   }, []);
-  const saved = initialData?.dlp;
+  const saved = migrateSavedFormData(initialData)?.dlp;
   const [picked, setPicked] = useState<Partial<Record<OptionId, boolean>>>(() => saved ? {
     'hdr-mobile': saved.header.mobile,
     'hdr-desktop-4x1': saved.header.desktop,
@@ -101,6 +103,10 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
   const projectName = vertical && nameSuffix.trim() ? `${namePrefix(vertical)}${nameSuffix.trim()}` : '';
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  // Draft record id: the edited record, or one reserved on the first (auto/manual) save of a new project
+  const draftIdRef = useRef<string | undefined>(editingId);
+  const draftExistsRef = useRef(!!editingId);
+  const [autoSavedNewId, setAutoSavedNewId] = useState<string | undefined>(undefined);
   const renderer = useRef<OffscreenBannerRendererHandle>(null);
   const [nameState, setNameState] = useState<{ status: 'idle' | 'checking' | 'valid' | 'invalid'; message?: string }>({ status: 'idle' });
   // Project names must be unique within DLP Assets only (other categories may reuse a name)
@@ -110,7 +116,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
     setNameState({ status: 'checking' });
     try {
       const list = await BannerService.listBanners();
-      const taken = list.some((b) => b.id !== editingId && b.category === 'DLP Assets' && b.name.trim().toLowerCase() === trimmed.toLowerCase());
+      const taken = list.some((b) => b.id !== draftIdRef.current && b.category === 'DLP Assets' && b.name.trim().toLowerCase() === trimmed.toLowerCase());
       if (taken) { setNameState({ status: 'invalid', message: 'Project name already exists in DLP Assets. Please choose another.' }); return false; }
       setNameState({ status: 'valid' });
       return true;
@@ -139,12 +145,21 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
     // Overlay color/layer-count are shared concepts but live in different fields for mobile vs desktop ratios — read from whichever side the source is, write to whichever side the target is.
     const overlayColor = isDesktopId(from) ? src.desktopOverlayColor : src.overlayColor;
     const overlay2Enabled = isDesktopId(from) ? src.desktopOverlay2Enabled : src.overlay2Enabled;
+    const overlayMode = isDesktopId(from) ? src.desktopOverlayMode : src.overlayMode;
+    const solidCoverage = isDesktopId(from) ? src.desktopOverlaySolidCoverage : src.overlaySolidCoverage;
+    const solidOpacity = isDesktopId(from) ? src.desktopOverlaySolidOpacity : src.overlaySolidOpacity;
+    const solidFill = isDesktopId(from) ? src.desktopOverlaySolidFill : src.overlaySolidFill;
+    const solidGradientStops = isDesktopId(from) ? src.desktopOverlaySolidGradientStops : src.overlaySolidGradientStops;
+    const solidGradientType = isDesktopId(from) ? src.desktopOverlaySolidGradientType : src.overlaySolidGradientType;
+    const solidGradientAngle = isDesktopId(from) ? src.desktopOverlaySolidGradientAngle : src.overlaySolidGradientAngle;
     const overlayUpdates: Partial<BannerFormData> = isDesktopId(to)
-      ? { desktopOverlayColor: overlayColor, desktopOverlay2Enabled: overlay2Enabled }
-      : { overlayColor, overlay2Enabled };
+      ? { desktopOverlayColor: overlayColor, desktopOverlay2Enabled: overlay2Enabled, desktopOverlayMode: overlayMode, desktopOverlaySolidCoverage: solidCoverage, desktopOverlaySolidOpacity: solidOpacity, desktopOverlaySolidFill: solidFill, desktopOverlaySolidGradientStops: solidGradientStops, desktopOverlaySolidGradientType: solidGradientType, desktopOverlaySolidGradientAngle: solidGradientAngle }
+      : { overlayColor, overlay2Enabled, overlayMode, overlaySolidCoverage: solidCoverage, overlaySolidOpacity: solidOpacity, overlaySolidFill: solidFill, overlaySolidGradientStops: solidGradientStops, overlaySolidGradientType: solidGradientType, overlaySolidGradientAngle: solidGradientAngle };
     return {
       ...JSON.parse(JSON.stringify({
         content: src.content,
+        headlineFormatSynced: src.headlineFormatSynced,
+        labelDiscountFormatSynced: src.labelDiscountFormatSynced,
         headlineType: src.headlineType,
         discountEnabled: src.discountEnabled,
         showCampaignLogo: src.showCampaignLogo,
@@ -153,8 +168,12 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
         partnerLogos: src.partnerLogos,
         keyVisualUrl: src.keyVisualUrl,
         keyVisualRotation: src.keyVisualRotation,
-        keyVisualFlipH: src.keyVisualFlipH,
-        keyVisualFlipV: src.keyVisualFlipV,
+        // Desktop 5:1 has its own flip (falls back to the mobile one when unset)
+        ...(() => {
+          const fh = isDesktopId(from) ? (src.desktopKeyVisualFlipH ?? src.keyVisualFlipH) : src.keyVisualFlipH;
+          const fv = isDesktopId(from) ? (src.desktopKeyVisualFlipV ?? src.keyVisualFlipV) : src.keyVisualFlipV;
+          return isDesktopId(to) ? { desktopKeyVisualFlipH: fh, desktopKeyVisualFlipV: fv } : { keyVisualFlipH: fh, keyVisualFlipV: fv };
+        })(),
         ...overlayUpdates,
       })),
       keyVisualFile: src.keyVisualFile, // File object: shared, not cloned
@@ -173,6 +192,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
   const applyToTargets = () => {
     if (!applyDialog) return;
     applyDialog.targets.forEach((t) => epChange(t, copyUpdates(applyDialog.from, t)));
+    toast.custom((t) => <TiketSnackbar id={t} message="Content copied, adjust in other ratio manually." />, { duration: 4000 });
     setApplyDialog(null);
   };
   const [sizeOpen, setSizeOpen] = useState<Record<string, boolean>>({});
@@ -207,21 +227,34 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
   const steps: TiketStepItem[] = keys.map((k, i) => ({ id: i + 1, label: STEP_LABEL[k] }));
   const current = keys[Math.min(index, keys.length - 1)];
   const anyPicked = Object.values(picked).some(Boolean);
-  // DLP Header Mobile/Desktop are forced on by default (see the `picked` initializer above) — they
-  // don't count as a "change" for the exit-confirmation below, only entry points + vertical + name do.
-  const hasRealChanges = (['ep-mobile-2x1', 'ep-mobile-3x4', 'ep-desktop'] as OptionId[]).some((id) => picked[id]) || !!vertical || !!projectName.trim();
+  // Only real banner content counts for the exit-confirmation (same as To Do): picking options, the vertical
+  // and the project name are just wizard setup, so leaving right after them goes straight back without a prompt.
+  const stripFiles = (forms: Record<string, BannerFormData>) => JSON.stringify(Object.fromEntries(Object.entries(forms).map(([k, f]) => [k, { ...f, keyVisualFile: undefined }])));
+  // State (not a ref) so an auto-save can move the baseline
+  const [epFormsBaseline, setEpFormsBaseline] = useState(() => stripFiles(epForms));
+  const hasRealChanges = Object.values(epForms).some((f) => !!f.keyVisualFile) || stripFiles(epForms) !== epFormsBaseline;
   const isLast = index >= keys.length - 1;
 
   // Saves the whole project as one DLP Assets record. Key visuals are uploaded first, the thumbnail is the first entry point banner.
-  const saveProject = async (status: 'draft' | 'published' = 'published') => {
-    (status === 'draft' ? setIsSavingDraft : setIsSaving)(true);
+  // silent = auto-save: no navigation, no toasts (errors are thrown to the auto-save hook)
+  const saveProject = async (status: 'draft' | 'published' = 'published', { silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) {
+      (status === 'draft' ? setIsSavingDraft : setIsSaving)(true);
+      await autoSave.waitForIdle();
+    }
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast.custom((t) => <TiketSnackbar id={t} message="You must be logged in to save" variant="error" />); return; }
+      if (!user) {
+        if (silent) throw new Error('Not logged in');
+        toast.custom((t) => <TiketSnackbar id={t} message="You must be logged in to save" variant="error" />); return;
+      }
       const { data: sessionData } = await supabase.auth.getSession();
       const userDisplay = getUserDisplayName(sessionData?.session?.user, userName || 'Unknown User');
 
-      const id = editingId || crypto.randomUUID();
+      // Reserve the record id before any await so auto-save / manual save / publish all target the same record
+      if (!draftIdRef.current) draftIdRef.current = crypto.randomUUID();
+      const id = draftIdRef.current;
+      const formsSnapshot = epForms;
       const epIds = (['ep-mobile-2x1', 'ep-mobile-3x4', 'ep-desktop'] as const).filter((e) => picked[e]);
       const editorIds = [...epIds, 'hdr-mobile' as const, 'hdr-desktop-4x1' as const];
 
@@ -276,15 +309,42 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
         product: vertical,
         metadata: { dimension: 'DLP set', fileSize: `${(thumb.size / 1024).toFixed(2)} KB` },
       };
-      if (editingId) await BannerService.updateBanner(editingId, data as any);
-      else await BannerService.saveBanner(data as any);
+      if (draftExistsRef.current) await BannerService.updateBanner(id, data as any);
+      else {
+        await BannerService.saveBanner(data as any);
+        draftExistsRef.current = true;
+        if (!editingId) setAutoSavedNewId(id);
+      }
+      if (silent) {
+        // Swap uploaded Files for their URLs (no re-upload next time) and move the unsaved-changes baseline to what was saved
+        const swap = (f: BannerFormData) => (f.keyVisualFile && uploaded.has(f.keyVisualFile) ? { ...f, keyVisualUrl: uploaded.get(f.keyVisualFile)!, keyVisualFile: undefined } : f);
+        if (uploaded.size) setEpForms((p) => Object.fromEntries(Object.entries(p).map(([k, f]) => [k, swap(f)])));
+        setEpFormsBaseline(stripFiles(Object.fromEntries(Object.entries(formsSnapshot).map(([k, f]) => [k, swap(f)]))));
+        return;
+      }
       onBack(`"${projectName.trim()}" ${status === 'draft' ? 'saved as draft' : 'saved'}`);
     } catch (err) {
+      if (silent) throw err;
       console.error('DLP save failed', err);
       toast.custom((t) => <TiketSnackbar id={t} message="Failed to save DLP Assets" variant="error" />);
     } finally {
-      (status === 'draft' ? setIsSavingDraft : setIsSaving)(false);
+      if (!silent) (status === 'draft' ? setIsSavingDraft : setIsSaving)(false);
     }
+  };
+
+  // Auto-save to Drafts: same requirements as the manual Save Draft (vertical + project name, name not taken)
+  const autoSave = useAutoSaveDraft({
+    enabled: !isSaving && !isSavingDraft && !!vertical && !!projectName.trim() && nameState.status !== 'invalid' && nameState.status !== 'checking',
+    isDirty: hasRealChanges,
+    changeKey: { epForms, picked, mobileRatio, vertical, nameSuffix },
+    save: () => saveProject('draft', { silent: true }),
+  });
+  // Discard: a new project that only exists as an auto-saved draft is deleted again
+  const discard = () => {
+    autoSave.stop();
+    const id = autoSavedNewId || (!editingId && draftExistsRef.current ? draftIdRef.current : undefined);
+    if (id) BannerService.deleteBanner(id).catch((err) => console.error('Failed to delete auto-saved draft:', err));
+    onBack();
   };
 
   // Summary step: "Download as ZIP" — same scale-factor picks as the single-banner download,
@@ -315,7 +375,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
         entryPoints: Object.fromEntries(epIds.map((e) => [e, epForm(e)])),
       };
       const banners = buildDlpZipManifest(dlp);
-      await renderer.current?.downloadDlpZip({ projectName: projectName.trim() || 'DLP Assets', scaleFactor, banners });
+      await renderer.current?.downloadDlpZip({ projectName: projectName.trim() || 'DLP Assets', zipName: dlpZipBaseName(vertical, projectName), scaleFactor, banners });
     } finally {
       setIsZipping(false);
     }
@@ -533,7 +593,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
         return (
           <div className="flex flex-col gap-[16px]">
             {editors.map((id) => (
-              <div key={id} data-dlp-card className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] px-[24px] scroll-mt-[calc(var(--sticky-base,0px)+72px)]" style={{ '--ep-head-top': 'calc(var(--sticky-base, 0px) + 64px)' } as React.CSSProperties}>
+              <div key={id} data-dlp-card className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] px-[24px] scroll-mt-[calc(var(--sticky-base,0px)+88px)]" style={{ '--ep-head-top': 'calc(var(--sticky-base, 0px) + 80px)' } as React.CSSProperties}>
                 {/* Sticky while scrolling: sits under the fixed header (64px) + fixed stepper bar (64px); the editor tabs stick right below it */}
                 <div className="sticky top-[var(--ep-head-top)] z-[30] -mx-[24px] px-[24px] h-[56px] bg-white rounded-t-[12px] flex items-center justify-between gap-[12px]">
                   <span className="flex items-baseline gap-[8px]">
@@ -642,6 +702,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
                         </button>
                       ))}
                     </div>
+                    {/desktop|5:1|4:1/i.test(`${id} ${title}`) && <p className="text-[11px] text-gray-500">{DESKTOP_EXPORT_CAP_NOTE}</p>}
                   </div>
                 </PopoverContent>
               </Popover>
@@ -685,6 +746,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
                         </button>
                       ))}
                     </div>
+                    <p className="text-[11px] text-gray-500">{DESKTOP_EXPORT_CAP_NOTE}</p>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -729,7 +791,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
   };
 
   return (
-    <div className="min-h-screen bg-[#f8f9fd] flex flex-col relative w-full overflow-x-clip" style={{ '--sticky-base': '64px' } as React.CSSProperties}>
+    <div className="min-h-screen bg-[#f8f9fd] flex flex-col relative w-full overflow-x-clip" style={{ '--sticky-base': '80px' } as React.CSSProperties}>
       <OffscreenBannerRenderer ref={renderer} />
       {/* Copy content (pull): an entry point can only copy from a header; a header can copy from the other header */}
       <Dialog open={!!copyDialog} onOpenChange={(o) => { if (!o) setCopyDialog(null); }}>
@@ -841,11 +903,11 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
         </DialogContent>
       </Dialog>
       <Header compact flat={scrolled} fullWidth showLogo hideSearch userName={userName} userId={userId} userAvatar={userAvatar} onLogout={() => supabase.auth.signOut()} />
-      <div className="mt-[88px] w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]">
+      <div className="mt-[104px] w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]">
         <div ref={stepBarRef}
-          className={`fixed top-[64px] left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[64px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+          className={`fixed top-[80px] left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[80px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
         >
-          <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-end pb-[16px] gap-[8px]">
+          <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-center py-[16px] gap-[8px]">
             <span className="text-[16px] font-semibold leading-[20px] text-[#303135] truncate">{projectName.trim() || 'DLP Assets'}</span>
             <TiketStepper steps={steps} currentStep={index + 1} maxStepReached={maxIndex + 1} onStepClick={(id) => goTo(id - 1)} size="compact" onBack={stepperBack} />
           </div>
@@ -880,6 +942,7 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
             >
               {isSavingDraft ? 'Saving...' : 'Save Draft'}
             </button>
+            <AutoSaveIndicator status={autoSave.status} lastSavedAt={autoSave.lastSavedAt} />
           </div>
           <div className="flex items-center gap-4">
             {index > 0 && (
@@ -968,8 +1031,9 @@ export function DlpAssetsFlow({ userName, userId, userAvatar, onBack, initialDat
                </div>
                <button
                 type="button"
-                onClick={() => onBack()}
-                className="w-full h-[48px] px-[24px] text-[#d4183d] text-[16px] font-bold rounded-[8px] transition-colors flex items-center justify-center gap-2"
+                onClick={discard}
+                disabled={isSaving || isSavingDraft}
+                className="w-full h-[48px] px-[24px] text-[#d4183d] text-[16px] font-bold rounded-[8px] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: '#FFDFDF', borderColor: '#FFDFDF' }}
               >
                 <Trash2 size={16} />

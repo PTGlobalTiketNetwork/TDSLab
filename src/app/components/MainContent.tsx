@@ -31,6 +31,9 @@ interface MainContentProps {
   presenceMap?: Record<string, PresenceUser[]>;
   availableRatios: string[];
   availableVerticals: string[];
+  templateFilter?: string[];
+  onTemplateFilterChange?: (filter: string[]) => void;
+  templateOptions?: string[];
   onEditBanner?: (banner: Banner) => void;
   onRenameBanner?: (banner: Banner) => void;
   onResizeBanner?: (banner: Banner) => void;
@@ -69,6 +72,9 @@ export function MainContent({
   presenceMap,
   availableRatios,
   availableVerticals,
+  templateFilter,
+  onTemplateFilterChange,
+  templateOptions,
   onEditBanner,
   onResizeBanner,
   onDuplicateBanner,
@@ -184,6 +190,9 @@ export function MainContent({
         onSortChange={onSortChange}
         availableRatios={availableRatios}
         availableVerticals={availableVerticals}
+        templateFilter={templateFilter}
+        onTemplateFilterChange={onTemplateFilterChange}
+        templateOptions={templateOptions}
       />
       </ListToolbar>
 

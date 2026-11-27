@@ -8,6 +8,8 @@ interface RichTextEditorProps {
   className?: string;
   singleLine?: boolean;
   onFocus?: (e: React.FocusEvent<HTMLDivElement>) => void;
+  // Caps the plain-text length (tags don't count). Typing/pasting past the limit is blocked, like a native maxLength.
+  maxLength?: number;
   
   // Font Size Controls
   fontSize?: number;
@@ -31,8 +33,9 @@ export function RichTextEditor({
     onChange, 
     placeholder, 
     className, 
-    singleLine, 
+    singleLine,
     onFocus,
+    maxLength,
     fontSize,
     onFontSizeChange,
     minFontSize = 12,
@@ -48,6 +51,36 @@ export function RichTextEditor({
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeColor, setActiveColor] = useState<string | null>(null);
   const [activeItalic, setActiveItalic] = useState<boolean>(false);
+  const [activeFontSize, setActiveFontSize] = useState<number | null>(null);
+  const [hasSelection, setHasSelection] = useState<boolean>(false);
+
+  // --- Undo/Redo history ---
+  // contentEditable's native undo doesn't reliably track the Range-surgery our format actions do,
+  // so we keep our own stack of past values (the tag-string, not the live DOM) and drive Ctrl/Cmd+Z/Y.
+  const prevValueRef = useRef(value);
+  const historyRef = useRef<{ undo: string[]; redo: string[] }>({ undo: [], redo: [] });
+  const lastSnapshotAt = useRef(0);
+  const HISTORY_DEBOUNCE_MS = 500;
+  const HISTORY_MAX = 100;
+
+  // The last non-collapsed selection we saw inside this editor. Clicking the toolbar's Slider or
+  // QuantityInput (unlike the format buttons, which preventDefault on mousedown) steals the live
+  // browser selection — so format actions triggered from there fall back to this instead.
+  const lastRangeRef = useRef<Range | null>(null);
+  const getWorkingSelection = (): Selection | null => {
+      const sel = window.getSelection();
+      if (!sel) return null;
+      if (sel.rangeCount && !sel.isCollapsed) {
+          const r = sel.getRangeAt(0);
+          if (editorRef.current?.contains(r.commonAncestorContainer)) return sel;
+      }
+      if (lastRangeRef.current && editorRef.current?.contains(lastRangeRef.current.commonAncestorContainer)) {
+          sel.removeAllRanges();
+          sel.addRange(lastRangeRef.current.cloneRange());
+          return sel;
+      }
+      return null;
+  };
 
   // --- Parsing Logic ---
 
@@ -82,45 +115,69 @@ export function RichTextEditor({
             return `<span style="text-decoration: underline; text-decoration-style: dotted; text-decoration-color: #94a3b8; text-decoration-thickness: 2px;" data-tag="color" data-color="${color}">`;
         })
         .replace(/&lt;\/c&gt;/g, '</span>')
+        // Per-selection font size: <fs v="22">...</fs>
+        .replace(/&lt;fs v="(.*?)"&gt;/g, (match, size) => `<span style="font-size: ${size}px" data-tag="fs" data-size="${size}">`)
+        .replace(/&lt;\/fs&gt;/g, '</span>')
         .replace(/\n/g, '<br>');
 
     return html;
   };
 
-  const getOutputValue = () => {
-      if (!editorRef.current) return '';
-      
+  // Walks a DOM node and rebuilds our internal tag string from it. Used both for this editor's own
+  // content (where every formatted span carries our data-tag marker) and for externally pasted HTML
+  // (own-editor copies keep their data-tag markers through the system clipboard; content pasted from
+  // elsewhere — Word, Docs, another app — only has inline styles/tag names, which we fall back to).
+  const nodeToValue = (root: Node): string => {
       const traverse = (node: Node): string => {
           if (node.nodeType === Node.TEXT_NODE) return node.textContent || '';
           if (node.nodeName === 'BR') return '\n';
-          
-          if (node.nodeName === 'DIV') {
+
+          if (node.nodeName === 'DIV' || node.nodeName === 'P') {
               return '\n' + Array.from(node.childNodes).map(traverse).join('');
           }
-          
-          if (node.nodeName === 'SPAN') {
+
+          if (node.nodeName === 'SPAN' || node.nodeName === 'B' || node.nodeName === 'STRONG' || node.nodeName === 'I' || node.nodeName === 'EM') {
               const el = node as HTMLElement;
-              const tag = el.dataset.tag;
+              const tag = el.dataset?.tag;
               const content = Array.from(node.childNodes).map(traverse).join('');
-              
+
               if (tag === 'sb') return `<sb>${content}</sb>`;
               if (tag === 'b') return `<b>${content}</b>`;
               if (tag === 'eb') return `<eb>${content}</eb>`;
               if (tag === 'reset') return `<r>${content}</r>`;
               if (tag === 'i') return `<i>${content}</i>`;
               if (tag === 'color') {
-                  const color = el.dataset.color || el.style.color;
-                  return `<c v="${color}">${content}</c>`;
+                  const color = el.dataset?.color || el.style?.color;
+                  return color ? `<c v="${color}">${content}</c>` : content;
               }
-              return content;
+              if (tag === 'fs') {
+                  const size = el.dataset?.size;
+                  return size ? `<fs v="${size}">${content}</fs>` : content;
+              }
+
+              // Fallback for content pasted from outside our own editors (no data-tag markers)
+              let result = content;
+              const weight = parseInt(el.style?.fontWeight || '', 10);
+              if (node.nodeName === 'EM' || node.nodeName === 'I' || el.style?.fontStyle === 'italic') {
+                  result = `<i>${result}</i>`;
+              }
+              if (!isNaN(weight) && weight >= 800) result = `<eb>${result}</eb>`;
+              else if (node.nodeName === 'B' || node.nodeName === 'STRONG' || (!isNaN(weight) && weight >= 700)) result = `<b>${result}</b>`;
+              else if (!isNaN(weight) && weight >= 600) result = `<sb>${result}</sb>`;
+              return result;
           }
-          
+
           return Array.from(node.childNodes).map(traverse).join('');
       };
-      
-      const res = Array.from(editorRef.current.childNodes).map(traverse).join('');
+
+      const res = Array.from(root.childNodes).map(traverse).join('');
       // remove leading newline if any
       return res.startsWith('\n') ? res.substring(1) : res;
+  };
+
+  const getOutputValue = () => {
+      if (!editorRef.current) return '';
+      return nodeToValue(editorRef.current);
   };
 
   // --- Effects ---
@@ -136,7 +193,13 @@ export function RichTextEditor({
         if (editorRef.current.innerHTML !== html) {
             editorRef.current.innerHTML = html;
         }
+        // An external change (switching to a different field/language, not our own edit) —
+        // the undo/redo history no longer applies to whatever is now in this box.
+        if (value !== prevValueRef.current) {
+            historyRef.current = { undo: [], redo: [] };
+        }
     }
+    prevValueRef.current = value;
   }, [value]);
 
   useEffect(() => {
@@ -145,23 +208,30 @@ export function RichTextEditor({
         if (!sel || !sel.rangeCount || !editorRef.current) {
             setActiveTag(null);
             setActiveColor(null);
+            setActiveFontSize(null);
+            setHasSelection(false);
             return;
         }
-        
+
         // Check if the selection is within THIS editor instance
         const range = sel.getRangeAt(0);
         if (!editorRef.current.contains(range.commonAncestorContainer)) {
             return;
         }
-        
+
+        setHasSelection(!sel.isCollapsed);
+        if (!sel.isCollapsed) lastRangeRef.current = range.cloneRange();
+
         // Find active tags
         let node = sel.anchorNode;
         // If anchor is the editor div itself, use the child at offset
         // (Not strictly necessary for simple cases)
 
         let foundTag: string | null = null;
+        let foundWeightResolved = false; // the innermost weight tag (incl. explicit "reset") wins — don't let an outer ancestor override it
         let foundColor: string | null = null;
         let foundItalic = false;
+        let foundFontSize: number | null = null;
 
         let current = node;
         while (current && current !== editorRef.current) {
@@ -171,13 +241,12 @@ export function RichTextEditor({
                     if (!foundColor) foundColor = (current as HTMLElement).dataset.color || null;
                 } else if (tag === 'i') {
                     foundItalic = true;
-                } else if (!foundTag) {
+                } else if (tag === 'fs') {
+                    if (!foundFontSize) foundFontSize = parseInt((current as HTMLElement).dataset.size || '', 10) || null;
+                } else if (!foundWeightResolved) {
                     // Priority to weight tags
-                    if (tag === 'reset') {
-                        foundTag = null; // explicit reset
-                    } else {
-                        foundTag = tag;
-                    }
+                    foundWeightResolved = true;
+                    foundTag = tag === 'reset' ? null : (tag ?? null); // explicit reset
                 }
             }
             current = current.parentNode;
@@ -185,6 +254,7 @@ export function RichTextEditor({
         setActiveTag(foundTag);
         setActiveColor(foundColor);
         setActiveItalic(foundItalic);
+        setActiveFontSize(foundFontSize);
     };
 
     document.addEventListener('selectionchange', checkSelection);
@@ -196,24 +266,164 @@ export function RichTextEditor({
   const handleInput = () => {
       isInternalChange.current = true;
       const val = getOutputValue();
+
+      // Snapshot the value from BEFORE this change for undo, debounced so continuous typing
+      // doesn't produce one undo step per keystroke. Formatting actions (bold, color, size, …)
+      // call handleInput() right after a discrete DOM edit, so they always get their own step.
+      const now = Date.now();
+      if (val !== prevValueRef.current && (now - lastSnapshotAt.current > HISTORY_DEBOUNCE_MS || historyRef.current.undo.length === 0)) {
+          historyRef.current.undo.push(prevValueRef.current);
+          if (historyRef.current.undo.length > HISTORY_MAX) historyRef.current.undo.shift();
+          historyRef.current.redo = [];
+      }
+      lastSnapshotAt.current = now;
+
       onChange(val);
+      prevValueRef.current = val;
       setTimeout(() => isInternalChange.current = false, 0);
+  };
+
+  const restoreValue = (target: string) => {
+      if (!editorRef.current) return;
+      isInternalChange.current = true;
+      editorRef.current.innerHTML = toHTML(target);
+      onChange(target);
+      prevValueRef.current = target;
+      // Put the cursor at the end so typing continues naturally after an undo/redo
+      const sel = window.getSelection();
+      const r = document.createRange();
+      r.selectNodeContents(editorRef.current);
+      r.collapse(false);
+      sel?.removeAllRanges();
+      sel?.addRange(r);
+      setTimeout(() => isInternalChange.current = false, 0);
+  };
+
+  const undo = () => {
+      const { undo: undoStack, redo: redoStack } = historyRef.current;
+      if (undoStack.length === 0) return;
+      const target = undoStack.pop()!;
+      redoStack.push(prevValueRef.current);
+      restoreValue(target);
+  };
+
+  const redo = () => {
+      const { undo: undoStack, redo: redoStack } = historyRef.current;
+      if (redoStack.length === 0) return;
+      const target = redoStack.pop()!;
+      undoStack.push(prevValueRef.current);
+      restoreValue(target);
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
       e.preventDefault();
-      const text = e.clipboardData.getData('text/plain');
-      document.execCommand('insertText', false, text);
+      const plain = e.clipboardData.getData('text/plain');
+      const html = e.clipboardData.getData('text/html');
+
+      let insertValue = plain;
+      if (html) {
+          try {
+              const parsed = nodeToValue(new DOMParser().parseFromString(html, 'text/html').body);
+              if (parsed) insertValue = parsed;
+          } catch {
+              // fall back to plain text below
+          }
+      }
+
+      if (typeof maxLength === 'number') {
+          const sel = window.getSelection();
+          const hasSelection = !!sel && !sel.isCollapsed && editorRef.current?.contains(sel.anchorNode);
+          const currentLength = editorRef.current?.textContent?.length ?? 0;
+          const remaining = Math.max(0, maxLength - (hasSelection ? 0 : currentLength));
+          if (insertValue.replace(/<[^>]*>/g, '').length > remaining) {
+              // Truncate on plain-text length, tags don't count — simplest safe approach is to strip
+              // tags from the overflowing paste rather than risk cutting a tag string in half.
+              const plainOnly = insertValue.replace(/<[^>]*>/g, '');
+              insertValue = plainOnly.slice(0, remaining);
+          }
+      }
+
+      const selection = window.getSelection();
+      const range = selection && selection.rangeCount ? selection.getRangeAt(0) : null;
+      if (!selection || !range || !editorRef.current?.contains(range.commonAncestorContainer)) {
+          document.execCommand('insertText', false, plain);
+          return;
+      }
+
+      range.deleteContents();
+      const temp = document.createElement('div');
+      temp.innerHTML = toHTML(insertValue);
+      let lastNode: ChildNode | null = null;
+      const frag = document.createDocumentFragment();
+      while (temp.firstChild) {
+          lastNode = temp.firstChild;
+          frag.appendChild(temp.firstChild);
+      }
+      range.insertNode(frag);
+
+      if (lastNode) {
+          const newRange = document.createRange();
+          newRange.setStartAfter(lastNode);
+          newRange.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+      }
+
+      handleInput();
+  };
+
+  // Finds the nearest ancestor span carrying a weight tag (sb/b/eb/reset), if the given node sits inside one.
+  const findWeightAncestor = (node: Node | null): HTMLElement | null => {
+      let cur: Node | null = node;
+      while (cur && cur !== editorRef.current) {
+          if (cur.nodeType === Node.ELEMENT_NODE) {
+              const tag = (cur as HTMLElement).dataset?.tag;
+              if (tag === 'sb' || tag === 'b' || tag === 'eb' || tag === 'reset') return cur as HTMLElement;
+          }
+          cur = cur.parentNode;
+      }
+      return null;
   };
 
   const applyTag = (requestedTag: string) => {
-      const selection = window.getSelection();
+      const selection = getWorkingSelection();
       if (!selection || !selection.rangeCount) return;
-      
-      const range = selection.getRangeAt(0);
+
+      let range = selection.getRangeAt(0);
       if (!editorRef.current?.contains(range.commonAncestorContainer)) return;
 
       if (range.collapsed) return;
+
+      // Re-selecting text that's already wrapped in a weight span (e.g. toggling Bold on/off
+      // repeatedly on the same selection) must REPLACE that span, not nest a new one inside it —
+      // extractContents() below only pulls out the span's CHILDREN, leaving the wrapper behind.
+      // Unwrap it first so the selection sits directly on plain content again.
+      // Only when the selection spans the WHOLE ancestor span, though — if it's a smaller selection inside a larger
+      // bolded block, unwrapping the whole thing would silently grow the selection to the entire block (bug: bolding
+      // one word inside an already-bold sentence re-bolded the whole sentence instead of just that word).
+      const weightAncestor = findWeightAncestor(range.commonAncestorContainer);
+      if (weightAncestor) {
+          const fullRange = document.createRange();
+          fullRange.selectNodeContents(weightAncestor);
+          const isExactMatch = range.compareBoundaryPoints(Range.START_TO_START, fullRange) === 0 &&
+              range.compareBoundaryPoints(Range.END_TO_END, fullRange) === 0;
+          if (isExactMatch) {
+              const parent = weightAncestor.parentNode;
+              if (parent) {
+                  const children = Array.from(weightAncestor.childNodes);
+                  children.forEach((child) => parent.insertBefore(child, weightAncestor));
+                  parent.removeChild(weightAncestor);
+                  if (children.length) {
+                      const newRange = document.createRange();
+                      newRange.setStartBefore(children[0]);
+                      newRange.setEndAfter(children[children.length - 1]);
+                      selection.removeAllRanges();
+                      selection.addRange(newRange);
+                      range = newRange;
+                  }
+              }
+          }
+      }
 
       // 1. Extract Selection.
       const fragment = range.extractContents();
@@ -333,6 +543,105 @@ export function RichTextEditor({
       handleInput();
   };
 
+  const applyFontSize = (size: number) => {
+      const selection = getWorkingSelection();
+      if (!selection || !selection.rangeCount || selection.isCollapsed) return;
+
+      let range = selection.getRangeAt(0);
+      if (!editorRef.current?.contains(range.commonAncestorContainer)) return;
+      if (range.collapsed) return;
+
+      // Selecting ALL the text and resizing means "change this field's size" — set the block size (which
+      // EN/ID style sync mirrors) instead of wrapping everything in a per-selection override that sync can't see.
+      if (onFontSizeChange && range.toString().trim() === (editorRef.current.textContent || '').trim()) {
+          const fsSpans = editorRef.current.querySelectorAll('span[data-tag="fs"]');
+          if (fsSpans.length) {
+              fsSpans.forEach((span) => {
+                  const parent = span.parentNode;
+                  if (!parent) return;
+                  while (span.firstChild) parent.insertBefore(span.firstChild, span);
+                  parent.removeChild(span);
+              });
+              handleInput();
+              // Separate tick so the size update builds on the text update above instead of overwriting it
+              setTimeout(() => onFontSizeChange(size), 0);
+          } else {
+              onFontSizeChange(size);
+          }
+          return;
+      }
+
+      // Re-adjusting a selection that's already wrapped in a font-size span (e.g. dragging the
+      // Size slider, which re-applies on every tick) must REPLACE that span, not nest a new one
+      // inside it — extractContents() below only pulls out the span's CHILDREN.
+      const fsAncestor = (() => {
+          let cur: Node | null = range.commonAncestorContainer;
+          while (cur && cur !== editorRef.current) {
+              if (cur.nodeType === Node.ELEMENT_NODE && (cur as HTMLElement).dataset?.tag === 'fs') return cur as HTMLElement;
+              cur = cur.parentNode;
+          }
+          return null;
+      })();
+      if (fsAncestor) {
+          // Only when the selection spans the WHOLE ancestor span — otherwise unwrapping it would grow a
+          // selection inside a larger resized block out to the whole block (same bug class as applyTag).
+          const fullRange = document.createRange();
+          fullRange.selectNodeContents(fsAncestor);
+          const isExactMatch = range.compareBoundaryPoints(Range.START_TO_START, fullRange) === 0 &&
+              range.compareBoundaryPoints(Range.END_TO_END, fullRange) === 0;
+          if (isExactMatch) {
+              const parent = fsAncestor.parentNode;
+              if (parent) {
+                  const children = Array.from(fsAncestor.childNodes);
+                  children.forEach((child) => parent.insertBefore(child, fsAncestor));
+                  parent.removeChild(fsAncestor);
+                  if (children.length) {
+                      const newRange = document.createRange();
+                      newRange.setStartBefore(children[0]);
+                      newRange.setEndAfter(children[children.length - 1]);
+                      selection.removeAllRanges();
+                      selection.addRange(newRange);
+                      range = newRange;
+                  }
+              }
+          }
+      }
+
+      const fragment = range.extractContents();
+
+      // Remove any existing font-size override within the selection so sizes don't nest/stack
+      const spans = fragment.querySelectorAll('span[data-tag="fs"]');
+      spans.forEach(span => {
+          const parent = span.parentNode;
+          if (parent) {
+              while (span.firstChild) parent.insertBefore(span.firstChild, span);
+              parent.removeChild(span);
+          }
+      });
+
+      // Always wrap with an explicit size, even when it happens to match the block's base —
+      // the editor's own plain-text rendering is a fixed 14px, not the block's base size, so
+      // skipping the wrap there made the selection visually shrink instead of matching it.
+      const span = document.createElement('span');
+      span.style.fontSize = `${size}px`;
+      span.dataset.tag = 'fs';
+      span.dataset.size = String(size);
+      span.appendChild(fragment);
+      range.insertNode(span);
+
+      const newRange = document.createRange();
+      newRange.selectNodeContents(span);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+
+      // Cleanup empty spans
+      editorRef.current?.querySelectorAll('span[data-tag]').forEach(s => {
+          if (!s.textContent) s.remove();
+      });
+
+      handleInput();
+  };
+
   const findItalicAncestor = (node: Node | null): HTMLElement | null => {
       let cur: Node | null = node;
       while (cur && cur !== editorRef.current) {
@@ -355,7 +664,7 @@ export function RichTextEditor({
   };
 
   const applyItalic = () => {
-      const selection = window.getSelection();
+      const selection = getWorkingSelection();
       if (!selection || !selection.rangeCount) return;
 
       const range = selection.getRangeAt(0);
@@ -365,8 +674,17 @@ export function RichTextEditor({
       if (activeItalic) {
           // Toggle OFF: unwrap any italic ancestor of the selection, and strip any
           // italic spans that fall fully inside the selection.
+          // Only unwrap the whole ancestor when the selection spans ALL of it — otherwise a selection
+          // inside a larger italicized block would un-italicize the whole block, not just the selection.
           const ancestor = findItalicAncestor(range.commonAncestorContainer);
-          if (ancestor) {
+          const spansWholeAncestor = (() => {
+              if (!ancestor) return false;
+              const fullRange = document.createRange();
+              fullRange.selectNodeContents(ancestor);
+              return range.compareBoundaryPoints(Range.START_TO_START, fullRange) === 0 &&
+                  range.compareBoundaryPoints(Range.END_TO_END, fullRange) === 0;
+          })();
+          if (ancestor && spansWholeAncestor) {
               const parent = ancestor.parentNode;
               if (parent) {
                   while (ancestor.firstChild) parent.insertBefore(ancestor.firstChild, ancestor);
@@ -411,8 +729,25 @@ export function RichTextEditor({
           if (k === 'b') { e.preventDefault(); applyTag('b'); return; }
           if (k === 'i') { e.preventDefault(); applyItalic(); return; }
       }
+      // Undo/redo go through our own history stack — the browser's native contentEditable undo
+      // doesn't track the Range surgery our format actions do, so it was a no-op (Ctrl+Z/Ctrl+Y).
+      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+          const k = e.key.toLowerCase();
+          if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+          if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); return; }
+      }
       if (singleLine && e.key === 'Enter') {
           e.preventDefault();
+      }
+      // Block typing past maxLength, like a native input's maxlength — only for plain printable
+      // keystrokes; navigation/deletion/shortcuts must still go through.
+      if (typeof maxLength === 'number' && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          const sel = window.getSelection();
+          const hasSelection = !!sel && !sel.isCollapsed && editorRef.current?.contains(sel.anchorNode);
+          const currentLength = editorRef.current?.textContent?.length ?? 0;
+          if (!hasSelection && currentLength >= maxLength) {
+              e.preventDefault();
+          }
       }
   };
 
@@ -420,12 +755,12 @@ export function RichTextEditor({
     <div className={`flex flex-col border border-[#d8dce8] rounded-[8px] bg-white overflow-hidden transition-all focus-within:border-[#007BFF] focus-within:ring-1 focus-within:ring-[#007BFF] relative ${className || ''}`}>
         
         {/* Toolbar */}
-        <TextFormattingToolbar 
+        <TextFormattingToolbar
             activeWeight={activeTag}
             onWeightChange={applyTag}
-            fontSize={fontSize}
-            onFontSizeChange={onFontSizeChange}
-            defaultFontSize={defaultFontSize}
+            fontSize={hasSelection && typeof fontSize === 'number' ? (activeFontSize ?? fontSize) : fontSize}
+            onFontSizeChange={hasSelection && onFontSizeChange ? applyFontSize : onFontSizeChange}
+            defaultFontSize={hasSelection ? fontSize : defaultFontSize}
             minFontSize={minFontSize}
             maxFontSize={maxFontSize}
             activeColor={activeColor ?? globalColor ?? null}
@@ -445,13 +780,23 @@ export function RichTextEditor({
                 onFocus={onFocus}
                 onPaste={handlePaste}
                 onKeyDown={handleKeyDown}
-                className="w-full px-[12px] py-[10px] outline-none text-[14px] min-h-[42px] font-sans selection:bg-[#007BFF] selection:text-white whitespace-pre-wrap"
-                style={{ minHeight: singleLine ? 'auto' : '80px', lineHeight: typeof lineHeight === 'number' ? lineHeight / 100 : undefined }}
+                className="w-full px-[12px] py-[10px] outline-none min-h-[42px] font-sans selection:bg-[#007BFF] selection:text-white whitespace-pre-wrap"
+                style={{
+                    minHeight: singleLine ? 'auto' : '80px',
+                    lineHeight: typeof lineHeight === 'number' ? lineHeight / 100 : undefined,
+                    // The block's own Size field is the base size for any text NOT wrapped in a per-selection
+                    // <fs> override — without this the box always rendered at a fixed 14px, so two fields
+                    // showing the same Size value could still look different depending on leftover <fs> wraps.
+                    fontSize: typeof fontSize === 'number' ? `${fontSize}px` : '14px',
+                }}
             />
             
             {/* Placeholder overlay if empty */}
             {!value && placeholder && (
-                <div className="absolute top-0 left-0 w-full h-full px-[12px] py-[10px] text-[#9EA0A5] text-[14px] pointer-events-none select-none">
+                <div
+                    className="absolute top-0 left-0 w-full h-full px-[12px] py-[10px] text-[#9EA0A5] pointer-events-none select-none"
+                    style={{ fontSize: typeof fontSize === 'number' ? `${fontSize}px` : '14px' }}
+                >
                     {placeholder}
                 </div>
             )}

@@ -6,6 +6,15 @@ import { ColorPicker } from '../ColorPicker';
 import { Label } from '../../ui/label';
 import { Input } from '../../ui/input';
 
+export const DEFAULT_OVERLAY_GRADIENT_STOPS = [
+  { id: '1', color: '#000000', position: 0, opacity: 100 },
+  { id: '2', color: '#007BFF', position: 100, opacity: 100 },
+];
+export const gradientStopsCss = (stops: GradientStop[], type: 'linear' | 'radial' = 'linear', angle = 90) => {
+  const s = [...stops].sort((a, b) => a.position - b.position).map((st) => `${st.color} ${st.position}%`).join(', ');
+  return type === 'radial' ? `radial-gradient(circle at center, ${s})` : `linear-gradient(${angle}deg, ${s})`;
+};
+
 interface GradientStop {
   id: string;
   color: string;

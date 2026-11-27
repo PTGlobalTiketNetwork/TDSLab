@@ -3,7 +3,7 @@ import { BannerFormData } from './types';
 import { BannerFixed } from './BannerFixed';
 import { getBase64FontCSS } from '../../utils/fontCss';
 import {
-  captureBannerElement,
+  captureBannerElement, DESKTOP_MAX_EXPORT_WIDTH, DESKTOP_EXPORT_CAP_NOTE, isDesktopBannerRatio, cappedPixelRatio,
   ensureDataUrlForCapture,
   fileToDataUrl,
   waitForRenderStable,
@@ -151,6 +151,7 @@ export function SuccessScreen({
         const { dataUrl } = await captureBannerElement(bannerElement, {
             pixelRatio: effectivePixelRatio,
             fontCss: base64FontCSS,
+            maxOutputWidth: isDesktopBannerRatio(formData.bannerRatio) ? DESKTOP_MAX_EXPORT_WIDTH : undefined,
         });
 
         const link = document.createElement('a');
@@ -546,16 +547,17 @@ export function SuccessScreen({
                             fullSize={true}
                             renderScale={renderScale}
                             isImagePreloaded={forceCaptureImageReady ? true : undefined}
+                            showPolaroidBadges={false}
                         />
                     </div>
 
                     {/* ID Banner Wrapper */}
                     <div className="relative rounded-[12px] overflow-hidden shadow-sm border border-gray-100">
-                        <BannerFixed 
+                        <BannerFixed
                             ref={idBannerRef}
-                            formData={formData} 
-                            lang="id" 
-                            label="ID Translation" 
+                            formData={formData}
+                            lang="id"
+                            label="ID Translation"
                             scale={scale}
                             position={position}
                             previewUrl={previewUrl}
@@ -564,6 +566,7 @@ export function SuccessScreen({
                             fullSize={true}
                             renderScale={renderScale}
                             isImagePreloaded={forceCaptureImageReady ? true : undefined}
+                            showPolaroidBadges={false}
                         />
                     </div>
 
@@ -646,6 +649,9 @@ export function SuccessScreen({
                                     ))}
                                 </div>
                             </div>
+                            {isDesktopBannerRatio(formData.bannerRatio) && (
+                                <p className="text-[11px] text-gray-500">{DESKTOP_EXPORT_CAP_NOTE} (scale is capped)</p>
+                            )}
                         </div>
                     </PopoverContent>
                 </Popover>

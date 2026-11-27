@@ -1,3 +1,6 @@
+/** One voucher decoration: x/y offsets in % of the banner, rotate offset in deg, scale in %. */
+export type VoucherDeco = { enabled?: boolean; color?: string; x?: number; y?: number; rotate?: number; scale?: number };
+
 export interface BannerFormData {
   // Step 1: Configuration
   bannerName: string;
@@ -72,8 +75,16 @@ export interface BannerFormData {
   overlay2Enabled?: boolean; // second overlay layer (same colour/opacity, own stop position)
   overlay2Synced?: boolean; // when true, Overlay 2's Start/Stop always mirror Overlay 1's (only Opacity stays independent)
   overlayGradientStop2?: number; // stop position of the second layer, default 40
+  overlayMode?: 'fade' | 'solid'; // missing = fade
+  overlaySolidCoverage?: number; // solid mode: % covered from the content edge, default 50
+  overlaySolidOpacity?: number; // solid mode: %, default 100
+  overlaySolidFill?: 'color' | 'gradient'; // solid mode fill, missing = color
+  overlaySolidGradientStops?: { id: string; color: string; position: number; opacity?: number }[]; // GradientEditor format, like backgroundGradientStops
+  overlaySolidGradientType?: 'linear' | 'radial';
+  overlaySolidGradientAngle?: number; // degrees, default 90
 
   headlineFormatSynced?: boolean; // when true, headline/sub-headline font size + weight/italic mirror between EN and ID
+  labelDiscountFormatSynced?: boolean; // when true, Additional Perks font size + weight/italic mirror between EN and ID
 
   stamp?: string; // or ID
   showStamp: boolean;
@@ -94,10 +105,13 @@ export interface BannerFormData {
   // with 2 or 3 tilted polaroid photos; photo 1 is the key visual, photos 2 and 3 live in polaroidImages.
   ttdTemplate?: 'gradient' | 'highlight-2' | 'highlight-3';
   polaroidImages?: string[]; // [photo 2, photo 3] URLs
+  polaroidLayoutVersion?: number; // 2 = highlight-3 frame order = photo number (older saves are migrated on load)
   polaroidOrder?: number[]; // layer order, front first: source index per polaroid frame (0 = key visual, 1/2 = polaroidImages[0/1])
   polaroidCrops?: { x: number; y: number; scale: number; flipH?: boolean; flipV?: boolean }[]; // per source: focus point (%) + zoom (%, ≥100) inside its frame
   polaroidRotations?: number[]; // per frame: extra tilt (deg, -5…5) on top of the Figma angle
   polaroidGroup?: { scale: number; x: number; y: number }; // whole collage: scale (%) + offset (Figma frame px)
+  // Yellow voucher decorations peeking in from the top / bottom edge (Figma 115-3009). Offsets relative to the default spot.
+  polaroidVouchers?: { top?: VoucherDeco; bottom?: VoucherDeco };
   polaroidBg?: string; // solid background colour, default #007BFF (B400)
   polaroidBgMode?: 'solid' | 'gradient';
   // Optional image between the background colour and the polaroids, faded out towards the text
@@ -162,11 +176,20 @@ export interface BannerFormData {
   desktopGradientEnd2?: number; // default 100
   desktopOverlayOpacity?: number; // %, default 100
   desktopOverlay2Opacity?: number; // %, default 100
+  desktopOverlayMode?: 'fade' | 'solid'; // missing = fade
+  desktopOverlaySolidCoverage?: number; // solid mode: % from the RIGHT edge, default 50
+  desktopOverlaySolidOpacity?: number; // solid mode: %, default 100
+  desktopOverlaySolidFill?: 'color' | 'gradient'; // solid mode fill, missing = color
+  desktopOverlaySolidGradientStops?: { id: string; color: string; position: number; opacity?: number }[]; // GradientEditor format, like backgroundGradientStops
+  desktopOverlaySolidGradientType?: 'linear' | 'radial';
+  desktopOverlaySolidGradientAngle?: number; // degrees, default 90
   desktopPartnerGap?: number; // px between partner logos, default 36 (never below 16)
   desktopOverlayColor?: string; // 5:1 overlay colour, default #000000
   desktopGradientStop?: number; // 5:1 overlay Start: % from the RIGHT edge where it begins to fade, default 66 (mirror of the 2:1 overlay)
   desktopKeyVisualScale?: number; // 5–250, default 100
   desktopKeyVisualPosition?: { x: number; y: number }; // % like the 2:1 key visual, default 50,50
+  desktopKeyVisualFlipH?: boolean; // own desktop flip; undefined = fall back to keyVisualFlipH
+  desktopKeyVisualFlipV?: boolean;
   textShadow?: boolean; // drop shadow on the banner text (headline, benefit, labels); missing = off
   landscapeContentScale?: number; // 60–200, default 100 — scales the whole content block in 2:1
   portraitContentOffsetY?: number; // px on the 720×960 canvas, default 0 — nudges the block up/down (negative = up)
@@ -226,9 +249,10 @@ export interface ContentTranslation {
   labelDiscount: boolean;
   labelDiscountType: 'With icon' | 'Without icon';
   labelDiscountText: string;
-  
+  labelDiscountFontSize?: number; // Font size for Additional Perks text
+
   additionalLabel: boolean;
-  additionalLabelType: 'Preset' | 'Custom';
+  additionalLabelType: 'Preset' | 'Custom' | 'Voucher';
   additionalLabelText: string;
   additionalLabelFontSize?: number; // Font size for additional label
   

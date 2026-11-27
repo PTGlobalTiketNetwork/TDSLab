@@ -1,4 +1,5 @@
-import { forwardRef, useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { gradientStopsCss, DEFAULT_OVERLAY_GRADIENT_STOPS } from './components/GradientEditor';
 import { BannerFormData } from './types';
 import { BannerLegacy } from './BannerLegacy';
 import { BoundingBox } from './components/BoundingBox';
@@ -16,6 +17,7 @@ interface BannerDesktop51Props {
   onFormChange?: (updates: Partial<BannerFormData>) => void; // editor preview: bounding box + key visual drag
   isDraggable?: boolean; // key visual can be dragged (Step 3)
   onMouseDown?: (e: React.MouseEvent) => void;
+  showPolaroidBadges?: boolean;
 }
 
 // Canvas of the Desktop 5:1 layout (Figma "Guideline Banner Desktop")
@@ -33,7 +35,7 @@ const CONTENT_W = CONTENT_AREA_W / K;
  * Desktop 5:1 banner. Content comes from the 2:1 component (BannerLegacy `contentOnly`);
  * this file only adds the 5:1 frame: full-bleed key visual + overlay, CTA and T&C.
  */
-export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(({ formData, lang, label, previewUrl, fullSize, onFormChange, isDraggable }, ref) => {
+export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(({ formData, lang, label, previewUrl, fullSize, onFormChange, isDraggable, showPolaroidBadges = true }, ref) => {
   const content = formData.content[lang];
   const H = desktopCanvasHeight(formData.bannerRatio);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -77,6 +79,9 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
   // Overlay: same Opacity / Start / Stop model as the 2:1 overlay, mirrored (opaque at the right, under the content)
   const overlayBg = (opacity: number, start: number, stop: number) =>
     `linear-gradient(270deg, rgba(${ovRgb},${opacity}) 0%, rgba(${ovRgb},${opacity}) ${start}%, rgba(${ovRgb},0) ${Math.max(start + 1, stop)}%)`;
+  // Solid + gradient fill: the gradient sits on its own Coverage-sized block so the hard edge survives
+  const solidGrad = formData.desktopOverlayMode === 'solid' && formData.desktopOverlaySolidFill === 'gradient';
+  const solidGradEl = (anchor: CSSProperties) => <div className="absolute" style={{ ...anchor, background: gradientStopsCss(formData.desktopOverlaySolidGradientStops ?? DEFAULT_OVERLAY_GRADIENT_STOPS, formData.desktopOverlaySolidGradientType, formData.desktopOverlaySolidGradientAngle ?? 90), opacity: (formData.desktopOverlaySolidOpacity ?? 100) / 100 }} />;
   const ctaText = content.ctaText || (lang === 'en' ? 'Book Now' : 'Pesan Sekarang'); // same text as the mobile CTA
 
   // Feed the 2:1 component: same content/settings, but force the 2:1 layout and drop what 5:1 draws itself (CTA, offsets)
@@ -103,11 +108,11 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
       <div ref={wrapRef} className="relative overflow-hidden rounded-[12px]" style={{ height: H * scale, width: fullSize ? W : '100%' }}>
         <div data-canvas-w={W} className="absolute top-0 left-0 overflow-hidden" style={{ width: W, height: H, transform: `scale(${scale})`, transformOrigin: 'top left', background: '#e9ebef' }}>
           {/* TTD Highlight templates: background colour + polaroid photos instead of the key visual and overlay */}
-          {isPolaroidTemplate(formData) ? <PolaroidCollage formData={formData} keyVisualUrl={previewUrl} /> : (<>
+          {isPolaroidTemplate(formData) ? <PolaroidCollage formData={formData} keyVisualUrl={previewUrl} showNumberBadges={showPolaroidBadges} /> : (<>
           {/* Key visual — full-bleed background like the 2:1 banner (position in %, scale in %), faded under the content */}
           {previewUrl && isDraggable && onFormChange ? (
             <ImageBox
-              wrapperStyle={{ position: 'absolute', left: `${kvPos.x}%`, top: `${kvPos.y}%`, width: 'auto', minWidth: '100%', transform: `translate3d(-50%, -50%, 0) scale(${(formData.keyVisualFlipH ? -1 : 1) * kvScale}, ${(formData.keyVisualFlipV ? -1 : 1) * kvScale})` /* same flips as the 2:1 key visual */ }}
+              wrapperStyle={{ position: 'absolute', left: `${kvPos.x}%`, top: `${kvPos.y}%`, width: 'auto', minWidth: '100%', transform: `translate3d(-50%, -50%, 0) scale(${((formData.desktopKeyVisualFlipH ?? formData.keyVisualFlipH) ? -1 : 1) * kvScale}, ${((formData.desktopKeyVisualFlipV ?? formData.keyVisualFlipV) ? -1 : 1) * kvScale})` /* own desktop flip, falls back to the 2:1 flip */ }}
               position={kvPos}
               scale={formData.desktopKeyVisualScale ?? 100} scaleMin={5} scaleMax={250}
               onPositionChange={(p) => onFormChange({ desktopKeyVisualPosition: p })}
@@ -124,14 +129,18 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
               className="absolute pointer-events-none select-none"
               style={previewUrl ? {
                 left: `${kvPos.x}%`, top: `${kvPos.y}%`, width: 'auto', minWidth: '100%', height: 'auto', maxWidth: 'none',
-                transform: `translate3d(-50%, -50%, 0) scale(${(formData.keyVisualFlipH ? -1 : 1) * kvScale}, ${(formData.keyVisualFlipV ? -1 : 1) * kvScale})` /* same flips as the 2:1 key visual */,
+                transform: `translate3d(-50%, -50%, 0) scale(${((formData.desktopKeyVisualFlipH ?? formData.keyVisualFlipH) ? -1 : 1) * kvScale}, ${((formData.desktopKeyVisualFlipV ?? formData.keyVisualFlipV) ? -1 : 1) * kvScale})` /* own desktop flip, falls back to the 2:1 flip */,
               } : {
                 left: 0, top: 0, width: '100%', height: '100%', objectFit: 'cover',
               }}
             />
           )}
-          <div className="absolute inset-0 pointer-events-none" style={{ background: overlayBg((formData.desktopOverlayOpacity ?? 100) / 100, formData.desktopGradientStop ?? 45, formData.desktopGradientEnd ?? 80) }} />
-          {formData.desktopOverlay2Enabled && <div className="absolute inset-0 pointer-events-none" style={{ background: overlayBg((formData.desktopOverlay2Opacity ?? 100) / 100, formData.desktopGradientStop2 ?? 80, formData.desktopGradientEnd2 ?? 100) }} />}
+          {solidGrad
+            ? <div className="absolute inset-0 pointer-events-none">{solidGradEl({ right: 0, top: 0, bottom: 0, width: `${formData.desktopOverlaySolidCoverage ?? 50}%` })}</div>
+            : formData.desktopOverlayMode === 'solid'
+            ? <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(270deg, rgba(${ovRgb},${(formData.desktopOverlaySolidOpacity ?? 100) / 100}) 0%, rgba(${ovRgb},${(formData.desktopOverlaySolidOpacity ?? 100) / 100}) ${formData.desktopOverlaySolidCoverage ?? 50}%, transparent ${formData.desktopOverlaySolidCoverage ?? 50}%)` }} />
+            : <div className="absolute inset-0 pointer-events-none" style={{ background: overlayBg((formData.desktopOverlayOpacity ?? 100) / 100, formData.desktopGradientStop ?? 45, formData.desktopGradientEnd ?? 80) }} />}
+          {formData.desktopOverlay2Enabled && formData.desktopOverlayMode !== 'solid' && <div className="absolute inset-0 pointer-events-none" style={{ background: overlayBg((formData.desktopOverlay2Opacity ?? 100) / 100, formData.desktopGradientStop2 ?? 80, formData.desktopGradientEnd2 ?? 100) }} />}
           </>)}
 
           {/* Content — the 2:1 component, scaled */}
@@ -166,7 +175,7 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
             // The pill is laid out at the default 160% asset size; "Partner asset size" only scales the logos inside it.
             const pa = 1.6;
             const logoScale = (formData.desktopPartnerAssetScale ?? 160) / 160;
-            const pillBase: React.CSSProperties = { display: 'flex', alignItems: 'center', height: 52, paddingLeft: 32, paddingRight: 32, gap: 32, borderRadius: '0 43px 43px 0', width: 'fit-content' };
+            const pillBase: React.CSSProperties = { display: 'flex', alignItems: 'center', height: 52, paddingLeft: 32, paddingRight: 32, gap: 32, borderRadius: '0 43px 43px 0', width: 'fit-content', overflow: 'hidden', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' };
             const partnerGap = Math.max(16, (formData.desktopPartnerGap ?? 36) * pa); // spacing between assets: never tighter than 16px
             const partnerPill: React.CSSProperties = { ...pillBase, height: 'auto', minHeight: 52, paddingTop: Math.max(8, 10 * pa), paddingBottom: Math.max(8, 10 * pa), paddingLeft: Math.max(12, 20 * pa), paddingRight: Math.max(12, 20 * pa), gap: partnerGap };
             const campaignImg = <img src={campaignSrc} alt="Campaign logo" crossOrigin="anonymous" draggable={false} style={{ height: Math.min(48, 30 * assetScale), width: 'auto', maxWidth: Math.min(140, 110 * assetScale), objectFit: 'contain' }} onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />;
@@ -179,7 +188,7 @@ export const BannerDesktop51 = forwardRef<HTMLDivElement, BannerDesktop51Props>(
                     {showCampaign && sticky && showPartner ? (
                       // Both on (Figma 83:743): one pill — campaign logo segment with a slanted edge, then the partner logos
                       <>
-                        <div style={{ minHeight: 52, padding: '0 36px 0 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2, flexShrink: 0, background: formData.desktopCampaignLogoBgEnabled === false ? '#FFFFFF' : (formData.desktopCampaignLogoBg ?? '#007BFF'), borderRadius: '0 100px 100px 0' }}>
+                        <div style={{ minHeight: 52, padding: '0 36px 0 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2, flexShrink: 0, background: formData.desktopCampaignLogoBgEnabled === false ? '#FFFFFF' : (formData.desktopCampaignLogoBg ?? '#007BFF'), borderRadius: '0 100px 100px 0', overflow: 'hidden', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>
                           <img src={campaignSrc} alt="Campaign logo" crossOrigin="anonymous" draggable={false} style={{ height: Math.min(48, 30 * assetScale), width: 'auto', maxWidth: Math.min(140, 110 * assetScale), objectFit: 'contain' }} onError={(e) => { const t = e.currentTarget; if (t.dataset.fallback) return; t.dataset.fallback = "1"; t.removeAttribute("crossorigin"); t.src = exampleImage; }} />
                         </div>
                         <div style={{ ...partnerPill, marginLeft: -44, paddingLeft: 44 + Math.max(12, 16 * pa), background: formData.desktopPartnerLogoBgEnabled === false ? 'transparent' : (formData.desktopPartnerLogoBg ?? '#FFFFFF') }}>

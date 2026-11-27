@@ -200,7 +200,8 @@ export function ImageInputSelector({
 
               <div className="flex flex-col gap-[4px] flex-1">
                   <p className="text-[16px] text-[#303135] font-medium">Max file size {maxSizeMB} MB</p>
-                  <p className="text-[14px] text-[#71747d] leading-[20px]">
+                  <p className="text-[14px] text-[#71747d] leading-[20px] min-h-[60px]">
+                    {/* Reserves space for up to 3 wrapped lines so switching the hover/non-hover text below never changes the box height, at any container width */}
                     Recommended file type PNG, JPG, WebP — or{' '}
                     <span className="font-bold text-[#007BFF]">{dropHover ? 'press now to paste your copied image' : 'hover here and paste an image from your clipboard'}</span>{' '}
                     <kbd className="inline-flex items-center px-[6px] py-[1px] rounded-[4px] border border-[#99CAFF] bg-white text-[12px] font-semibold text-[#007BFF] align-middle">{typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘V' : 'Ctrl+V'}</kbd>

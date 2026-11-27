@@ -1,6 +1,7 @@
 import { Switch } from '../../ui/switch';
+import { Dialog, DialogContent, DialogTitle } from '../../ui/dialog';
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, FlipHorizontal2, FlipVertical2, GripVertical, Loader2, RotateCw, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, FlipHorizontal2, FlipVertical2, GripVertical, Loader2, Maximize2, RotateCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { BannerFormData } from '../types';
 import { ColorPicker } from '../ColorPicker';
@@ -8,7 +9,7 @@ import { Slider } from '../../ui/slider';
 import { ImageInputSelector } from '../../inputs/ImageInputSelector';
 import { BannerService } from '../../../../services/bannerService';
 import { LinearGradientEditor } from './LinearGradientEditor';
-import { DEFAULT_CROP, DEFAULT_GROUP, DEFAULT_OVERLAY, OVERLAY_MAX_OPACITY, GROUP_Y_LIMIT, MAX_TILT, cropStyle, cropToUi, uiToCrop, panCrop, frameAspect, groupGeometry, DEFAULT_POLAROID_BG, DEFAULT_POLAROID_GRADIENT, polaroidOrder } from './PolaroidCollage';
+import { DEFAULT_CROP, DEFAULT_GROUP, DEFAULT_OVERLAY, OVERLAY_MAX_OPACITY, GROUP_Y_LIMIT, MAX_TILT, CropImg, cropToUi, uiToCrop, panCrop, frameAspect, groupGeometry, DEFAULT_POLAROID_BG, DEFAULT_POLAROID_GRADIENT, polaroidOrder, PHOTO_SCALE_MIN, PHOTO_SCALE_MAX, DEFAULT_VOUCHER_COLOR, voucherDefaults } from './PolaroidCollage';
 
 interface Props {
   formData: BannerFormData;
@@ -24,8 +25,9 @@ interface Props {
 export function PolaroidVisualFields({ formData, onChange }: Props) {
   const order = polaroidOrder(formData);
   const [uploading, setUploading] = useState<number | null>(null);
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
-  const [dragOver, setDragOver] = useState<number | null>(null);
+  const [imgDragFrom, setImgDragFrom] = useState<number | null>(null);
+  const [imgDragOver, setImgDragOver] = useState<number | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const keyVisualPreview = useMemo(
     () => (formData.keyVisualFile instanceof Blob ? URL.createObjectURL(formData.keyVisualFile) : formData.keyVisualUrl || null),
@@ -63,27 +65,37 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
     onChange({ polaroidOrder: next });
   };
 
+  // Swap which uploaded image sits in which photo slot (drag thumbnail onto thumbnail), leaving each slot's
+  // own crop/scale/rotation/layer order untouched — only the picture itself moves.
+  const getImage = (src: number): { file?: File | null; url?: string } =>
+    src === 0
+      ? { file: formData.keyVisualFile ?? null, url: formData.keyVisualFile ? undefined : formData.keyVisualUrl }
+      : { url: formData.polaroidImages?.[src - 1] || undefined };
+  const swapImages = (a: number, b: number) => {
+    if (a === b) return;
+    const imgA = getImage(a);
+    const imgB = getImage(b);
+    const updates: Partial<BannerFormData> = {};
+    const apply = (src: number, img: { file?: File | null; url?: string }) => {
+      if (src === 0) {
+        updates.keyVisualFile = img.file ?? null;
+        updates.keyVisualUrl = img.file ? undefined : img.url;
+      } else {
+        const next = updates.polaroidImages ? [...updates.polaroidImages] : [...(formData.polaroidImages ?? [])];
+        next[src - 1] = img.url || '';
+        updates.polaroidImages = next;
+      }
+    };
+    apply(a, imgB);
+    apply(b, imgA);
+    onChange(updates);
+  };
+
   const crop = (src: number) => formData.polaroidCrops?.[src] ?? DEFAULT_CROP;
   const setCrop = (src: number, patch: Partial<NonNullable<BannerFormData['polaroidCrops']>[number]>) => {
     const next = Array.from({ length: Math.max(3, formData.polaroidCrops?.length ?? 0) }, (_, i) => formData.polaroidCrops?.[i] ?? DEFAULT_CROP);
     next[src] = { ...next[src], ...patch };
     onChange({ polaroidCrops: next });
-  };
-  // Drag the thumbnail to move the focus point (same feel as panning a cropped image)
-  const panThumb = (e: React.PointerEvent<HTMLDivElement>, src: number) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const { clientWidth: w, clientHeight: h } = e.currentTarget;
-    const startCrop = crop(src);
-    const start = { px: e.clientX, py: e.clientY };
-    let raf = 0;
-    let last: PointerEvent | null = null;
-    const apply = () => { raf = 0; const ev = last!; setCrop(src, panCrop(srcOf(src), startCrop, w, h, ev.clientX - start.px, ev.clientY - start.py)); };
-    const move = (ev: PointerEvent) => { last = ev; if (!raf) raf = requestAnimationFrame(apply); }; // one update per frame
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
   };
   const overlay = { ...DEFAULT_OVERLAY, enabled: false, ...formData.polaroidOverlay };
   const setOverlay = (patch: Partial<typeof overlay>) => onChange({ polaroidOverlay: { ...overlay, ...patch } });
@@ -161,33 +173,44 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
     return (
       <div
         key={src}
-        draggable
-        onDragStart={(e) => { setDragFrom(layer); e.dataTransfer.effectAllowed = 'move'; }}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(layer); }}
-        onDragLeave={() => setDragOver((v) => (v === layer ? null : v))}
-        onDrop={(e) => { e.preventDefault(); if (dragFrom !== null) move(dragFrom, layer); setDragFrom(null); setDragOver(null); }}
-        onDragEnd={() => { setDragFrom(null); setDragOver(null); }}
-        className={`flex flex-col gap-[12px] rounded-[10px] border p-[12px] bg-white transition-colors ${dragOver === layer && dragFrom !== layer ? 'border-[#007BFF] bg-[#f2f8ff]' : 'border-[#e9ebef]'} ${dragFrom === layer ? 'opacity-50' : ''}`}
+        onDragOver={(e) => { if (imgDragFrom !== null) { e.preventDefault(); setImgDragOver(src); } }}
+        onDragLeave={() => setImgDragOver((v) => (v === src ? null : v))}
+        onDrop={(e) => { e.preventDefault(); if (imgDragFrom !== null) swapImages(imgDragFrom, src); setImgDragFrom(null); setImgDragOver(null); }}
+        className={`flex flex-col gap-[12px] rounded-[10px] border p-[12px] bg-white transition-colors ${imgDragOver === src && imgDragFrom !== src ? 'border-[#007BFF] bg-[#f2f8ff]' : 'border-[#e9ebef]'} ${imgDragFrom === src ? 'opacity-50' : ''}`}
       >
         <div className="flex items-center gap-[8px]">
-          <GripVertical size={16} className="text-[#9EA0A5] cursor-grab shrink-0" />
+          <GripVertical
+            size={16}
+            className="text-[#9EA0A5] cursor-grab shrink-0"
+            draggable={!!url}
+            onDragStart={(e) => { if (!url) { e.preventDefault(); return; } setImgDragFrom(src); e.dataTransfer.effectAllowed = 'move'; }}
+            onDragEnd={() => { setImgDragFrom(null); setImgDragOver(null); }}
+            title="Drag onto another photo to swap the uploaded image"
+          />
           <span className="text-[13px] font-bold text-[#303135] flex-1">Photo {src + 1} <span className="font-normal text-[#71747d]">· {layer === 0 ? 'front' : layer === order.length - 1 ? 'back' : 'middle'}</span></span>
           <button type="button" onClick={() => move(layer, layer - 1)} disabled={layer === 0} className="p-[4px] rounded-[6px] text-[#5e6066] hover:bg-[#f5f6fa] disabled:opacity-30" title="Bring forward"><ChevronUp size={14} /></button>
           <button type="button" onClick={() => move(layer, layer + 1)} disabled={layer === order.length - 1} className="p-[4px] rounded-[6px] text-[#5e6066] hover:bg-[#f5f6fa] disabled:opacity-30" title="Send backward"><ChevronDown size={14} /></button>
         </div>
         {url ? (
           <div className="flex gap-[12px]">
-            {/* Same crop as the polaroid frame: drag inside to reposition the image, scroll to zoom */}
             <div
-              className="relative w-[120px] shrink-0 self-start rounded-[6px] overflow-hidden border border-[#d8dce8] bg-[#f8f9fd] cursor-move"
-              style={{ aspectRatio: String(frameAspect(formData, src)), touchAction: 'none' }}
-              draggable={false}
-              onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              onPointerDown={(e) => panThumb(e, src)}
-              onWheel={(e) => setCrop(src, { scale: Math.min(300, Math.max(100, Math.round(c.scale - e.deltaY / 4))) })}
-              title="Drag to reposition, scroll to zoom"
+              className="relative w-[120px] shrink-0 self-start rounded-[6px] overflow-hidden border border-[#d8dce8] bg-[#f8f9fd] cursor-grab"
+              style={{ aspectRatio: String(frameAspect(formData, src)) }}
+              draggable
+              onDragStart={(e) => { setImgDragFrom(src); e.dataTransfer.effectAllowed = 'move'; }}
+              onDragEnd={() => { setImgDragFrom(null); setImgDragOver(null); }}
+              onDoubleClick={() => setPreviewUrl(url)}
+              title="Double-click to view full size · drag onto another photo to swap"
             >
-              <img src={url} alt={`Photo ${src + 1}`} className="pointer-events-none select-none" style={cropStyle(c)} draggable={false} />
+              <img src={url} alt={`Photo ${src + 1}`} className="w-full h-full object-cover pointer-events-none select-none" draggable={false} />
+              <button
+                type="button"
+                onClick={() => setPreviewUrl(url)}
+                className="absolute top-[4px] left-[4px] bg-white/90 p-[4px] rounded-full shadow-sm hover:text-[#007BFF] transition-colors"
+                title="View full size"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => (src === 0 ? onChange({ keyVisualFile: null, keyVisualUrl: undefined }) : setExtra(src, ''))}
@@ -199,7 +222,7 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
             </div>
             <div className="flex-1 min-w-0 flex flex-col gap-[8px]">
               {flipButtons(c, (p) => setCrop(src, p))}
-              {slider('Scale', c.scale, '%', 100, 300, 100, (v) => setCrop(src, { scale: v }))}
+              {slider('Scale', c.scale, '%', PHOTO_SCALE_MIN, PHOTO_SCALE_MAX, 100, (v) => setCrop(src, { scale: v }))}
               {slider('Position X', cropToUi(c.x), '%', -150, 150, 0, (v) => setCrop(src, { x: uiToCrop(v) }))}
               {slider('Position Y', cropToUi(c.y), '%', -150, 150, 0, (v) => setCrop(src, { y: uiToCrop(v) }))}
               {slider('Rotation', formData.polaroidRotations?.[src] ?? 0, '°', -MAX_TILT, MAX_TILT, 0, (v) => {
@@ -228,7 +251,32 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
     );
   };
 
+  type Voucher = NonNullable<NonNullable<BannerFormData['polaroidVouchers']>['top']>;
+  const setVoucher = (pos: 'top' | 'bottom', patch: Partial<Voucher>) =>
+    onChange({ polaroidVouchers: { ...formData.polaroidVouchers, [pos]: { ...formData.polaroidVouchers?.[pos], ...patch } } });
+  const voucherCard = (pos: 'top' | 'bottom') => {
+    const v = formData.polaroidVouchers?.[pos] ?? {};
+    const d = voucherDefaults(formData, pos);
+    return (
+      <div key={pos} className="flex flex-col gap-[12px] rounded-[10px] border border-[#e9ebef] p-[12px] bg-white">
+        <div className="flex items-center justify-between">
+          <span className="text-[13px] font-bold text-[#303135]">{pos === 'top' ? 'Top voucher' : 'Bottom voucher'}</span>
+          <Switch checked={!!v.enabled} onCheckedChange={(checked) => setVoucher(pos, { enabled: checked })} className="data-[state=checked]:bg-[#007BFF]" />
+        </div>
+        {v.enabled && (
+          <>
+            {slider('Scale', v.scale ?? d.scale, '%', 75, 120, d.scale, (scale) => setVoucher(pos, { scale }))}
+            {slider('Position X', v.x ?? d.x, '%', -5, 5, d.x, (x) => setVoucher(pos, { x }))}
+            {slider('Position Y', v.y ?? d.y, '%', -5, 5, d.y, (y) => setVoucher(pos, { y }))}
+            {slider('Rotation', v.rotate ?? d.rotate, '°', -15, 15, d.rotate, (rotate) => setVoucher(pos, { rotate }))}
+          </>
+        )}
+      </div>
+    );
+  };
+
   const isGradient = formData.polaroidBgMode === 'gradient';
+  const vouchersOn = !!(formData.polaroidVouchers?.top?.enabled || formData.polaroidVouchers?.bottom?.enabled);
   return (
     <>
       <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] w-full">
@@ -311,7 +359,7 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
                 onPointerDown={panOverlayThumb}
                 title="Drag to move the overlay image"
               >
-                <img src={overlay.url} alt="Overlay" className="pointer-events-none select-none" style={cropStyle(overlay)} draggable={false} />
+                <CropImg src={overlay.url} alt="Overlay" className="pointer-events-none select-none" crop={overlay} draggable={false} />
                 <button type="button" onClick={() => setOverlay({ url: undefined })} className="absolute top-[6px] right-[6px] bg-white/90 p-[4px] rounded-full shadow-sm hover:text-red-600 transition-colors" title="Remove image">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -327,12 +375,62 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
             {slider('Fade start', overlay.fadeStart, '%', 0, 100, DEFAULT_OVERLAY.fadeStart, (v) => setOverlay({ fadeStart: v, fadeEnd: Math.max(v + 1, overlay.fadeEnd) }))}
             {slider('Fade end', overlay.fadeEnd, '%', 1, 100, DEFAULT_OVERLAY.fadeEnd, (v) => setOverlay({ fadeEnd: v, fadeStart: Math.min(v - 1, overlay.fadeStart) }))}
             {flipButtons(overlay, setOverlay)}
-            {slider('Scale', overlay.scale, '%', 100, 300, 100, (v) => setOverlay({ scale: v }))}
+            {slider('Scale', overlay.scale, '%', PHOTO_SCALE_MIN, PHOTO_SCALE_MAX, 100, (v) => setOverlay({ scale: v }))}
             {slider('Position X', cropToUi(overlay.x), '%', -150, 150, 0, (v) => setOverlay({ x: uiToCrop(v) }))}
             {slider('Position Y', cropToUi(overlay.y), '%', -150, 150, 0, (v) => setOverlay({ y: uiToCrop(v) }))}
           </>
         )}
       </div>
+
+      <div className="flex flex-col gap-[12px] rounded-[12px] border border-[#e9ebef] p-[16px] w-full">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <label className="text-[14px] font-bold text-[#303135]">Voucher</label>
+            <span className="text-[12px] text-[#71747d]">Ticket shapes peeking in from the top and bottom edge.</span>
+          </div>
+          <Switch
+            checked={vouchersOn}
+            onCheckedChange={(checked) => onChange({ polaroidVouchers: { ...formData.polaroidVouchers, top: { ...formData.polaroidVouchers?.top, enabled: checked }, bottom: { ...formData.polaroidVouchers?.bottom, enabled: checked } } })}
+            className="data-[state=checked]:bg-[#007BFF]"
+          />
+        </div>
+        {vouchersOn && (
+          <>
+          <ColorPicker
+            value={(formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR)}
+            onChange={(c) => onChange({ polaroidVouchers: { ...formData.polaroidVouchers, top: { ...formData.polaroidVouchers?.top, color: c }, bottom: { ...formData.polaroidVouchers?.bottom, color: c } } })}
+            defaultValue={DEFAULT_VOUCHER_COLOR}
+            trigger={
+              <button type="button" className="flex items-center gap-2 w-full text-left bg-[#F8F9FD] p-2 rounded-lg border border-[#d8dce8] hover:border-[#b9bfcc]">
+                <div className="w-[16px] h-[16px] rounded-full border border-[#d8dce8] shrink-0 shadow-sm" style={{ backgroundColor: (formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR) }} />
+                <span className="text-sm text-[#71747d] font-medium uppercase truncate">{(formData.polaroidVouchers?.top?.color || formData.polaroidVouchers?.bottom?.color || DEFAULT_VOUCHER_COLOR)}</span>
+              </button>
+            }
+          />
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => onChange({ polaroidVouchers: Object.fromEntries((['top', 'bottom'] as const).map((k) => {
+              const { x, y, rotate, scale, ...rest } = formData.polaroidVouchers?.[k] ?? {};
+              return [k, rest];
+            })) })}
+            disabled={(['top', 'bottom'] as const).every((k) => { const v = formData.polaroidVouchers?.[k]; const d = voucherDefaults(formData, k); return (v?.x ?? d.x) === d.x && (v?.y ?? d.y) === d.y && (v?.rotate ?? d.rotate) === d.rotate && (v?.scale ?? d.scale) === d.scale; })}
+            className="flex items-center gap-[4px] text-[13px] font-semibold text-[#007BFF] hover:underline disabled:text-[#9EA0A5] disabled:no-underline"
+          >
+            <RotateCw size={12} /> Reset slider to default
+          </button>
+        </div>
+        {voucherCard('top')}
+        {voucherCard('bottom')}
+          </>
+        )}
+      </div>
+      <Dialog open={!!previewUrl} onOpenChange={(o) => { if (!o) setPreviewUrl(null); }}>
+        <DialogContent className="max-w-[90vw] w-auto p-[16px]">
+          <DialogTitle className="sr-only">Photo preview</DialogTitle>
+          {previewUrl && <img src={previewUrl} alt="Full size" className="max-w-[85vw] max-h-[80vh] object-contain mx-auto" />}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

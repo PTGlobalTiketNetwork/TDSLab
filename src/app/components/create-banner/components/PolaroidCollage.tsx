@@ -9,20 +9,22 @@ type Frame = { cx: number; cy: number; w: number; h: number; rot: number; border
 type Layout = { w: number; h: number; frames: Frame[] }; // frames[i] shows photo i (0 = key visual); default layer order = frame order
 
 const sq = (cx: number, cy: number, s: number, rot: number): Frame => ({ cx, cy, w: s, h: s, rot, border: s * 0.032, shadowY: 1 });
-const wide = (cx: number, cy: number, w: number, h: number, rot: number, border: number): Frame => ({ cx, cy, w, h, rot, border, shadowY: -1 });
+const wide = (cx: number, cy: number, w: number, h: number, rot: number, border: number): Frame => ({ cx, cy, w, h, rot, border, shadowY: 1 });
 
 const LAYOUTS: Record<'2:1' | '3:1' | '5:1', Record<'highlight-2' | 'highlight-3', Layout>> = {
   '2:1': {
-    'highlight-3': { w: 360, h: 180, frames: [sq(235.97, 100.76, 107.49, 6.88), wide(319.99, 135.6, 121.82, 88.03, -9.64, 3.95), sq(283.02, 42.53, 104.46, -27.32)] },
-    'highlight-2': { w: 360, h: 180, frames: [sq(256.17, 63.05, 123.03, 6.88), wide(301.56, 131.23, 145.5, 105.14, -9.64, 3.95)] },
+    // frame order = photo number (1/2/3); photo 2 sits further back (top), photo 3 sits in front of it (bottom-right)
+    'highlight-3': { w: 360, h: 180, frames: [sq(235.97, 100.76, 107.49, 6.88), sq(283.02, 42.53, 104.46, -27.32), wide(319.99, 135.6, 121.82, 88.03, -9.64, 3.95)] },
+    'highlight-2': { w: 360, h: 180, frames: [sq(256.17, 63.05, 123.03, 8), wide(301.56, 131.23, 145.5, 105.14, -9.64, 3.95)] },
   },
   '3:1': {
-    'highlight-3': { w: 360, h: 120, frames: [sq(232.47, 67.79, 94.33, 6.88), wide(306.2, 98.36, 106.9, 77.25, -9.64, 3.46), sq(273.75, 16.69, 91.66, -27.32)] },
-    'highlight-2': { w: 360, h: 120, frames: [sq(258.56, 34.19, 90.2, 6.88), wide(298.41, 89.82, 107.66, 77.8, -9.64, 3.46)] },
+    'highlight-3': { w: 360, h: 120, frames: [sq(232.47, 67.79, 94.33, 6.88), sq(273.75, 16.69, 91.66, -27.32), wide(306.2, 98.36, 106.9, 77.25, -9.64, 3.46)] },
+    'highlight-2': { w: 360, h: 120, frames: [sq(258.56, 34.19, 90.2, 8), wide(298.41, 89.82, 107.66, 77.8, -9.64, 3.46)] },
   },
   '5:1': {
-    'highlight-3': { w: 1000, h: 200, frames: [sq(127.86, 101.49, 146.4, 9.67), wide(272.5, 167.49, 180.27, 130.27, -9.64, 5.84), sq(215.66, 40.19, 154.58, -33.61)] },
-    'highlight-2': { w: 1000, h: 200, frames: [sq(146.29, 65.91, 168.49, 6.88), wide(263.48, 139.22, 193.92, 140.13, -15.62, 5.26)] },
+    // Positions tuned in Figma (node 107:1092)
+    'highlight-3': { w: 1000, h: 200, frames: [sq(136.56, 107.02, 146.4, 9.67), sq(235, 30.71, 154.58, -33.61), wide(289.1, 158.79, 180.27, 130.27, -9.64, 5.84)] },
+    'highlight-2': { w: 1000, h: 200, frames: [sq(146.29, 65.91, 168.49, 8), wide(263.48, 139.22, 193.92, 140.13, -15.62, 5.26)] },
   },
 };
 
@@ -32,6 +34,61 @@ export const DEFAULT_CROP = { x: 50, y: 50, scale: 100 };
 export const DEFAULT_GROUP = { scale: 100, x: 0, y: 0 };
 export const OVERLAY_MAX_OPACITY = 80; // keep the overlay a background accent, never a full photo
 export const DEFAULT_OVERLAY: NonNullable<BannerFormData['polaroidOverlay']> = { enabled: true, source: 'upload', opacity: 40, fadeStart: 15, fadeEnd: 60, x: 50, y: 50, scale: 100 };
+
+// Polaroid layout version. v2 swapped highlight-3 frames 1 and 2 (frame order = photo number);
+// forms saved before that have photo 2/3 data in each other's slots, so swap them back once.
+export const POLAROID_LAYOUT_VERSION = 2;
+const migrateCache = new WeakMap<BannerFormData, BannerFormData>();
+export function migratePolaroidLayout(form: BannerFormData): BannerFormData {
+  if (!form || typeof form !== 'object') return form;
+  if ((form.polaroidLayoutVersion ?? 0) >= POLAROID_LAYOUT_VERSION) return form;
+  const cached = migrateCache.get(form);
+  if (cached) return cached;
+  let out: BannerFormData = { ...form, polaroidLayoutVersion: POLAROID_LAYOUT_VERSION };
+  if (form.ttdTemplate === 'highlight-3') {
+    const swap = <T,>(a: T[] | undefined, i: number, j: number) => {
+      if (!a) return a;
+      const c = [...a];
+      const len = Math.max(c.length, i + 1, j + 1);
+      c.length = len;
+      [c[i], c[j]] = [c[j], c[i]];
+      // trim trailing holes so we don't introduce undefined entries
+      while (c.length && c[c.length - 1] === undefined) c.pop();
+      return c;
+    };
+    out = {
+      ...out,
+      polaroidImages: swap(form.polaroidImages, 0, 1),
+      polaroidCrops: swap(form.polaroidCrops, 1, 2),
+      polaroidRotations: swap(form.polaroidRotations, 1, 2),
+      // Missing order meant the old default [0,1,2] in old frames, i.e. [0,2,1] in new photo indices.
+      polaroidOrder: (form.polaroidOrder ?? [0, 1, 2]).map((i) => (i === 1 ? 2 : i === 2 ? 1 : i)),
+    };
+  }
+  migrateCache.set(form, out);
+  return out;
+}
+const savedCache = new WeakMap<BannerFormData, BannerFormData>();
+// Applies migratePolaroidLayout to a saved banner's form_data, including nested TTD / DLP sub-forms.
+export function migrateSavedFormData<T extends BannerFormData | undefined | null>(fd: T): T {
+  if (!fd || typeof fd !== 'object') return fd;
+  const hit = savedCache.get(fd as BannerFormData);
+  if (hit) return hit as T;
+  const m = (f?: BannerFormData) => (f ? migratePolaroidLayout(f) : f);
+  let out = migratePolaroidLayout(fd as BannerFormData);
+  if (out.ttd) {
+    const ttd: any = { ...out.ttd };
+    for (const k of Object.keys(ttd)) if (ttd[k] && typeof ttd[k] === 'object' && 'bannerRatio' in ttd[k]) ttd[k] = m(ttd[k]);
+    out = { ...out, ttd };
+  }
+  if (out.dlp) {
+    const eps: any = { ...(out.dlp.entryPoints ?? {}) };
+    for (const k of Object.keys(eps)) eps[k] = m(eps[k]);
+    out = { ...out, dlp: { ...out.dlp, entryPoints: eps, header: out.dlp.header && { ...out.dlp.header, desktopForm: m(out.dlp.header.desktopForm), mobileForm: m(out.dlp.header.mobileForm) } } };
+  }
+  savedCache.set(fd as BannerFormData, out);
+  return out as T;
+}
 
 export const isPolaroidTemplate = (f: Pick<BannerFormData, 'ttdTemplate'>) => f.ttdTemplate === 'highlight-2' || f.ttdTemplate === 'highlight-3';
 export const polaroidCount = (f: Pick<BannerFormData, 'ttdTemplate'>) => (f.ttdTemplate === 'highlight-3' ? 3 : f.ttdTemplate === 'highlight-2' ? 2 : 0);
@@ -81,6 +138,9 @@ interface Props {
    *  so dragging a photo moves the polaroids even where they sit under the (draggable) text, while the visible
    *  polaroids stay behind the text. */
   handlesOnly?: boolean;
+  /** Show a small "2"/"3" badge on the stacked/overlapping photos so they're easy to tell apart in every in-app
+   *  preview (editor, dashboard summary cards, etc). Off only for the actual exported banner image. */
+  showNumberBadges?: boolean;
 }
 
 // Group offset is stored in ‰ of the banner (so it means the same on every render size).
@@ -102,26 +162,50 @@ const OVERSHOOT = 2; // % of the frame per stored unit past 0/100 (25 units → 
 export const cropToUi = (v: number) => Math.round((v - 50) * 2);
 export const uiToCrop = (v: number) => 50 + v / 2;
 type Crop = { x: number; y: number; scale: number; flipH?: boolean; flipV?: boolean };
-export const cropStyle = (c: Crop): React.CSSProperties => {
+/** `rel` = image aspect ÷ frame aspect, once known. Below 100% the image keeps its own shape (cover size × scale)
+ *  so a rectangular asset is no longer cut to the frame's shape; unknown shape falls back to fitting it whole. */
+export const cropStyle = (c: Crop, rel?: number | null): React.CSSProperties => {
   const px = clamp(c.x, 0, 100);
   const py = clamp(c.y, 0, 100);
-  const left = ((100 - c.scale) * px) / 100 - (c.x - px) * OVERSHOOT;
-  const top = ((100 - c.scale) * py) / 100 - (c.y - py) * OVERSHOOT;
+  const shrunk = c.scale < 100;
+  const w = shrunk && rel ? c.scale * Math.max(1, rel) : c.scale;
+  const h = shrunk && rel ? c.scale * Math.max(1, 1 / rel) : c.scale;
+  // Past 0/100 keep moving the same way as inside it: a smaller-than-frame axis slides with the value, a larger one against it
+  const left = ((100 - w) * px) / 100 + (c.x - px) * OVERSHOOT * (w < 100 ? 1 : -1);
+  const top = ((100 - h) * py) / 100 + (c.y - py) * OVERSHOOT * (h < 100 ? 1 : -1);
   return {
     position: 'absolute',
-    width: `${c.scale}%`,
-    height: `${c.scale}%`,
+    width: `${w}%`,
+    height: `${h}%`,
     left: `${left}%`,
     top: `${top}%`,
     // Flip mirrors what the frame shows (around the frame's centre, not the image's), so the crop stays put
     ...(c.flipH || c.flipV ? {
       transform: `scale(${c.flipH ? -1 : 1}, ${c.flipV ? -1 : 1})`,
-      transformOrigin: `${((50 - left) / c.scale) * 100}% ${((50 - top) / c.scale) * 100}%`,
+      transformOrigin: `${((50 - left) / w) * 100}% ${((50 - top) / h) * 100}%`,
     } : {}),
     maxWidth: 'none',
-    objectFit: 'cover',
+    objectFit: shrunk && !rel ? 'contain' : 'cover',
     objectPosition: `${px}% ${py}%`,
   };
+};
+
+/** An <img> placed by `cropStyle` that learns its own shape vs. its frame on load. */
+export const CropImg = ({ crop, ...props }: { crop: Crop } & React.ImgHTMLAttributes<HTMLImageElement>) => {
+  const [rel, setRel] = useState<number | null>(null);
+  return (
+    <img
+      {...props}
+      style={cropStyle(crop, rel)}
+      onLoad={(e) => {
+        const img = e.currentTarget;
+        const box = img.parentElement;
+        if (img.naturalWidth && props.src) naturalSizes.set(props.src, { w: img.naturalWidth, h: img.naturalHeight });
+        if (img.naturalWidth && img.naturalHeight && box?.clientWidth && box.clientHeight)
+          setRel((img.naturalWidth / img.naturalHeight) / (box.clientWidth / box.clientHeight));
+      }}
+    />
+  );
 };
 
 // Natural image sizes, so a drag can move the image exactly with the pointer
@@ -140,14 +224,23 @@ export const panCrop = (url: string | null | undefined, crop: Crop, frameW: numb
   // A flipped image moves the other way under the pointer
   if (crop.flipH) dx = -dx;
   if (crop.flipV) dy = -dy;
-  const nat = url ? naturalSize(url) : null;
   const s = crop.scale / 100;
   const boxW = frameW * s;
   const boxH = frameH * s;
+  // Below 100% the image box is smaller than the frame: 0–100 slides the whole box across the free space instead,
+  // so it moves with the pointer (not against it)
+  const shrunk = crop.scale < 100;
+  const nat = url ? naturalSize(url) : null;
   const cover = nat ? Math.max(boxW / nat.w, boxH / nat.h) : 1;
-  // how far the image can travel per axis (px on screen); unknown size → assume only the zoom overflow
-  const travelX = Math.max(1, nat ? nat.w * cover - frameW : boxW - frameW);
-  const travelY = Math.max(1, nat ? nat.h * cover - frameH : boxH - frameH);
+  // Image size on screen: below 100% it keeps its own shape (see cropStyle), so it may still overflow one axis
+  const imgW = nat ? nat.w * cover : boxW;
+  const imgH = nat ? nat.h * cover : boxH;
+  // An image smaller than the frame slides across the free space instead, so flip to keep it under the pointer
+  if (shrunk && imgW < frameW) dx = -dx;
+  if (shrunk && imgH < frameH) dy = -dy;
+  // how far the image can travel per axis (px on screen)
+  const travelX = Math.max(1, Math.abs(imgW - frameW));
+  const travelY = Math.max(1, Math.abs(imgH - frameH));
   // Work in on-screen pixels so the image follows the pointer 1:1 across the whole range (no jump at 0/100):
   // 0–100 maps onto the image's own travel, past that each unit is OVERSHOOT % of the frame.
   const toPx = (v: number, travel: number, frame: number) =>
@@ -158,7 +251,29 @@ export const panCrop = (url: string | null | undefined, crop: Crop, frameW: numb
     Math.round(clamp(fromPx(toPx(v, travel, frame) - d, travel, frame), CROP_MIN, CROP_MAX) * 10) / 10;
   return { x: step(crop.x, dx, travelX, frameW), y: step(crop.y, dy, travelY, frameH) };
 };
-export const MAX_TILT = 5; // deg each card can be rotated away from its Figma angle
+export const MAX_TILT = 8;
+/** Uploaded photo zoom range (%). Below 100 the photo no longer fills its frame and the frame's grey shows around it. */
+export const PHOTO_SCALE_MIN = 50;
+export const PHOTO_SCALE_MAX = 300;
+
+// Voucher decorations (Figma 115-3009): one shape, placed by its centre (% of banner), height in % of banner height
+export const VOUCHER_PATH = 'M49.0916 24.2206C38.6262 40.0118 32.0027 50.4385 14.157 53.3117C13.4872 53.4195 12.8006 53.2026 12.3061 52.7381L9.88069 50.46C9.075 49.7032 9.61053 48.3508 10.7159 48.3508C11.808 48.3508 12.3499 47.0259 11.5708 46.2606L7.49055 42.2525C7.07191 41.8413 6.50854 41.6109 5.92171 41.6109H2.68975C1.8979 41.6109 1.16496 41.1926 0.762204 40.5108L0.311731 39.7483C-0.395309 38.5514 0.15122 37.0078 1.43806 36.4821C24.767 26.9509 20.5045 17.3703 23.0285 1.76196C23.3112 0.0140691 25.4403 -0.594274 26.6736 0.676217L29.83 3.92804C30.1748 4.28325 30.3922 4.74271 30.448 5.23457L31.204 11.8869C31.2772 12.531 31.626 13.1117 32.1601 13.4789L39.7841 18.7204C40.7081 19.3558 41.9695 19.1439 42.6354 18.2415C43.4186 17.1801 44.9795 17.1068 45.8587 18.0901L48.8959 21.4869C49.5753 22.2468 49.6547 23.3709 49.0916 24.2206Z';
+const VOUCHER_VB = { w: 49.4654, h: 53.3389 };
+export const DEFAULT_VOUCHER_COLOR = '#FFD300';
+type VoucherAdjust = { scale: number; x: number; y: number; rotate: number };
+/** Slider starting values per ratio (what "reset" returns to), tuned on top of the Figma spots. */
+const VOUCHER_DEFAULTS: Record<'2:1' | '3:1' | '5:1', { top: VoucherAdjust; bottom: VoucherAdjust }> = {
+  '2:1': { top: { scale: 100, x: 5, y: 1, rotate: 4 }, bottom: { scale: 75, x: 3, y: 5, rotate: 6 } },
+  '3:1': { top: { scale: 75, x: 0, y: 0, rotate: 0 }, bottom: { scale: 100, x: 5, y: 0, rotate: 0 } },
+  '5:1': { top: { scale: 104, x: 2, y: 4, rotate: 4 }, bottom: { scale: 105, x: -1, y: 1, rotate: 3 } },
+};
+export const voucherDefaults = (formData: Pick<BannerFormData, 'bannerRatio'>, pos: 'top' | 'bottom') => VOUCHER_DEFAULTS[ratioKey(formData.bannerRatio)][pos];
+type VoucherSpot = { x: number; y: number; h: number; rot: number; flipY?: boolean };
+const VOUCHER_SPOTS: Record<'2:1' | '3:1' | '5:1', { top: VoucherSpot; bottom: VoucherSpot }> = {
+  '2:1': { top: { x: 46.8, y: -0.1, h: 21, rot: 167.89, flipY: true }, bottom: { x: 54.7, y: 94, h: 31, rot: 5.48 } },
+  '3:1': { top: { x: 48.1, y: -0.7, h: 31, rot: 167.89, flipY: true }, bottom: { x: 44.5, y: 95.8, h: 24, rot: 5.48 } },
+  '5:1': { top: { x: 43.2, y: -2.1, h: 27.5, rot: 167.89, flipY: true }, bottom: { x: 97.1, y: 86.9, h: 56, rot: 12.11 } },
+}; // deg each card can be rotated away from its Figma angle
 
 export function groupGeometry(formData: BannerFormData, scale: number) {
   const layout = LAYOUTS[ratioKey(formData.bannerRatio)][formData.ttdTemplate === 'highlight-3' ? 'highlight-3' : 'highlight-2'];
@@ -183,7 +298,7 @@ export function groupGeometry(formData: BannerFormData, scale: number) {
 }
 
 /** Background + tilted polaroid photos. Fills its (positioned) parent; sits where the key visual and overlay usually go. */
-export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesOnly }: Props) {
+export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesOnly, showNumberBadges = true }: Props) {
   const layout = LAYOUTS[ratioKey(formData.bannerRatio)][formData.ttdTemplate === 'highlight-3' ? 'highlight-3' : 'highlight-2'];
   const ref = useRef<HTMLDivElement>(null);
   const [k, setK] = useState(1); // element px per Figma px
@@ -260,7 +375,7 @@ export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesO
         const mask = `linear-gradient(${towardsText}, #000 ${o.fadeStart}%, transparent ${Math.max(o.fadeStart + 1, o.fadeEnd)}%)`;
         return (
           <div className="absolute inset-0 overflow-hidden" style={{ opacity: Math.min(o.opacity, OVERLAY_MAX_OPACITY) / 100, WebkitMaskImage: mask, maskImage: mask }}>
-            <img src={src} alt="" crossOrigin="anonymous" draggable={false} className="block select-none pointer-events-none" style={cropStyle(o)} />
+            <CropImg src={src} alt="" crossOrigin="anonymous" draggable={false} className="block select-none pointer-events-none" crop={o} />
           </div>
         );
       })()}
@@ -316,6 +431,7 @@ export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesO
         {[...order].reverse().map((i) => {
           const f = layout.frames[i];
           const crop = crops[i] ?? DEFAULT_CROP;
+          const rotDeg = f.rot + clamp(formData.polaroidRotations?.[i] ?? 0, -MAX_TILT, MAX_TILT);
           return (
             <div
               key={i}
@@ -327,7 +443,7 @@ export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesO
                 top: (f.cy - f.h / 2 - box.t) * k,
                 width: f.w * k,
                 height: f.h * k,
-                transform: `rotate(${f.rot + clamp(formData.polaroidRotations?.[i] ?? 0, -MAX_TILT, MAX_TILT)}deg)`,
+                transform: `rotate(${rotDeg}deg)`,
                 border: `${f.border * k}px solid ${handlesOnly ? 'transparent' : '#FFFFFF'}`,
                 background: handlesOnly ? 'transparent' : '#D9D9D9',
                 boxShadow: handlesOnly ? undefined : `0 ${f.shadowY * f.border * k}px ${f.border * 1.6 * k}px rgba(0,0,0,0.3)`,
@@ -337,19 +453,57 @@ export function PolaroidCollage({ formData, keyVisualUrl, onFormChange, handlesO
               }}
             >
               {srcs[i] && !handlesOnly && (
-                <img
+                <CropImg
                   src={srcs[i]!}
                   alt={`Photo ${i + 1}`}
                   crossOrigin="anonymous"
                   draggable={false}
                   className="block select-none pointer-events-none"
-                  style={cropStyle(crop)}
+                  crop={crop}
                 />
+              )}
+              {/* Helps tell the stacked/overlapping photos apart */}
+              {showNumberBadges && !handlesOnly && !srcs[i] && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div
+                    className="flex items-center justify-center w-[28px] h-[28px] rounded-full bg-black/60 text-white text-[14px] font-bold leading-none"
+                    style={{ transform: `rotate(${-rotDeg}deg)` }}
+                  >
+                    {i + 1}
+                  </div>
+                </div>
               )}
             </div>
           );
         })}
       </BoundingBox>
+      {/* Voucher decorations: above the photos, below the logo / text (the whole collage sits under those) */}
+      {!handlesOnly && (['top', 'bottom'] as const).map((pos) => {
+        const v = formData.polaroidVouchers?.[pos];
+        if (!v?.enabled) return null;
+        const spot = VOUCHER_SPOTS[ratioKey(formData.bannerRatio)][pos];
+        const d = voucherDefaults(formData, pos);
+        const hPx = ((spot.h * layout.h) / 100) * k * ((v.scale ?? d.scale) / 100);
+        const wPx = (hPx * VOUCHER_VB.w) / VOUCHER_VB.h;
+        return (
+          <svg
+            key={pos}
+            viewBox={`0 0 ${VOUCHER_VB.w} ${VOUCHER_VB.h}`}
+            width={wPx}
+            height={hPx}
+            className="absolute pointer-events-none"
+            style={{
+              left: `calc(${spot.x + (v.x ?? d.x)}% - ${wPx / 2}px)`,
+              top: `calc(${spot.y + (v.y ?? d.y)}% - ${hPx / 2}px)`,
+              transform: `rotate(${spot.rot + (v.rotate ?? d.rotate)}deg)${spot.flipY ? ' scaleY(-1)' : ''}`,
+              transformOrigin: 'center',
+              overflow: 'visible',
+            }}
+          >
+            <path d={VOUCHER_PATH} fill={v.color || DEFAULT_VOUCHER_COLOR} />
+          </svg>
+        );
+      })}
     </div>
   );
 }

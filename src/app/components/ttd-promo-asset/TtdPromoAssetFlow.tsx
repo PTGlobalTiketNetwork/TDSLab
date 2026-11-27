@@ -1,5 +1,6 @@
 import { useStickyBar, STICKY_SHADOW } from '@/hooks/useStickyBar';
 import { useEffect, useRef, useState } from 'react';
+import { useAutoSaveDraft, AutoSaveIndicator } from '@/hooks/useAutoSaveDraft';
 import { AlertTriangle, ArrowLeftRight, ArrowRight, Download, Edit3, Eraser, Image as ImageIcon, Info, Loader2, Maximize2, RotateCw, Save, Trash2 } from 'lucide-react';
 import { Header } from '../Header';
 import { supabase } from '../../../utils/supabase/client';
@@ -7,6 +8,7 @@ import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
 import { TiketBreadcrumb, TiketStepper } from '../ui/tiket-ui';
 import type { TiketStepItem } from '../ui/tiket-ui';
 import { Checkbox as BaseCheckbox } from '../ui/checkbox';
+import { EditableSliderValue } from '../ui/EditableSliderValue';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { BannerService } from '../../../services/bannerService';
 import { AssetService } from '../../../services/assetService';
@@ -15,7 +17,7 @@ import { SingleAssetUploadDialog } from '../assets/SingleAssetUploadDialog';
 import { DropdownSelect } from '../create-banner/components/DropdownSelect';
 import { BoundingBox } from '../create-banner/components/BoundingBox';
 import { EntryPointEditor } from '../dlp-assets/EntryPointEditor';
-import { PolaroidCollage } from '../create-banner/components/PolaroidCollage';
+import { PolaroidCollage, migrateSavedFormData } from '../create-banner/components/PolaroidCollage';
 import { LivePreview } from '../create-banner/LivePreview';
 import { initialFormDataBase } from '../create-banner/CreateBanner';
 import { OffscreenBannerRenderer, type OffscreenBannerRendererHandle } from '../OffscreenBannerRenderer';
@@ -26,7 +28,7 @@ import { SETTINGS_VERSION } from '../create-banner/settingsVersion';
 import { startCreationTimer, stopCreationTimer } from '../../../utils/creationTimer';
 import type { BannerFormData } from '../create-banner/types';
 import type { Banner } from '../../../types/banner';
-import { buildTtdZipParams } from '../../utils/bannerCapture';
+import { buildTtdZipParams, DESKTOP_EXPORT_CAP_NOTE } from '../../utils/bannerCapture';
 import { removeWhiteBackground } from '../../utils/removeWhiteBackground';
 
 // Blue like the Next button
@@ -82,18 +84,26 @@ const ICON_THEME_LABEL: Record<IconTheme, string> = {
 // Banner 5:1 keeps its own "desktop*" overlay fields instead of the shared ones — same split as DLP's header desktop.
 const isDesktopItem = (id: BannerItemId) => id === 'banner5x1';
 
-const newItemForm = (ratio: BannerFormData['bannerRatio']): BannerFormData => ({
-  ...JSON.parse(JSON.stringify(initialFormDataBase)),
-  bannerCategory: 'Promo Banner', // Internal rendering/editing only — the project itself is saved as category 'TTD Promo Asset'
-  bannerRatio: ratio,
-  showPartnerLogo: true, // TTD banners default to showing the partner logo (vs. off by default for plain Promo Banner)
-  // Slot 1 defaults to the 'Partner' category (vs. 'Payment' for plain Promo Banner) — TTD logos come from the Partner library.
-  partnerLogos: [{ id: Math.random().toString(36).slice(2, 11), type: 'Partner' as const, logo: '' }],
-  // Banner 5:1 default content scale is 150% for TTD (vs the shared Desktop 5:1 default used by plain Promo Banner).
-  ...(ratio === 'Desktop (5:1)' ? { desktopContentScale: 150 } : {}),
-  // 2:1 gets the shared 125% from initialFormDataBase; 3:1 (exclusive to TTD) stays at its own 105% default.
-  ...(ratio === 'Landscape (3:1)' ? { landscapeContentScale: undefined } : {}),
-});
+const newItemForm = (ratio: BannerFormData['bannerRatio']): BannerFormData => {
+  const base = JSON.parse(JSON.stringify(initialFormDataBase));
+  return {
+    ...base,
+    bannerCategory: 'Promo Banner', // Internal rendering/editing only — the project itself is saved as category 'TTD Promo Asset'
+    bannerRatio: ratio,
+    showPartnerLogo: true, // TTD banners default to showing the partner logo (vs. off by default for plain Promo Banner)
+    // Slot 1 defaults to the 'Partner' category (vs. 'Payment' for plain Promo Banner) — TTD logos come from the Partner library.
+    partnerLogos: [{ id: Math.random().toString(36).slice(2, 11), type: 'Partner' as const, logo: '' }],
+    // TTD Promo Asset banners default T&C off (vs on by default for plain Promo Banner).
+    content: {
+      en: { ...base.content.en, termsAndCondition: false },
+      id: { ...base.content.id, termsAndCondition: false },
+    },
+    // Banner 5:1 default content scale is 150% for TTD (vs the shared Desktop 5:1 default used by plain Promo Banner).
+    ...(ratio === 'Desktop (5:1)' ? { desktopContentScale: 150 } : {}),
+    // 2:1 gets the shared 125% from initialFormDataBase; 3:1 (exclusive to TTD) stays at its own 105% default.
+    ...(ratio === 'Landscape (3:1)' ? { landscapeContentScale: undefined } : {}),
+  };
+};
 
 interface Props {
   userName: string;
@@ -115,7 +125,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
     startCreationTimer(initialSeconds);
     return () => stopCreationTimer();
   }, []);
-  const saved = initialData?.ttd;
+  const saved = migrateSavedFormData(initialData)?.ttd;
   const [picked, setPicked] = useState<Partial<Record<OptionId, boolean>>>(() => saved ? {
     banner2x1: !!saved.banner2x1,
     banner3x1: !!saved.banner3x1,
@@ -131,6 +141,10 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
   const projectName = nameSuffix.trim() ? `${NAME_PREFIX}${nameSuffix.trim()}` : '';
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  // Draft record id: the edited record, or one reserved on the first (auto/manual) save of a new project
+  const draftIdRef = useRef<string | undefined>(editingId);
+  const draftExistsRef = useRef(!!editingId);
+  const [autoSavedNewId, setAutoSavedNewId] = useState<string | undefined>(undefined);
   const renderer = useRef<OffscreenBannerRendererHandle>(null);
   const [nameState, setNameState] = useState<{ status: 'idle' | 'checking' | 'valid' | 'invalid'; message?: string }>({ status: 'idle' });
   // Project names must be unique within TTD Promo Asset only (other categories may reuse a name)
@@ -140,7 +154,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
     setNameState({ status: 'checking' });
     try {
       const list = await BannerService.listBanners();
-      const taken = list.some((b) => b.id !== editingId && b.category === 'TTD Promo Asset' && b.name.trim().toLowerCase() === trimmed.toLowerCase());
+      const taken = list.some((b) => b.id !== draftIdRef.current && b.category === 'TTD Promo Asset' && b.name.trim().toLowerCase() === trimmed.toLowerCase());
       if (taken) { setNameState({ status: 'invalid', message: 'Project name already exists in TTD Promo Asset. Please choose another.' }); return false; }
       setNameState({ status: 'valid' });
       return true;
@@ -177,12 +191,21 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
     const src = itemForm(from);
     const overlayColor = isDesktopItem(from) ? src.desktopOverlayColor : src.overlayColor;
     const overlay2Enabled = isDesktopItem(from) ? src.desktopOverlay2Enabled : src.overlay2Enabled;
+    const overlayMode = isDesktopItem(from) ? src.desktopOverlayMode : src.overlayMode;
+    const solidCoverage = isDesktopItem(from) ? src.desktopOverlaySolidCoverage : src.overlaySolidCoverage;
+    const solidOpacity = isDesktopItem(from) ? src.desktopOverlaySolidOpacity : src.overlaySolidOpacity;
+    const solidFill = isDesktopItem(from) ? src.desktopOverlaySolidFill : src.overlaySolidFill;
+    const solidGradientStops = isDesktopItem(from) ? src.desktopOverlaySolidGradientStops : src.overlaySolidGradientStops;
+    const solidGradientType = isDesktopItem(from) ? src.desktopOverlaySolidGradientType : src.overlaySolidGradientType;
+    const solidGradientAngle = isDesktopItem(from) ? src.desktopOverlaySolidGradientAngle : src.overlaySolidGradientAngle;
     const overlayUpdates: Partial<BannerFormData> = isDesktopItem(to)
-      ? { desktopOverlayColor: overlayColor, desktopOverlay2Enabled: overlay2Enabled }
-      : { overlayColor, overlay2Enabled };
+      ? { desktopOverlayColor: overlayColor, desktopOverlay2Enabled: overlay2Enabled, desktopOverlayMode: overlayMode, desktopOverlaySolidCoverage: solidCoverage, desktopOverlaySolidOpacity: solidOpacity, desktopOverlaySolidFill: solidFill, desktopOverlaySolidGradientStops: solidGradientStops, desktopOverlaySolidGradientType: solidGradientType, desktopOverlaySolidGradientAngle: solidGradientAngle }
+      : { overlayColor, overlay2Enabled, overlayMode, overlaySolidCoverage: solidCoverage, overlaySolidOpacity: solidOpacity, overlaySolidFill: solidFill, overlaySolidGradientStops: solidGradientStops, overlaySolidGradientType: solidGradientType, overlaySolidGradientAngle: solidGradientAngle };
     return {
       ...JSON.parse(JSON.stringify({
         content: src.content,
+        headlineFormatSynced: src.headlineFormatSynced,
+        labelDiscountFormatSynced: src.labelDiscountFormatSynced,
         headlineType: src.headlineType,
         textShadow: src.textShadow,
         discountEnabled: src.discountEnabled,
@@ -192,8 +215,12 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         partnerLogos: src.partnerLogos,
         keyVisualUrl: src.keyVisualUrl,
         keyVisualRotation: src.keyVisualRotation,
-        keyVisualFlipH: src.keyVisualFlipH,
-        keyVisualFlipV: src.keyVisualFlipV,
+        // Desktop 5:1 has its own flip (falls back to the mobile one when unset)
+        ...(() => {
+          const fh = isDesktopItem(from) ? (src.desktopKeyVisualFlipH ?? src.keyVisualFlipH) : src.keyVisualFlipH;
+          const fv = isDesktopItem(from) ? (src.desktopKeyVisualFlipV ?? src.keyVisualFlipV) : src.keyVisualFlipV;
+          return isDesktopItem(to) ? { desktopKeyVisualFlipH: fh, desktopKeyVisualFlipV: fv } : { keyVisualFlipH: fh, keyVisualFlipV: fv };
+        })(),
         polaroidImages: src.polaroidImages,
         polaroidBg: src.polaroidBg,
         polaroidBgMode: src.polaroidBgMode,
@@ -202,6 +229,14 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         polaroidCrops: src.polaroidCrops,
         polaroidRotations: src.polaroidRotations,
         polaroidOverlay: src.polaroidOverlay,
+        // Voucher on/off + colour travel; each size keeps its own position, rotation and scale
+        ...(() => {
+          const sv = src.polaroidVouchers;
+          const color = sv?.top?.color || sv?.bottom?.color;
+          const dst = itemForm(to).polaroidVouchers;
+          const pick = (k: 'top' | 'bottom') => ({ ...dst?.[k], enabled: !!sv?.[k]?.enabled, ...(color ? { color } : {}) });
+          return { polaroidVouchers: { ...dst, top: pick('top'), bottom: pick('bottom') } };
+        })(),
         ...overlayUpdates,
       })),
       keyVisualFile: src.keyVisualFile, // File object: shared, not cloned
@@ -211,6 +246,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
   const applyToTargets = () => {
     if (!applyDialog) return;
     applyDialog.targets.forEach((t) => itemChange(t, copyUpdates(applyDialog.from, t)));
+    toast.custom((t) => <TiketSnackbar id={t} message="Content copied, adjust in other ratio manually." />, { duration: 4000 });
     setApplyDialog(null);
   };
 
@@ -223,7 +259,11 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
   const [iconOffsetY, setIconOffsetY] = useState<number>(saved?.verticalIconOffsetY ?? 0);
   const [assets, setAssets] = useState<Asset[]>([]);
   useEffect(() => {
-    AssetService.listAssets().then(setAssets).catch((err) => console.error('Failed to fetch assets', err));
+    const load = () => AssetService.listAssets().then(setAssets).catch((err) => console.error('Failed to fetch assets', err));
+    load();
+    // Pick up assets uploaded elsewhere (e.g. the Partner-logo slot pickers) without a reload
+    window.addEventListener('assets:changed', load);
+    return () => window.removeEventListener('assets:changed', load);
   }, []);
   const iconAssetOptions = assets
     .filter((a) => a.category === 'Partner')
@@ -267,7 +307,17 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
   const isLast = index >= keys.length - 1;
   const goTo = (i: number) => { setIndex(i); setMaxIndex((m) => Math.max(m, i)); };
 
-  const hasUnsavedChanges = anyPicked || !!projectName.trim();
+  // Picking items / naming the project is just required wizard setup, not "a banner you made" — only warn once there's
+  // actual content to lose: a banner's fields differ from its fresh default (or saved baseline, when editing), an image
+  // was uploaded this session, or a vertical icon was picked.
+  const stripFile = (f: BannerFormData) => JSON.stringify({ ...f, keyVisualFile: undefined });
+  const itemFormsKey = (forms: Record<BannerItemId, BannerFormData>) => JSON.stringify({ banner2x1: stripFile(forms.banner2x1), banner3x1: stripFile(forms.banner3x1), banner5x1: stripFile(forms.banner5x1) });
+  // State (not refs) so an auto-save can move the baseline
+  const [baseline, setBaseline] = useState(() => ({ forms: itemFormsKey(itemForms), iconUrl: verticalIconUrl }));
+  const hasUnsavedChanges =
+    !!itemForms.banner2x1.keyVisualFile || !!itemForms.banner3x1.keyVisualFile || !!itemForms.banner5x1.keyVisualFile ||
+    itemFormsKey(itemForms) !== baseline.forms ||
+    verticalIconUrl !== baseline.iconUrl;
   // Stepper's back chevron: previous step while mid-flow, exit (with unsaved-changes confirm) only from the first step.
   // Summary step downloads — same as DLP Assets: one ZIP with every picked item, or one banner's EN + ID.
   const [zipScaleOpen, setZipScaleOpen] = useState(false);
@@ -306,15 +356,26 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
     else onBack();
   };
 
-  const saveProject = async (status: 'draft' | 'published' = 'published') => {
-    (status === 'draft' ? setIsSavingDraft : setIsSaving)(true);
+  // silent = auto-save: no navigation, no toasts (errors are thrown to the auto-save hook)
+  const saveProject = async (status: 'draft' | 'published' = 'published', { silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) {
+      (status === 'draft' ? setIsSavingDraft : setIsSaving)(true);
+      await autoSave.waitForIdle();
+    }
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast.custom((t) => <TiketSnackbar id={t} message="You must be logged in to save" variant="error" />); return; }
+      if (!user) {
+        if (silent) throw new Error('Not logged in');
+        toast.custom((t) => <TiketSnackbar id={t} message="You must be logged in to save" variant="error" />); return;
+      }
       const { data: sessionData } = await supabase.auth.getSession();
       const userDisplay = getUserDisplayName(sessionData?.session?.user, userName || 'Unknown User');
 
-      const id = editingId || crypto.randomUUID();
+      // Reserve the record id before any await so auto-save / manual save / publish all target the same record
+      if (!draftIdRef.current) draftIdRef.current = crypto.randomUUID();
+      const id = draftIdRef.current;
+      const formsSnapshot = itemForms;
+      const iconSnapshot = verticalIconUrl;
       const itemIds = (['banner2x1', 'banner3x1', 'banner5x1'] as const).filter((i) => picked[i]);
 
       // Upload key visual files once each; keep only URLs in the saved data
@@ -370,15 +431,43 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         image_url_id: up.url,
         metadata: { dimension: 'TTD Promo Asset set', fileSize: `${(thumb.size / 1024).toFixed(2)} KB` },
       };
-      if (editingId) await BannerService.updateBanner(editingId, data as any);
-      else await BannerService.saveBanner(data as any);
+      if (draftExistsRef.current) await BannerService.updateBanner(id, data as any);
+      else {
+        await BannerService.saveBanner(data as any);
+        draftExistsRef.current = true;
+        if (!editingId) setAutoSavedNewId(id);
+      }
+      if (silent) {
+        // Swap uploaded Files for their URLs (no re-upload next time) and move the unsaved-changes baseline to what was saved
+        const swap = (f: BannerFormData) => (f.keyVisualFile && uploaded.has(f.keyVisualFile) ? { ...f, keyVisualUrl: uploaded.get(f.keyVisualFile)!, keyVisualFile: undefined } : f);
+        const swapAll = (forms: Record<BannerItemId, BannerFormData>) => ({ banner2x1: swap(forms.banner2x1), banner3x1: swap(forms.banner3x1), banner5x1: swap(forms.banner5x1) });
+        if (uploaded.size) setItemForms((p) => swapAll(p));
+        setBaseline({ forms: itemFormsKey(swapAll(formsSnapshot)), iconUrl: iconSnapshot });
+        return;
+      }
       onBack(`"${projectName.trim()}" ${status === 'draft' ? 'saved as draft' : 'saved'}`);
     } catch (err) {
+      if (silent) throw err;
       console.error('TTD Promo Asset save failed', err);
       toast.custom((t) => <TiketSnackbar id={t} message="Failed to save TTD Promo Asset" variant="error" />);
     } finally {
-      (status === 'draft' ? setIsSavingDraft : setIsSaving)(false);
+      if (!silent) (status === 'draft' ? setIsSavingDraft : setIsSaving)(false);
     }
+  };
+
+  // Auto-save to Drafts: same requirements as the manual Save Draft (project name, name not taken)
+  const autoSave = useAutoSaveDraft({
+    enabled: !isSaving && !isSavingDraft && !!projectName.trim() && nameState.status !== 'invalid' && nameState.status !== 'checking',
+    isDirty: hasUnsavedChanges,
+    changeKey: { itemForms, picked, template, verticalIconUrl, verticalIconTheme, iconScale, iconOffsetX, iconOffsetY, nameSuffix },
+    save: () => saveProject('draft', { silent: true }),
+  });
+  // Discard: a new project that only exists as an auto-saved draft is deleted again
+  const discard = () => {
+    autoSave.stop();
+    const id = autoSavedNewId || (!editingId && draftExistsRef.current ? draftIdRef.current : undefined);
+    if (id) BannerService.deleteBanner(id).catch((err) => console.error('Failed to delete auto-saved draft:', err));
+    onBack();
   };
 
   const section = (title: string, hint: string, children: React.ReactNode, info?: React.ReactNode) => (
@@ -472,7 +561,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
       <div className="relative w-full aspect-[2/1] rounded-[6px] overflow-hidden" style={{ background: '#007BFF' }}>
         {id === 'gradient' && <div className="absolute inset-0 bg-gradient-to-r from-[#303135]/90 from-40% to-transparent" />}
         {/* The real 2:1 polaroid layout (empty frames), so the thumbnail matches the banner exactly */}
-        {id !== 'gradient' && <PolaroidCollage formData={{ bannerRatio: 'Landscape (2:1)', ttdTemplate: id, polaroidBg: '#007BFF' } as BannerFormData} keyVisualUrl={null} />}
+        {id !== 'gradient' && <PolaroidCollage formData={{ bannerRatio: 'Landscape (2:1)', ttdTemplate: id, polaroidBg: '#007BFF' } as BannerFormData} keyVisualUrl={null} showNumberBadges={false} />}
         {bars}
       </div>
     );
@@ -493,7 +582,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium text-[#71747d]">{label}</span>
         <div className="flex items-center gap-[6px]">
-          <span className="text-[12px] font-semibold text-[#007BFF]">{label === 'Scale' ? `${value}%` : `${value}px`}</span>
+          <EditableSliderValue value={value} onChange={onChange} suffix={label === 'Scale' ? '%' : 'px'} min={min} max={max} className="text-[12px] font-semibold text-[#007BFF]" />
           <button type="button" onClick={() => onChange(reset)} className="text-[#71747d] hover:text-[#303135] transition-colors" title="Reset to default">
             <RotateCw size={11} />
           </button>
@@ -666,7 +755,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         return (
           <div className="flex flex-col gap-[16px]">
             {editors.map((id) => (
-              <div key={id} data-ttd-card className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] px-[24px] scroll-mt-[calc(var(--sticky-base,0px)+72px)]" style={{ '--ep-head-top': 'calc(var(--sticky-base, 0px) + 64px)' } as React.CSSProperties}>
+              <div key={id} data-ttd-card className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] px-[24px] scroll-mt-[calc(var(--sticky-base,0px)+88px)]" style={{ '--ep-head-top': 'calc(var(--sticky-base, 0px) + 80px)' } as React.CSSProperties}>
                 <div className="sticky top-[var(--ep-head-top)] z-[30] -mx-[24px] px-[24px] h-[56px] bg-white rounded-t-[12px] flex items-center justify-between gap-[12px]">
                   <span className="text-[16px] font-bold text-[#303135]">{ITEM_TITLE[id]}</span>
                   <div className="flex items-center gap-[8px] shrink-0">
@@ -723,7 +812,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         );
       }
       case 'summary': {
-        const scalePicker = (onPick: (factor: number) => void, label: string) => (
+        const scalePicker = (onPick: (factor: number) => void, label: string, showCapNote = true) => (
           <PopoverContent className="w-[220px] p-4 bg-white" align="end" sideOffset={8}>
             <div className="flex flex-col gap-3">
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</span>
@@ -739,6 +828,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
                   </button>
                 ))}
               </div>
+              {showCapNote && <p className="text-[11px] text-gray-500">{DESKTOP_EXPORT_CAP_NOTE}</p>}
             </div>
           </PopoverContent>
         );
@@ -757,7 +847,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
                     <Download size={14} />
                   </button>
                 </PopoverTrigger>
-                {scalePicker((factor) => downloadCard(id, title, factor), 'Download EN + ID')}
+                {scalePicker((factor) => downloadCard(id, title, factor), 'Download EN + ID', /desktop|5:1|4:1/i.test(`${id} ${title}`))}
               </Popover>
             </div>
             <LivePreview formData={itemForm(id)} onChange={() => {}} currentStep={4} activeTab="en" deviceTab="all" compact />
@@ -816,7 +906,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
   };
 
   return (
-    <div className="min-h-screen bg-[#f8f9fd] flex flex-col relative w-full overflow-x-clip" style={{ '--sticky-base': '64px' } as React.CSSProperties}>
+    <div className="min-h-screen bg-[#f8f9fd] flex flex-col relative w-full overflow-x-clip" style={{ '--sticky-base': '80px' } as React.CSSProperties}>
       <OffscreenBannerRenderer ref={renderer} />
       <SingleAssetUploadDialog
         open={iconUploadOpen}
@@ -892,11 +982,11 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
         </DialogContent>
       </Dialog>
       <Header compact flat={scrolled} fullWidth showLogo hideSearch userName={userName} userId={userId} userAvatar={userAvatar} onLogout={() => supabase.auth.signOut()} />
-      <div className="mt-[88px] w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]">
+      <div className="mt-[104px] w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]">
         <div ref={stepBarRef}
-          className={`fixed top-[64px] left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[64px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+          className={`fixed top-[80px] left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[80px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
         >
-          <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-end pb-[16px] gap-[8px]">
+          <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-center py-[16px] gap-[8px]">
             <span className="text-[16px] font-semibold leading-[20px] text-[#303135] truncate">{projectName.trim() || 'TTD Promo Asset'}</span>
             <TiketStepper steps={steps} currentStep={index + 1} maxStepReached={maxIndex + 1} onStepClick={(id) => goTo(id - 1)} size="compact" onBack={stepperBack} />
           </div>
@@ -928,6 +1018,7 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
             >
               {isSavingDraft ? 'Saving...' : 'Save Draft'}
             </button>
+            <AutoSaveIndicator status={autoSave.status} lastSavedAt={autoSave.lastSavedAt} />
           </div>
           <div className="flex items-center gap-4">
             {index > 0 && (
@@ -1001,8 +1092,9 @@ export function TtdPromoAssetFlow({ userName, userId, userAvatar, onBack, initia
                </div>
                <button
                 type="button"
-                onClick={() => onBack()}
-                className="w-full h-[48px] px-[24px] text-[#d4183d] text-[16px] font-bold rounded-[8px] transition-colors flex items-center justify-center gap-2"
+                disabled={isSaving || isSavingDraft}
+                onClick={discard}
+                className="w-full h-[48px] px-[24px] text-[#d4183d] text-[16px] font-bold rounded-[8px] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: '#FFDFDF', borderColor: '#FFDFDF' }}
               >
                 <Trash2 size={16} />

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Copy, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  differenceInCalendarDays, eachDayOfInterval, eachMonthOfInterval, eachWeekOfInterval,
+  differenceInCalendarDays, eachDayOfInterval, eachHourOfInterval, eachMonthOfInterval, eachWeekOfInterval,
   endOfDay, format, startOfDay, startOfMonth, startOfWeek, subDays,
 } from 'date-fns';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -11,9 +11,10 @@ import type { Banner } from '../../types/banner';
 import { MultiSelectFilter, PillSelect } from '../components/FilterBar';
 import { TiketSnackbar } from '../components/ui/TiketSnackbar';
 
-type RangeKey = 'week' | 'month' | 'year' | 'semester' | 'custom';
+type RangeKey = 'day' | 'week' | 'month' | 'year' | 'semester' | 'custom';
 
 const RANGES: { key: RangeKey; label: string; days?: number }[] = [
+  { key: 'day', label: 'Daily', days: 1 },
   { key: 'week', label: 'Weekly', days: 7 },
   { key: 'month', label: 'Monthly', days: 30 },
   { key: 'year', label: 'Yearly', days: 365 },
@@ -274,8 +275,13 @@ export function AnalyticsPage({ isSidebarCollapsed = false }: { isSidebarCollaps
   const fmtMin = (m: number) => String(Number(m.toFixed(1)));
   const days = differenceInCalendarDays(to, from) + 1;
 
-  // Trend buckets: daily up to a month, weekly up to ~4 months, monthly beyond
+  // Trend buckets: hourly for a single day, daily up to a month, weekly up to ~4 months, monthly beyond
   const trend = useMemo(() => {
+    if (days === 1) {
+      const counts = Array(24).fill(0);
+      current.forEach((b) => { counts[new Date(b.createdAt).getHours()]++; });
+      return eachHourOfInterval({ start: from, end: to }).map((h) => ({ name: format(h, 'HH:00'), value: counts[h.getHours()] }));
+    }
     const mode = days <= 31 ? 'day' : days <= 140 ? 'week' : 'month';
     const keyOf = (d: Date) => format(mode === 'day' ? d : mode === 'week' ? startOfWeek(d, { weekStartsOn: 1 }) : startOfMonth(d), 'yyyy-MM-dd');
     const starts = mode === 'day' ? eachDayOfInterval({ start: from, end: to })
@@ -305,7 +311,7 @@ export function AnalyticsPage({ isSidebarCollapsed = false }: { isSidebarCollaps
     return Array.from(m, ([name, list]) => ({ name, ...summarize(list) })).sort((a, b) => b.created - a.created);
   }, [current]);
 
-  const rangeLabel = range === 'semester' ? `${semYear} H${semHalf} (${format(from, 'd MMM')} – ${format(to, 'd MMM yyyy')})` : `${format(from, 'd MMM yyyy')} – ${format(to, 'd MMM yyyy')}`;
+  const rangeLabel = days === 1 ? format(from, 'd MMM yyyy') : range === 'semester' ? `${semYear} H${semHalf} (${format(from, 'd MMM')} – ${format(to, 'd MMM yyyy')})` : `${format(from, 'd MMM yyyy')} – ${format(to, 'd MMM yyyy')}`;
   const who = creators.length === 0 ? 'the team' : creators.join(', ');
   const hoursText = String(Number(hoursSaved.toFixed(2))); // exact, up to 2 decimals (29.5 stays 29.5)
   const summaryText =

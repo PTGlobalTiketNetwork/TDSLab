@@ -1,8 +1,8 @@
 import { Slider } from './slider';
 import { QuantityInput } from './QuantityInput';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
-import { useState } from 'react';
 import { ChevronDown, PaintBucket, Pipette, AlignVerticalSpaceAround, RotateCw } from 'lucide-react';
+import { ColorPicker } from '../create-banner/ColorPicker';
 
 interface TextFormattingToolbarProps {
   activeWeight: string | null;
@@ -37,8 +37,6 @@ export function TextFormattingToolbar({
   lineHeight,
   onLineHeightChange
 }: TextFormattingToolbarProps) {
-  const [customHex, setCustomHex] = useState('');
-
   const colors = [
     { name: 'White', value: '#FFFFFF' },
     { name: 'Tiket Blue', value: '#0064D2' },
@@ -49,7 +47,7 @@ export function TextFormattingToolbar({
   return (
     <div className={`flex flex-wrap items-center justify-between gap-x-[8px] gap-y-[6px] px-[8px] py-[6px] border-b border-[#f0f2f5] bg-[#f8f9fd] ${className || ''}`}>
          {/* Left: Font Weight Controls */}
-         <div className="flex items-center gap-[4px]">
+         <div className="flex flex-wrap items-center gap-x-[4px] gap-y-[6px]">
              <button
                  type="button"
                  onMouseDown={(e) => e.preventDefault()}
@@ -139,50 +137,22 @@ export function TextFormattingToolbar({
                      </button>
                    </PopoverTrigger>
                    <PopoverContent className="w-64 p-3" align="start">
-                      <div className="flex flex-col gap-3">
-                        <div className="grid grid-cols-4 gap-2">
-                          {colors.map((c) => (
-                            <button
-                              key={c.value}
-                              className={`w-8 h-8 rounded-full border shadow-sm transition-transform hover:scale-110 ${activeColor === c.value ? 'ring-2 ring-blue-500 ring-offset-1' : 'border-gray-200'}`}
-                              style={{ backgroundColor: c.value }}
-                              onClick={() => onColorChange(c.value)}
-                              title={c.name}
-                            />
-                          ))}
-                        </div>
-                        <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-                          <span className="text-xs text-gray-500 font-medium">Hex</span>
-                          <div className="flex items-center flex-1 border rounded px-2 py-1 bg-white">
-                            <span className="text-gray-400 text-xs mr-1">#</span>
-                            <input 
-                              type="text" 
-                              className="w-full text-xs outline-none font-mono"
-                              placeholder="000000"
-                              maxLength={6}
-                              value={customHex.replace('#', '')}
-                              onChange={(e) => setCustomHex(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  let val = customHex;
-                                  if (!val.startsWith('#')) val = '#' + val;
-                                  if (/^#[0-9A-F]{6}$/i.test(val)) {
-                                    onColorChange(val);
-                                  }
-                                }
-                              }}
-                              onBlur={() => {
-                                if (customHex) {
-                                  let val = customHex;
-                                  if (!val.startsWith('#')) val = '#' + val;
-                                  if (/^#[0-9A-F]{6}$/i.test(val)) {
-                                    onColorChange(val);
-                                  }
-                                }
-                              }}
-                            />
-                          </div>
-                        </div>
+                      <div className="grid grid-cols-5 gap-2 items-start">
+                        {colors.map((c) => (
+                          <button
+                            key={c.value}
+                            className={`w-8 h-8 rounded-full border shadow-sm transition-transform hover:scale-110 ${(activeColor || '#000000').toLowerCase() === c.value.toLowerCase() ? 'ring-2 ring-[#007BFF] ring-offset-2' : 'border-gray-200'}`}
+                            style={{ backgroundColor: c.value }}
+                            onClick={() => onColorChange(c.value)}
+                            title={c.name}
+                          />
+                        ))}
+                        <ColorPicker
+                          variant="chip"
+                          value={activeColor && !colors.some((c) => c.value.toLowerCase() === activeColor.toLowerCase()) ? activeColor : undefined}
+                          chipActive={!!activeColor && !colors.some((c) => c.value.toLowerCase() === activeColor.toLowerCase())}
+                          onChange={onColorChange}
+                        />
                       </div>
                    </PopoverContent>
                  </Popover>

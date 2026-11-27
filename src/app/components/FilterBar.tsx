@@ -11,6 +11,10 @@ interface FilterBarProps {
   onSortChange: (sort: string) => void;
   availableRatios: string[];
   availableVerticals: string[];
+  /** When set, the Product/Ratio filters are replaced by a single template filter (TTD Promo Asset list). */
+  templateFilter?: string[];
+  onTemplateFilterChange?: (filter: string[]) => void;
+  templateOptions?: string[];
 }
 
 const sortOptions = [
@@ -33,8 +37,12 @@ function ChevronDownIcon() {
 }
 
 /** Pill dropdown with a search box and checkboxes, so more than one option can be selected. Empty selection = all. */
-export function MultiSelectFilter({ allLabel, pluralLabel, options, selected, onChange }: {
+export function MultiSelectFilter({ allLabel, pluralLabel, options, selected, onChange, searchable = true, fullIsAll = false }: {
   allLabel: string;
+  /** Show the search box (default true) */
+  searchable?: boolean;
+  /** Label reads allLabel when every option is checked */
+  fullIsAll?: boolean;
   pluralLabel: string;
   options: string[];
   selected: string[];
@@ -54,7 +62,7 @@ export function MultiSelectFilter({ allLabel, pluralLabel, options, selected, on
 
   useEffect(() => { if (!open) setQuery(''); }, [open]);
 
-  const label = selected.length === 0 ? allLabel : selected.length === 1 ? selected[0] : `${selected.length} ${pluralLabel}`;
+  const label = selected.length === 0 || (fullIsAll && selected.length === options.length) ? allLabel : selected.length === 1 ? selected[0] : `${selected.length} ${pluralLabel}`;
   const shown = options.filter((o) => o.toLowerCase().includes(query.trim().toLowerCase()));
   const toggle = (o: string) => onChange(selected.includes(o) ? selected.filter((x) => x !== o) : [...selected, o]);
 
@@ -74,7 +82,7 @@ export function MultiSelectFilter({ allLabel, pluralLabel, options, selected, on
 
       {open && (
         <div className="absolute top-[48px] left-0 w-[280px] bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] z-50 overflow-clip flex flex-col items-start py-[8px]">
-          <div className="w-full px-[12px] pb-[8px]">
+          {searchable && <div className="w-full px-[12px] pb-[8px]">
             <div className="flex items-center gap-[8px] bg-[#f8f9fd] border border-[#e8eaee] rounded-[8px] px-[10px] py-[6px]">
               <Search size={14} className="text-[#71747d] shrink-0" />
               <input
@@ -85,7 +93,7 @@ export function MultiSelectFilter({ allLabel, pluralLabel, options, selected, on
                 className="w-full bg-transparent outline-none text-[14px] text-[#303135] placeholder:text-[#71747d]"
               />
             </div>
-          </div>
+          </div>}
           <div className="w-full max-h-[300px] overflow-y-auto">
             {!query.trim() && (
               <div onClick={() => onChange([])} className="flex items-center gap-[12px] px-[16px] py-[10px] w-full cursor-pointer hover:bg-[#f8f9fd] transition-colors">
@@ -173,7 +181,11 @@ export function FilterBar({
   onSortChange,
   availableRatios,
   availableVerticals,
+  templateFilter,
+  onTemplateFilterChange,
+  templateOptions = [],
 }: FilterBarProps) {
+  const useTemplate = !!templateFilter && !!onTemplateFilterChange;
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -191,9 +203,10 @@ export function FilterBar({
   const currentSortLabel = sortOptions.find(opt => opt.value === sortBy)?.label || 'Sort by';
   
   // Check if any filter is active
-  const hasActiveFilters = verticalFilter.length > 0 || ratioFilter.length > 0;
+  const hasActiveFilters = useTemplate ? templateFilter!.length > 0 : verticalFilter.length > 0 || ratioFilter.length > 0;
   
   const handleClearAll = () => {
+    if (useTemplate) { onTemplateFilterChange!([]); return; }
     onVerticalFilterChange([]);
     onRatioFilterChange([]);
   };
@@ -241,8 +254,14 @@ export function FilterBar({
           )}
         </div>
 
-        <MultiSelectFilter allLabel="All Product" pluralLabel="Products" options={availableVerticals} selected={verticalFilter} onChange={onVerticalFilterChange} />
-        <MultiSelectFilter allLabel="All Ratio" pluralLabel="Ratios" options={availableRatios} selected={ratioFilter} onChange={onRatioFilterChange} />
+        {useTemplate ? (
+          <MultiSelectFilter allLabel="All Template" pluralLabel="selected" options={templateOptions} selected={templateFilter!} onChange={onTemplateFilterChange!} searchable={false} fullIsAll />
+        ) : (
+          <>
+            <MultiSelectFilter allLabel="All Product" pluralLabel="Products" options={availableVerticals} selected={verticalFilter} onChange={onVerticalFilterChange} />
+            <MultiSelectFilter allLabel="All Ratio" pluralLabel="Ratios" options={availableRatios} selected={ratioFilter} onChange={onRatioFilterChange} />
+          </>
+        )}
         {hasActiveFilters && (
           <button
             onClick={handleClearAll}

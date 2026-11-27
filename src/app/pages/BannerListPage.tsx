@@ -13,7 +13,7 @@ import { useAllBannersPresence } from '../../hooks/useAllBannersPresence';
 import { getUserDisplayName, getUserAvatarUrl } from '../utils/userDisplay';
 import { OffscreenBannerRenderer, OffscreenBannerRendererHandle } from '../components/OffscreenBannerRenderer';
 import { handoffStore } from '../../utils/indexedDB';
-import { buildDlpZipManifest, buildTtdZipParams } from '../utils/bannerCapture';
+import { buildDlpZipManifest, dlpZipBaseName, buildTtdZipParams } from '../utils/bannerCapture';
 import { TiketTabs } from '../components/ui/TiketTabs';
 import { getBannerCategory } from '../components/CategoryBadge';
 import { needsMigration, SETTINGS_VERSION } from '../components/create-banner/settingsVersion';
@@ -50,6 +50,14 @@ interface BannerListPageProps {
   isSidebarCollapsed: boolean;
   onDataChange?: () => void;
 }
+
+const TTD_TEMPLATE_OPTIONS = ['Gradient', '2 Highlight', '3 Highlight'];
+// TTD projects stamp the same template on every banner in form_data.ttd; missing = Gradient
+const getTtdTemplateLabel = (b: Banner) => {
+  const fd = (b as any).form_data;
+  const t = fd?.ttd?.banner2x1?.ttdTemplate ?? fd?.ttd?.banner3x1?.ttdTemplate ?? fd?.ttd?.banner5x1?.ttdTemplate ?? fd?.ttdTemplate;
+  return t === 'highlight-2' ? '2 Highlight' : t === 'highlight-3' ? '3 Highlight' : 'Gradient';
+};
 
 const VERTICAL_FILTER_OPTIONS = ['General', 'Accom', 'Flight', 'NFT', 'ToDos', 'Event'];
 // Banners saved before the split still say "Transport": they show up under Flight
@@ -108,6 +116,9 @@ export function BannerListPage({
 
   const activeCategory = categorySlug ? categoryMap[categorySlug] : 'Promo Banner';
   const isDraftsPage = activeCategory === 'Drafts';
+  const isTtdPage = activeCategory === 'TTD Promo Asset';
+  const [templateFilter, setTemplateFilter] = useState<string[]>([]);
+  useEffect(() => { setTemplateFilter([]); }, [categorySlug]);
 
   // Drafts page: category tab ('all' or a category name)
   const DRAFT_TAB_CATEGORIES = ['Promo Banner', 'Product Entry Point', 'DLP Assets', 'TTD Promo Asset'];
@@ -226,13 +237,18 @@ export function BannerListPage({
       );
     }
     
+    // TTD Promo Asset: template filter replaces the Product/Ratio filters
+    if (isTtdPage) {
+        if (templateFilter.length > 0) filtered = filtered.filter(b => templateFilter.includes(getTtdTemplateLabel(b)));
+    }
+
     // Filter by Vertical (Product)
-    if (verticalFilter.length > 0) {
+    if (!isTtdPage && verticalFilter.length > 0) {
         filtered = filtered.filter(b => verticalFilter.includes(normalizeVertical(b.product)));
     }
 
     // Filter by Ratio (using form_data.bannerRatio)
-    if (ratioFilter.length > 0) {
+    if (!isTtdPage && ratioFilter.length > 0) {
         filtered = filtered.filter(b => {
             const formData = (b as any).form_data;
             return !!formData?.bannerRatio && ratioFilter.includes(formData.bannerRatio);
@@ -260,7 +276,7 @@ export function BannerListPage({
     });
 
     return filtered;
-  }, [banners, searchQuery, activeCategory, session, verticalFilter, ratioFilter, sortBy, draftTab]);
+  }, [banners, searchQuery, activeCategory, session, verticalFilter, ratioFilter, sortBy, draftTab, isTtdPage, templateFilter]);
 
   // DYNAMIC FACETING: Extract unique ratios and verticals from CURRENT page category
   const { availableRatios, availableVerticals } = useMemo(() => {
@@ -787,6 +803,7 @@ export function BannerListPage({
         if (offscreenRendererRef.current) {
           await offscreenRendererRef.current.downloadDlpZip({
             projectName: banner.name || 'DLP Assets',
+            zipName: dlpZipBaseName((banner.form_data as any)?.verticalCategory === 'Hotel' ? 'Accom' : (banner.form_data as any)?.verticalCategory, banner.name || ''),
             scaleFactor: 2,
             banners: buildDlpZipManifest(dlp),
           });
@@ -891,6 +908,7 @@ export function BannerListPage({
           presenceMap={presenceMap}
           availableRatios={availableRatios}
           availableVerticals={availableVerticals}
+          {...(isTtdPage ? { templateFilter, onTemplateFilterChange: setTemplateFilter, templateOptions: TTD_TEMPLATE_OPTIONS } : {})}
           onEditBanner={(banner) => handleEdit(banner)}
           onRenameBanner={openRename}
           onResizeBanner={handleResize}

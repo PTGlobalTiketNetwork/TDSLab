@@ -1,9 +1,11 @@
 import { useStickyBar, STICKY_SHADOW } from '@/hooks/useStickyBar';
+import { useAutoSaveDraft, AutoSaveIndicator } from '@/hooks/useAutoSaveDraft';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Lock, Unlock, RotateCcw } from 'lucide-react';
 import { BANNER_SPECS } from '../../../config/banner-layouts';
 import { BannerFormData, ContentTranslation } from './types';
+import { migratePolaroidLayout, POLAROID_LAYOUT_VERSION } from './components/PolaroidCollage';
 import { FormStepConfig } from './FormStepConfig';
 import { FormStep2 } from './FormStep2';
 import { FormStep3 } from './FormStep3';
@@ -42,6 +44,7 @@ interface CreateBannerProps {
 }
 
 export const initialFormDataBase: BannerFormData = {
+  polaroidLayoutVersion: POLAROID_LAYOUT_VERSION, // new forms already use the current frame order
   // Step 1: Configuration
   bannerName: '',
   landscapeContentScale: NEW_LANDSCAPE_21_CONTENT_SCALE, // only read by the 2:1/3:1 layout
@@ -234,7 +237,7 @@ export function CreateBanner({
       return 1;
   });
   const [formData, setFormData] = useState<BannerFormData>(() => {
-      if (initialData) return initialData;
+      if (initialData) return migratePolaroidLayout(initialData);
       
       // Customize defaults based on Category
       const base = JSON.parse(JSON.stringify(initialFormDataBase)); // Deep clone to avoid mutation
@@ -287,7 +290,6 @@ export function CreateBanner({
   } | null>(null);
   const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
 
-  const isDraft = initialStatus === 'draft';
 
   // Preview Controls State
   const [previewControls, setPreviewControls] = useState<{
@@ -326,10 +328,18 @@ export function CreateBanner({
 
   // Store initial state for change detection
   // We use a ref so it doesn't trigger re-renders, but we need it to be stable
-  const initialBannerState = useRef<string>(JSON.stringify(initialData || {
+  // State (not a ref) so an auto-save can move the baseline and hasChanges recomputes.
+  const [initialBannerState, setInitialBannerState] = useState<string>(() => JSON.stringify((initialData && migratePolaroidLayout(initialData)) || {
       ...initialFormDataBase,
       bannerCategory: initialCategory
   }));
+  // Draft record id: the edited record, or one generated on the first (auto/manual) draft save of a new banner.
+  const draftIdRef = useRef<string | undefined>(editingId);
+  const draftExistsRef = useRef<boolean>(!!editingId);
+  // New banner that now exists only as an auto-saved draft (deleted again on Discard)
+  const [autoSavedNewId, setAutoSavedNewId] = useState<string | undefined>(undefined);
+  const recordId = editingId || autoSavedNewId;
+  const isDraft = initialStatus === 'draft' || !!autoSavedNewId;
 
   // Change Detection Logic
   const hasChanges = useMemo(() => {
@@ -346,8 +356,8 @@ export function CreateBanner({
         manualBackgroundFile: undefined
     });
     
-    return currentString !== initialBannerState.current;
-  }, [formData]);
+    return currentString !== initialBannerState;
+  }, [formData, initialBannerState]);
 
   // Force Lock on Step 3
   useEffect(() => {
@@ -444,7 +454,7 @@ export function CreateBanner({
           
           if (check.exists) {
               // If we are editing and the found ID matches our ID, it's valid (we own the name)
-              if (editingId && check.id === editingId) {
+              if (draftIdRef.current && check.id === draftIdRef.current) {
                   setNameValidation({ status: 'valid' });
                   return true;
               } else {
@@ -532,20 +542,26 @@ export function CreateBanner({
           setIsOverwriteModalOpen(true);
       } else {
           setIsOverwriteMode(false);
-          setIsDone(true);
+          void finishAfterAutoSave();
       }
     }
+  };
+
+  // Let an in-flight auto-save land before publishing so it cannot overwrite the published record
+  const finishAfterAutoSave = async () => {
+      await autoSaveRef.current?.waitForIdle();
+      setIsDone(true);
   };
 
   const handleOverwriteConfirm = () => {
       setIsOverwriteModalOpen(false);
       setIsOverwriteMode(true);
-      setIsDone(true);
+      void finishAfterAutoSave();
   };
 
   const confirmFinish = () => {
     setIsFinishModalOpen(false);
-    setIsDone(true);
+    void finishAfterAutoSave();
   };
 
   const handlePreviousStep = () => {
@@ -866,6 +882,114 @@ export function CreateBanner({
     toast.custom((t) => <TiketSnackbar id={t} message="You will overwrite the latest version when you finish." variant="default" />);
   };
 
+  // Shared draft persistence for manual Save Draft and auto-save. Silent = no toast, no navigation.
+  const persistDraft = async ({ silent }: { silent: boolean }) => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) throw Object.assign(new Error('Not logged in'), { auth: true });
+
+      // Reserve the id before any await so a concurrent manual/auto save targets the same record
+      if (!draftIdRef.current) {
+        draftIdRef.current = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `draft-${Date.now()}`;
+      }
+      const bannerId = draftIdRef.current;
+      const snapshot = formData;
+
+      // If there is a keyVisualFile, upload it first
+      let keyVisualUrl = snapshot.keyVisualUrl || null;
+      const uploadedFile = snapshot.keyVisualFile;
+      if (uploadedFile) {
+         // Determine upload path based on file origin (AI vs Manual)
+         const isAI = uploadedFile.name.startsWith('ai_generated_');
+         const ext = uploadedFile.name.split('.').pop() || 'png';
+         const uniqueFilename = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `bg-${Date.now()}`;
+         const path = isAI ? `Assets/AI_Generated/${uniqueFilename}.${ext}` : `Assets/ImageBG/${uniqueFilename}.${ext}`;
+         const { url } = await BannerService.uploadImage(uploadedFile, path);
+         keyVisualUrl = url;
+      }
+
+      // Prepare data for saving
+      const safeData = getSafeFormData();
+      const draftData = {
+        ...safeData,
+        keyVisualFile: undefined, // Don't save File object
+        manualBackgroundFile: undefined, // Don't save File object
+        keyVisualUrl: keyVisualUrl, // Save URL instead
+        settingsVersion: snapshot.settingsVersion ?? SETTINGS_VERSION,
+        last_step: currentStep // Save current step
+      };
+
+      const bannerData = {
+        id: bannerId,
+        name: snapshot.bannerName || 'Untitled Draft',
+        category: snapshot.bannerCategory,
+        status: 'draft' as const,
+        form_data: draftData,
+        created_by: user.id,
+        // Tag the save as ours so the conflict listener does not flag our own auto-saves
+        last_edited_by_id: user.id,
+        last_edited_by_name: userName,
+        user_avatar: getUserAvatarUrl(user) || userAvatar || null,
+        image_url_en: keyVisualUrl || '', // Use raw asset as preview for now
+        image_url_id: keyVisualUrl || '',
+        product: snapshot.verticalCategory // Add product/vertical info
+      };
+
+      // Existing record (edited, or created by an earlier save) -> PUT; otherwise create with the reserved id
+      if (draftExistsRef.current) {
+           await BannerService.updateBanner(bannerId, bannerData);
+      } else {
+           await BannerService.saveBanner(bannerData);
+           draftExistsRef.current = true;
+           if (!editingId) setAutoSavedNewId(bannerId);
+      }
+      if (!silent) toast.custom((t) => <TiketSnackbar id={t} message={editingId ? "Draft updated successfully." : "Draft saved successfully."} />);
+
+      if (silent) {
+        // Swap the uploaded File for its URL so the next auto-save does not upload it again
+        const savedForm = { ...snapshot, keyVisualFile: undefined, keyVisualUrl: keyVisualUrl || snapshot.keyVisualUrl };
+        if (uploadedFile) {
+          setFormData(prev => prev.keyVisualFile === uploadedFile ? { ...prev, keyVisualFile: undefined, keyVisualUrl: keyVisualUrl || prev.keyVisualUrl } : prev);
+        }
+        // Move the unsaved-changes baseline to what was just saved
+        setInitialBannerState(JSON.stringify({ ...savedForm, keyVisualFile: undefined, manualBackgroundFile: undefined }));
+      }
+  };
+
+  const handleSaveDraft = async (shouldLogout = false) => {
+    try {
+      setIsSavingDraft(true);
+      await autoSaveRef.current?.waitForIdle();
+      await persistDraft({ silent: false });
+
+      if (shouldLogout) {
+          await performLogout();
+      } else {
+          onBack(undefined, 'drafts');
+      }
+    } catch (error: any) {
+      console.error('Save draft error:', error);
+      toast.custom((t) => <TiketSnackbar id={t} message={error?.auth ? "You must be logged in to save drafts" : "Failed to save draft"} variant="error" />);
+      setIsSavingDraft(false);
+    }
+  };
+
+  // Discard: a new banner that only exists as an auto-saved draft is deleted again
+  const discardAutoSavedDraft = () => {
+      autoSaveRef.current?.stop();
+      const id = autoSavedNewId || (!editingId && draftExistsRef.current ? draftIdRef.current : undefined);
+      if (id) BannerService.deleteBanner(id).catch(err => console.error('Failed to delete auto-saved draft:', err));
+  };
+
+  // Auto-save to Drafts (same requirements as the manual Save as Draft button)
+  const autoSave = useAutoSaveDraft({
+      enabled: !isDone && !isSavingDraft && !!formData.bannerName?.trim() && !!formData.verticalCategory && nameValidation.status !== 'invalid',
+      isDirty: hasChanges,
+      changeKey: formData,
+      save: () => persistDraft({ silent: true }),
+  });
+  const autoSaveRef = useRef(autoSave);
+  autoSaveRef.current = autoSave;
+
   if (isDone) {
     return (
       <SuccessScreen 
@@ -877,98 +1001,13 @@ export function CreateBanner({
           onBack(undefined, 'category');
         }}
         overwriteMode={isOverwriteMode}
-        editingId={editingId}
-        initialStatus={initialStatus}
+        editingId={recordId}
+        initialStatus={autoSavedNewId ? 'draft' : initialStatus}
         onLogout={handleLogout}
         onBackToEdit={() => { setIsDone(false); setIsOverwriteMode(false); }}
       />
     );
   }
-
-  const handleSaveDraft = async (shouldLogout = false) => {
-    try {
-      setIsSavingDraft(true);
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
-        console.error("Auth error:", authError);
-        toast.custom((t) => <TiketSnackbar id={t} message="You must be logged in to save drafts" variant="error" />);
-        setIsSavingDraft(false);
-        return;
-      }
-
-      // Generate or use existing ID for Deterministic Filename
-      // Fallback to Date.now() if crypto.randomUUID is not available
-      const bannerId = editingId || (typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `draft-${Date.now()}`);
-
-      // If there is a keyVisualFile, upload it first
-      let keyVisualUrl = formData.keyVisualUrl || null;
-      if (formData.keyVisualFile) {
-         // Determine upload path based on file origin (AI vs Manual)
-         const isAI = formData.keyVisualFile.name.startsWith('ai_generated_');
-         const ext = formData.keyVisualFile.name.split('.').pop() || 'png';
-         const uniqueFilename = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `bg-${Date.now()}`;
-         let path = '';
-         
-         if (isAI) {
-            // AI Generated: Use specific folder and unique UUID
-            path = `Assets/AI_Generated/${uniqueFilename}.${ext}`;
-         } else {
-            // Manual Upload: Use standard ImageBG folder with unique UUID
-            path = `Assets/ImageBG/${uniqueFilename}.${ext}`;
-         }
-         
-         const { url } = await BannerService.uploadImage(formData.keyVisualFile, path);
-         keyVisualUrl = url;
-      }
-
-      // Prepare data for saving
-      const safeData = getSafeFormData();
-      const draftData = {
-        ...safeData,
-        keyVisualFile: undefined, // Don't save File object
-        manualBackgroundFile: undefined, // Don't save File object
-        keyVisualUrl: keyVisualUrl, // Save URL instead
-        settingsVersion: formData.settingsVersion ?? SETTINGS_VERSION,
-        last_step: currentStep // Save current step
-      };
-
-      // DETECT UPDATE VS CREATE FOR DRAFTS
-      // If we are editing an existing banner (editingId exists), we MUST use updateBanner (PUT)
-      // to trigger the logic on the backend.
-      // The backend now intelligently handles drafts by NOT snapshotting history and NOT incrementing version.
-      
-      const bannerData = {
-        id: bannerId, // Use the ID we generated/used
-        name: formData.bannerName || 'Untitled Draft',
-        category: formData.bannerCategory,
-        status: 'draft' as const,
-        form_data: draftData,
-        created_by: user.id,
-        user_avatar: getUserAvatarUrl(user) || userAvatar || null,
-        image_url_en: keyVisualUrl || '', // Use raw asset as preview for now
-        image_url_id: keyVisualUrl || '',
-        product: formData.verticalCategory // Add product/vertical info
-      };
-
-      if (editingId) {
-           await BannerService.updateBanner(editingId, bannerData);
-           toast.custom((t) => <TiketSnackbar id={t} message="Draft updated successfully." />);
-      } else {
-           await BannerService.saveBanner(bannerData);
-           toast.custom((t) => <TiketSnackbar id={t} message="Draft saved successfully." />);
-      }
-
-      if (shouldLogout) {
-          await performLogout();
-      } else {
-          onBack(undefined, 'drafts');
-      }
-    } catch (error) {
-      console.error('Save draft error:', error);
-      toast.custom((t) => <TiketSnackbar id={t} message="Failed to save draft" variant="error" />);
-      setIsSavingDraft(false);
-    }
-  };
 
   const getStepTitle = () => {
     switch (currentStep) {
@@ -990,7 +1029,7 @@ export function CreateBanner({
     // --sticky-base = height of the fixed Header when it is rendered here; --sticky-top (set on the card) = base + the sticky breadcrumb.
     <div
       className={`min-h-screen bg-[#f8f9fd] flex flex-col relative w-full overflow-x-clip ${embedded ? 'pt-[64px]' : ''}`}
-      style={{ '--sticky-base': embedded ? '0px' : '64px' } as React.CSSProperties}
+      style={{ '--sticky-base': embedded ? '0px' : '80px' } as React.CSSProperties}
     >
       <FontStyles />
       {/* Top Menu / Header */}
@@ -1011,7 +1050,7 @@ export function CreateBanner({
 
       {/* Conflict Alert */}
       {remoteVersion && (
-        <div className={`fixed z-30 bg-blue-50 border-b border-blue-100 px-6 py-3 flex items-center justify-center shadow-sm w-full gap-4 transition-all duration-300 ${embedded ? 'top-[0px]' : 'top-[64px]'}`}>
+        <div className={`fixed z-30 bg-blue-50 border-b border-blue-100 px-6 py-3 flex items-center justify-center shadow-sm w-full gap-4 transition-all duration-300 ${embedded ? 'top-[0px]' : 'top-[80px]'}`}>
             <div className="flex items-center gap-2 text-blue-800">
                 <Info size={18} />
                 <span className="font-medium text-sm">{remoteVersion.userName} has just saved a new version of this banner.</span>
@@ -1033,7 +1072,7 @@ export function CreateBanner({
       )}
 
       {/* Main Content Area */}
-      <div className={`${embedded ? '' : 'mt-[88px]'} w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]`}>
+      <div className={`${embedded ? '' : 'mt-[104px]'} w-full max-w-[1200px] mx-auto px-[24px] pb-[40px] flex flex-col gap-[24px]`}>
         
         {/* Breadcrumbs & Steps */}
         <div className="flex flex-col gap-[8px] items-start">
@@ -1056,9 +1095,9 @@ export function CreateBanner({
         {/* Scrolled state only: compact bar under the header with the banner name + steps */}
         <div
           ref={stepBarRef}
-          className={`fixed ${embedded ? 'top-[0px]' : 'top-[64px]'} left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[64px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+          className={`fixed ${embedded ? 'top-[0px]' : 'top-[80px]'} left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[80px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
         >
-          <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-end pb-[16px] gap-[8px]">
+          <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-center py-[16px] gap-[8px]">
             <span className="text-[16px] font-semibold leading-[20px] text-[#303135] truncate">{formData.bannerName?.trim() || 'Untitled banner'}</span>
             <TiketStepper
               steps={steps}
@@ -1076,7 +1115,7 @@ export function CreateBanner({
             the left form column's height — stretching left a tall blank scrollable tail below the preview.
             The divider below is a separate self-stretch element so it still spans the full row height
             (whichever column is taller) instead of stopping at the shorter column's own content height. */}
-        <div className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] w-full flex items-start min-h-[600px]" style={{ '--sticky-top': 'calc(var(--sticky-base) + 64px)' } as React.CSSProperties}>
+        <div className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] w-full flex items-start min-h-[600px]" style={{ '--sticky-top': 'calc(var(--sticky-base) + 80px)' } as React.CSSProperties}>
            {/* Left Side: Form */}
            <div className="flex-1 flex flex-col max-w-[680px]">
              {/* Header */}
@@ -1197,6 +1236,7 @@ export function CreateBanner({
                       Save as Draft
                     </button>
                 )}
+                <AutoSaveIndicator status={autoSave.status} lastSavedAt={autoSave.lastSavedAt} />
             </div>
 
             {/* Right Group: Navigation Actions */}
@@ -1425,6 +1465,7 @@ export function CreateBanner({
                <button
                 type="button"
                 onClick={() => {
+                   discardAutoSavedDraft();
                    if (logoutPending) performLogout();
                    else onBack();
                 }}
@@ -1461,6 +1502,7 @@ export function CreateBanner({
             setPendingNavigation(null);
           }}
           onDiscard={() => {
+            discardAutoSavedDraft();
             setHasUnsavedChanges(false);
             setShowNavigationBlocker(false);
             if (pendingNavigation) {
