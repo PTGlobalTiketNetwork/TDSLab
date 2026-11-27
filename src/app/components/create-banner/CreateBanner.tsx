@@ -1095,9 +1095,9 @@ export function CreateBanner({
         {/* Scrolled state only: compact bar under the header with the banner name + steps */}
         <div
           ref={stepBarRef}
-          className={`fixed ${embedded ? 'top-[0px]' : 'top-[80px]'} left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[64px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+          className={`fixed ${embedded ? 'top-[0px]' : 'top-[80px]'} left-0 right-0 z-[44] bg-white border-b border-[#e9ebef] ${stepBarShadow ? STICKY_SHADOW : ''} h-[72px] transition-all duration-200 ${scrolled ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
         >
-          <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-center py-[8px] gap-[8px]">
+          <div className="max-w-[1200px] mx-auto px-[24px] h-full flex flex-col justify-center py-[12px] gap-[8px]">
             <span className="text-[16px] font-semibold leading-[20px] text-[#303135] truncate">{formData.bannerName?.trim() || 'Untitled banner'}</span>
             <TiketStepper
               steps={steps}
@@ -1115,7 +1115,7 @@ export function CreateBanner({
             the left form column's height — stretching left a tall blank scrollable tail below the preview.
             The divider below is a separate self-stretch element so it still spans the full row height
             (whichever column is taller) instead of stopping at the shorter column's own content height. */}
-        <div className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] w-full flex items-start min-h-[600px]" style={{ '--sticky-top': 'calc(var(--sticky-base) + 64px)' } as React.CSSProperties}>
+        <div className="bg-white rounded-[12px] shadow-[0px_2px_8px_0px_rgba(48,49,53,0.16)] w-full flex items-start min-h-[600px]" style={{ '--sticky-top': 'calc(var(--sticky-base) + 72px)' } as React.CSSProperties}>
            {/* Left Side: Form */}
            <div className="flex-1 flex flex-col max-w-[680px]">
              {/* Header */}
