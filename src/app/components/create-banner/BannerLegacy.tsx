@@ -196,12 +196,8 @@ export const BannerLegacy = forwardRef<HTMLDivElement, BannerLegacyProps>(({
   };
 
   const renderHtml = (text: string | undefined, className: string, style?: React.CSSProperties) => {
-    if (!text) return null;
-    // Trailing newlines (even inside closing tags) would render as an empty extra line.
-    const trimmed = text.replace(/\s+$/, '');
-    if (!trimmed) return null;
-    const htmlContent = tagsToHtml(trimmed, 'font-style: italic; display: inline-block; transform: skewX(-10deg); transform-origin: 0 100%;')
-      .replace(/(?:\s|<br\/>)+((?:<\/span>\s*)*)$/, '$1');
+    if (!text || !text.trim()) return null;
+    const htmlContent = tagsToHtml(text, 'font-style: italic; display: inline-block; transform: skewX(-10deg); transform-origin: 0 100%;');
     return <span className={`${className}`} style={style} dangerouslySetInnerHTML={{ __html: htmlContent }} />;
   };
 

@@ -171,8 +171,11 @@ export function RichTextEditor({
       };
 
       const res = Array.from(root.childNodes).map(traverse).join('');
+      // Chrome inserts a trailing empty <div><br></div> when Enter is pressed at the end of the
+      // text; left in, it serializes into stray trailing newlines that render as an empty gap.
+      const trimmed = res.replace(/\n+$/, '');
       // remove leading newline if any
-      return res.startsWith('\n') ? res.substring(1) : res;
+      return trimmed.startsWith('\n') ? trimmed.substring(1) : trimmed;
   };
 
   const getOutputValue = () => {

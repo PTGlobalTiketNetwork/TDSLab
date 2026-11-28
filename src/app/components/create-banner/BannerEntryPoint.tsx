@@ -131,6 +131,9 @@ export const BannerEntryPoint = forwardRef((props: BannerEntryPointProps, ref: F
   const parseStyledText = (text: string) => {
       if (!text) return '';
       return text
+          // Trailing newlines — even ones left inside a still-open custom tag — would otherwise
+          // render as an empty extra line below the text (e.g. from pressing Enter at the end).
+          .replace(/\s+$/, '')
           .replace(/<sb>/g, '<span class="font-semibold">')
           .replace(/<\/sb>/g, '</span>')
           .replace(/<b>/g, '<span class="font-bold">')
@@ -143,7 +146,8 @@ export const BannerEntryPoint = forwardRef((props: BannerEntryPointProps, ref: F
           .replace(/<\/i>/g, '</span>')
           .replace(/<c v="(.*?)">/g, '<span style="color: $1">')
           .replace(/<\/c>/g, '</span>')
-          .replace(/\n/g, '<br/>');
+          .replace(/\n/g, '<br/>')
+          .replace(/(?:\s|<br\/>)+((?:<\/span>\s*)*)$/, '$1');
   };
 
   const handleVisualMouseDown = (e: React.MouseEvent) => {
