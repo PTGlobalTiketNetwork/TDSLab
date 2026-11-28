@@ -11,6 +11,9 @@ Rangkuman buat diskusi. Semua PR dibuat oleh **yojdottix** dan sudah **merged** 
 | #14 | TTD Promo Asset flow + shared banner editor polish | `TTD-Promo-Assets` | 38 | 27 Nov 2026 |
 | #15 | TTD polaroid Highlight templates and editor polish | `feat/ttd-polaroid-templates` | 20 | 27 Nov 2026 |
 | #16 | Banner editor polish: auto-save drafts, To Do vouchers, voucher badge, overlay solid mode | `fix-nudge-type-grouping` | 35 | 28 Nov 2026 |
+| #18 | Fix TTD Promo photo drag-to-reorder not working | `fix-polaroid-photo-drag-reorder` | 1 | 28 Nov 2026 |
+| #19 | Fix empty gap after rich text headline formatting | `fix-richtext-trailing-newline-gap` | 5 | 28 Nov 2026 |
+| #20 | Fix custom nudge text off-center vertically | `fix-custom-nudge-vertical-centering` | 1 | 28 Nov 2026 |
 
 ---
 
@@ -267,3 +270,47 @@ Rangkuman buat diskusi. Semua PR dibuat oleh **yojdottix** dan sudah **merged** 
 - Saat merge, status check PR "unstable" (kemungkinan preview Vercel) — cek deploy `main`.
 - Auto-save **tidak** membuat/meng-upload thumbnail (hemat traffic); thumbnail diperbarui saat Save Draft / Publish manual. Draft baru yang hanya ter-auto-save belum punya thumbnail di list.
 - Divider 0.5px bisa terlihat samar di layar 1x.
+
+---
+
+# PR #18 — Fix drag-to-reorder foto TTD Promo
+
+## Intinya
+Drag handle (atau thumbnail) di list foto "Photo N" tidak berfungsi untuk tukar posisi; cuma tombol panah atas/bawah yang beneran mengubah urutan.
+
+## Detail
+- Penyebab: drag pakai native HTML5 drag-and-drop tanpa `dataTransfer.setData()`, yang di sebagian browser bisa gagal memulai drag sama sekali. Semua interaksi drag lain di codebase ini (`panOverlayThumb`, `startMove`/`startScale`, drag gradient stop) sudah pakai pointer events, bukan native DnD.
+- Drag foto diubah total ke pointer events, mengikuti pola yang sudah terbukti jalan itu: drag grip handle sekarang memindahkan urutan (sama seperti tombol panah), drag thumbnail tetap menukar gambar antar slot (crop/scale/rotation per slot tidak ikut berubah).
+
+## Perlu dicek
+- Belum dites manual di browser (sandbox tidak ada Playwright/chromium-cli dan fitur butuh login) — baru lolos `pnpm build`.
+
+---
+
+# PR #19 — Fix celah kosong setelah format rich text
+
+## Intinya
+Setelah format teks headline/sub-headline (misal semi-bold sebagian teks), preview banner kadang menampilkan celah kosong besar di bawah teks.
+
+## Detail
+- Penyebab: menekan Enter di akhir baris menyisakan `<div><br></div>` kosong di contentEditable Chrome. Serializer `RichTextEditor` mengubah ini jadi newline nyasar di string tersimpan. Ada 3 tempat terpisah yang mengubah string tag jadi HTML render, dan 2 di antaranya (`BannerSquare.tsx`, `BannerEntryPoint.tsx`) tidak memangkas newline tersebut — hanya `BannerLegacy.tsx` yang sudah punya workaround, makanya bug ini tidak muncul di semua ratio.
+- Fix: newline di akhir dipangkas dari sumbernya (`RichTextEditor`), dan pemangkasan sisi-render disatukan ke helper `tagsToHtml` yang dipakai bersama (dipakai ulang di `BannerSquare`, menggantikan implementasi duplikatnya yang basi); `BannerEntryPoint` tetap pakai implementasi class-based sendiri tapi dapat pemangkasan yang sama.
+
+## Perlu dicek
+- Belum dites manual di browser — baru lolos `pnpm build`.
+- Pastikan baris kosong yang memang disengaja di tengah teks tidak ikut terpotong (pemangkasan hanya menyasar newline di ujung string).
+
+---
+
+# PR #20 — Fix custom nudge tidak center secara vertikal
+
+## Intinya
+Teks nudge "Custom" (bebas, misal 2 baris "All packages" / "Discount") terlihat tidak center vertikal dibanding posisi yang seharusnya.
+
+## Detail
+- Penyebab: posisi Y default nudge diasumsikan tinggi tetap `fontSize * 2` untuk 2 baris, tapi teks Custom dirender dengan `lineHeight: 1.1` (atau nilai custom dari kontrol line-height) dan bisa berapa pun jumlah barisnya. Karena bagian atas box dipaku ke Y tersimpan dan hanya tumbuh ke bawah, kelebihan tinggi menggeser titik tengah visual ke bawah — jadi posisi yang "sudah di-center" jadi meleset khusus untuk teks nudge Custom multi-baris. Preset nudge ("Discount", "Start from", dst) pakai geometri tetap hasil tuning manual, jadi tidak kena.
+- Fix: blok teks Custom digeser sebesar setengah selisih antara tinggi render sebenarnya dan asumsi `fontSize * 2`, supaya tetap center di titik yang sama berapa pun jumlah baris atau line-height-nya.
+
+## Perlu dicek
+- Belum dites manual di browser — baru lolos `pnpm build`.
+- Cek juga preset nudge (Discount, Start from, dst) memang tidak ikut bergeser.
