@@ -822,9 +822,14 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                         
                         // Custom: Support multiline and bold tags
                         const lines = text.split('\n');
-                        
+                        const lineHeightRatio = typeof content.prefixLineHeight === 'number' ? content.prefixLineHeight / 100 : 1.1;
+                        // The outer box's height (and the saved default Y position) assumes a fixed
+                        // fontSize*2 footprint; free-form text can have any line count/line-height, so
+                        // re-center it around that same assumed midpoint instead of just growing downward.
+                        const centerOffset = (fontSize * lineHeightRatio * lines.length - fontSize * 2) / 2;
+
                         return (
-                        <div className="flex flex-col gap-0 leading-tight">
+                        <div className="flex flex-col gap-0 leading-tight" style={{ transform: `translateY(${-centerOffset}px)` }}>
                             {lines.map((line, idx) => (
                             <span 
                                 key={idx}
@@ -832,7 +837,7 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
                                 style={{ 
                                 fontSize: `${fontSize}px`,
                                 color: content.prefixColor || '#FFFFFF',
-                                lineHeight: typeof content.prefixLineHeight === 'number' ? content.prefixLineHeight / 100 : '1.1'
+                                lineHeight: lineHeightRatio
                                 }}
                                 dangerouslySetInnerHTML={{ 
                                 __html: line
