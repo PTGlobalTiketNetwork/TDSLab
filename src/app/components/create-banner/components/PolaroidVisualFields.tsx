@@ -1,6 +1,6 @@
 import { Switch } from '../../ui/switch';
 import { Dialog, DialogContent, DialogTitle } from '../../ui/dialog';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, FlipHorizontal2, FlipVertical2, GripVertical, Loader2, Maximize2, RotateCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { BannerFormData } from '../types';
@@ -25,8 +25,10 @@ interface Props {
 export function PolaroidVisualFields({ formData, onChange }: Props) {
   const order = polaroidOrder(formData);
   const [uploading, setUploading] = useState<number | null>(null);
-  const [imgDragFrom, setImgDragFrom] = useState<number | null>(null);
-  const [imgDragOver, setImgDragOver] = useState<number | null>(null);
+  // Rows are reordered/swapped via pointer events (not native HTML5 drag-and-drop, which needs
+  // dataTransfer.setData to reliably start a drag in Firefox) — same pattern as panOverlayThumb below.
+  const [imgDrag, setImgDrag] = useState<{ src: number; mode: 'order' | 'swap'; over: number | null } | null>(null);
+  const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const keyVisualPreview = useMemo(
@@ -89,6 +91,35 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
     apply(a, imgB);
     apply(b, imgA);
     onChange(updates);
+  };
+
+  // Drag the grip handle to reorder rows (layer position); drag the thumbnail to swap the uploaded
+  // image between slots instead. Driven by pointer events so it works the same across browsers.
+  const beginImgDrag = (src: number, mode: 'order' | 'swap') => (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    e.preventDefault();
+    setImgDrag({ src, mode, over: null });
+    const onMove = (ev: PointerEvent) => {
+      let hovered: number | null = null;
+      rowRefs.current.forEach((el, key) => {
+        const r = el.getBoundingClientRect();
+        if (ev.clientY >= r.top && ev.clientY <= r.bottom) hovered = key;
+      });
+      setImgDrag((d) => (d ? { ...d, over: hovered } : d));
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setImgDrag((d) => {
+        if (d && d.over !== null && d.over !== d.src) {
+          if (d.mode === 'order') move(order.indexOf(d.src), order.indexOf(d.over));
+          else swapImages(d.src, d.over);
+        }
+        return null;
+      });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
   };
 
   const crop = (src: number) => formData.polaroidCrops?.[src] ?? DEFAULT_CROP;
@@ -173,19 +204,15 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
     return (
       <div
         key={src}
-        onDragOver={(e) => { if (imgDragFrom !== null) { e.preventDefault(); setImgDragOver(src); } }}
-        onDragLeave={() => setImgDragOver((v) => (v === src ? null : v))}
-        onDrop={(e) => { e.preventDefault(); if (imgDragFrom !== null) swapImages(imgDragFrom, src); setImgDragFrom(null); setImgDragOver(null); }}
-        className={`flex flex-col gap-[12px] rounded-[10px] border p-[12px] bg-white transition-colors ${imgDragOver === src && imgDragFrom !== src ? 'border-[#007BFF] bg-[#f2f8ff]' : 'border-[#e9ebef]'} ${imgDragFrom === src ? 'opacity-50' : ''}`}
+        ref={(el) => { if (el) rowRefs.current.set(src, el); else rowRefs.current.delete(src); }}
+        className={`flex flex-col gap-[12px] rounded-[10px] border p-[12px] bg-white transition-colors ${imgDrag?.over === src && imgDrag.src !== src ? 'border-[#007BFF] bg-[#f2f8ff]' : 'border-[#e9ebef]'} ${imgDrag?.src === src ? 'opacity-50' : ''}`}
       >
         <div className="flex items-center gap-[8px]">
           <GripVertical
             size={16}
-            className="text-[#9EA0A5] cursor-grab shrink-0"
-            draggable={!!url}
-            onDragStart={(e) => { if (!url) { e.preventDefault(); return; } setImgDragFrom(src); e.dataTransfer.effectAllowed = 'move'; }}
-            onDragEnd={() => { setImgDragFrom(null); setImgDragOver(null); }}
-            title="Drag onto another photo to swap the uploaded image"
+            className={`text-[#9EA0A5] shrink-0 touch-none ${url ? 'cursor-grab' : ''}`}
+            onPointerDown={url ? beginImgDrag(src, 'order') : undefined}
+            title="Drag onto another photo to change its layer position"
           />
           <span className="text-[13px] font-bold text-[#303135] flex-1">Photo {src + 1} <span className="font-normal text-[#71747d]">· {layer === 0 ? 'front' : layer === order.length - 1 ? 'back' : 'middle'}</span></span>
           <button type="button" onClick={() => move(layer, layer - 1)} disabled={layer === 0} className="p-[4px] rounded-[6px] text-[#5e6066] hover:bg-[#f5f6fa] disabled:opacity-30" title="Bring forward"><ChevronUp size={14} /></button>
@@ -194,13 +221,11 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
         {url ? (
           <div className="flex gap-[12px]">
             <div
-              className="relative w-[120px] shrink-0 self-start rounded-[6px] overflow-hidden border border-[#d8dce8] bg-[#f8f9fd] cursor-grab"
+              className="relative w-[120px] shrink-0 self-start rounded-[6px] overflow-hidden border border-[#d8dce8] bg-[#f8f9fd] cursor-grab touch-none"
               style={{ aspectRatio: String(frameAspect(formData, src)) }}
-              draggable
-              onDragStart={(e) => { setImgDragFrom(src); e.dataTransfer.effectAllowed = 'move'; }}
-              onDragEnd={() => { setImgDragFrom(null); setImgDragOver(null); }}
+              onPointerDown={beginImgDrag(src, 'swap')}
               onDoubleClick={() => setPreviewUrl(url)}
-              title="Double-click to view full size · drag onto another photo to swap"
+              title="Double-click to view full size · drag onto another photo to swap the uploaded image"
             >
               <img src={url} alt={`Photo ${src + 1}`} className="w-full h-full object-cover pointer-events-none select-none" draggable={false} />
               <button
