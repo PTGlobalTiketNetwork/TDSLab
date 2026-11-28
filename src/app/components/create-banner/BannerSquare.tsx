@@ -299,21 +299,8 @@ export const BannerSquare = forwardRef((props: BannerSquareProps, ref: Forwarded
   };
 
   const renderHtml = (text: string | undefined, className: string) => {
-    if (!text) return null;
-    const htmlContent = text
-        .replace(/\n/g, '<br/>')
-        .replace(/<sb>/g, '<span style="font-weight: 600">')
-        .replace(/<\/sb>/g, '</span>')
-        .replace(/<b>/g, '<span style="font-weight: 700">')
-        .replace(/<\/b>/g, '</span>')
-        .replace(/<eb>/g, '<span style="font-weight: 800">')
-        .replace(/<\/eb>/g, '</span>')
-        .replace(/<r>/g, '<span style="font-weight: 400">')
-        .replace(/<\/r>/g, '</span>')
-        .replace(/<i>/g, '<span style="font-style: italic; display: inline-block; transform: skewX(-10deg); transform-origin: 0 100%;">')
-        .replace(/<\/i>/g, '</span>')
-        .replace(/<c v="(.*?)">/g, '<span style="color: $1">')
-        .replace(/<\/c>/g, '</span>');
+    if (!text || !text.trim()) return null;
+    const htmlContent = tagsToHtml(text, 'font-style: italic; display: inline-block; transform: skewX(-10deg); transform-origin: 0 100%;');
     return <span className={`${className}`} dangerouslySetInnerHTML={{ __html: htmlContent }} />;
   };
 

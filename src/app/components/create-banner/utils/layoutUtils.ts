@@ -10,6 +10,9 @@ export const tagsToHtml = (
     italicStyle = 'font-style: italic',
 ) =>
     text
+        // Trailing newlines — even ones left inside a still-open custom tag — would otherwise
+        // render as an empty extra line below the text (e.g. from pressing Enter at the end).
+        .replace(/\s+$/, '')
         .replace(/\n/g, '<br/>')
         .replace(/<sb>/g, '<span style="font-weight: 600">')
         .replace(/<\/sb>/g, '</span>')
@@ -24,7 +27,8 @@ export const tagsToHtml = (
         .replace(/<c v="(.*?)">/g, '<span style="color: $1">')
         .replace(/<\/c>/g, '</span>')
         .replace(/<fs v="(.*?)">/g, '<span style="font-size: $1px">')
-        .replace(/<\/fs>/g, '</span>');
+        .replace(/<\/fs>/g, '</span>')
+        .replace(/(?:\s|<br\/>)+((?:<\/span>\s*)*)$/, '$1');
 
 /** Text shown before the discount number. 'IDR' is the legacy value and renders as "Rp". */
 export const getCurrencyLabel = (type: CurrencyType | undefined, customCurrency?: string): string => {
