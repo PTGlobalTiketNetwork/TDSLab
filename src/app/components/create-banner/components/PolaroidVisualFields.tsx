@@ -26,6 +26,7 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
   const order = polaroidOrder(formData);
   const [uploading, setUploading] = useState<number | null>(null);
   const [imgDragFrom, setImgDragFrom] = useState<number | null>(null);
+  const [imgDragMode, setImgDragMode] = useState<'order' | 'swap'>('swap');
   const [imgDragOver, setImgDragOver] = useState<number | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -175,7 +176,15 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
         key={src}
         onDragOver={(e) => { if (imgDragFrom !== null) { e.preventDefault(); setImgDragOver(src); } }}
         onDragLeave={() => setImgDragOver((v) => (v === src ? null : v))}
-        onDrop={(e) => { e.preventDefault(); if (imgDragFrom !== null) swapImages(imgDragFrom, src); setImgDragFrom(null); setImgDragOver(null); }}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (imgDragFrom !== null && imgDragFrom !== src) {
+            if (imgDragMode === 'order') move(order.indexOf(imgDragFrom), order.indexOf(src));
+            else swapImages(imgDragFrom, src);
+          }
+          setImgDragFrom(null);
+          setImgDragOver(null);
+        }}
         className={`flex flex-col gap-[12px] rounded-[10px] border p-[12px] bg-white transition-colors ${imgDragOver === src && imgDragFrom !== src ? 'border-[#007BFF] bg-[#f2f8ff]' : 'border-[#e9ebef]'} ${imgDragFrom === src ? 'opacity-50' : ''}`}
       >
         <div className="flex items-center gap-[8px]">
@@ -183,9 +192,9 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
             size={16}
             className="text-[#9EA0A5] cursor-grab shrink-0"
             draggable={!!url}
-            onDragStart={(e) => { if (!url) { e.preventDefault(); return; } setImgDragFrom(src); e.dataTransfer.effectAllowed = 'move'; }}
+            onDragStart={(e) => { if (!url) { e.preventDefault(); return; } setImgDragFrom(src); setImgDragMode('order'); e.dataTransfer.effectAllowed = 'move'; }}
             onDragEnd={() => { setImgDragFrom(null); setImgDragOver(null); }}
-            title="Drag onto another photo to swap the uploaded image"
+            title="Drag onto another photo to change its layer position"
           />
           <span className="text-[13px] font-bold text-[#303135] flex-1">Photo {src + 1} <span className="font-normal text-[#71747d]">· {layer === 0 ? 'front' : layer === order.length - 1 ? 'back' : 'middle'}</span></span>
           <button type="button" onClick={() => move(layer, layer - 1)} disabled={layer === 0} className="p-[4px] rounded-[6px] text-[#5e6066] hover:bg-[#f5f6fa] disabled:opacity-30" title="Bring forward"><ChevronUp size={14} /></button>
@@ -197,10 +206,10 @@ export function PolaroidVisualFields({ formData, onChange }: Props) {
               className="relative w-[120px] shrink-0 self-start rounded-[6px] overflow-hidden border border-[#d8dce8] bg-[#f8f9fd] cursor-grab"
               style={{ aspectRatio: String(frameAspect(formData, src)) }}
               draggable
-              onDragStart={(e) => { setImgDragFrom(src); e.dataTransfer.effectAllowed = 'move'; }}
+              onDragStart={(e) => { setImgDragFrom(src); setImgDragMode('swap'); e.dataTransfer.effectAllowed = 'move'; }}
               onDragEnd={() => { setImgDragFrom(null); setImgDragOver(null); }}
               onDoubleClick={() => setPreviewUrl(url)}
-              title="Double-click to view full size · drag onto another photo to swap"
+              title="Double-click to view full size · drag onto another photo to swap the uploaded image"
             >
               <img src={url} alt={`Photo ${src + 1}`} className="w-full h-full object-cover pointer-events-none select-none" draggable={false} />
               <button
